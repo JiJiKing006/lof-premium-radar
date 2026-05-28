@@ -1,0 +1,27 @@
+{
+  "name": "lof-premium-radar-pages",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node server/index.js",
+    "build": "vite build",
+    "preview": "NODE_ENV=production node server/index.js",
+    "typecheck": "vue-tsc --noEmit",
+    "test": "vitest run",
+    "lint": "vite --host 127.0.0.1 --version"
+  },
+  "dependencies": {
+    "@vitejs/plugin-vue": "^6.0.7",
+    "cheerio": "^1.0.0",
+    "express": "^4.21.2",
+    "vite": "^8.0.14",
+    "vue": "^3.5.35"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue-jsx": "^5.1.5",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.7",
+    "vue-tsc": "^3.3.2"
+  }
+}
