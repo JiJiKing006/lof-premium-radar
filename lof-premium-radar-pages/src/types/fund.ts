@@ -34,6 +34,12 @@ export interface FundItem {
   premiumRate: number | null;
   premiumBasis?: string;
   premiumNote?: string;
+  estimatedNavSource?: string;
+  estimatedNavTime?: string;
+  estimateConfidence?: string;
+  estimateDeviationRate?: number | null;
+  estimateWarning?: string;
+  estimateSources?: Array<{ role?: string; source?: string; value?: number | null; time?: string }>;
   volume: number | null;
   amount: number | null;
   turnover?: number | null;
@@ -48,6 +54,7 @@ export interface FundItem {
   purchaseLimit?: { state?: string; label?: string; limitText?: string };
   intraday?: Array<{ time?: string; price?: number | null; volume?: number | null; turnover?: number | null }>;
   quoteTime?: string;
+  navQuoteTime?: string;
   updatedAt: string;
   updateTime?: string;
   isRealtime?: boolean;

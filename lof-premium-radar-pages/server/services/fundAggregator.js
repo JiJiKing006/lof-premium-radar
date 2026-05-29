@@ -9,7 +9,7 @@ import { fetchSubscriptionLimitMap } from '../sources/subscriptionLimitSource.js
 export async function getFundQuotes({ category = '', force = false, includeTrends = true } = {}) {
   const normalizedCategory = String(category || 'LOF').toUpperCase();
   const quotePayload = await getQuotes({ category: normalizedCategory, force });
-  const navMap = quotePayload.hasNav ? new Map() : await getNavMap(quotePayload.rows, { force });
+  const navMap = await getNavMap(quotePayload.rows, { force: force || quotePayload.hasNav });
   const updateTime = formatShanghaiTime();
   const codes = quotePayload.rows.map((quote) => quote.code);
   const [marketQuoteMap, subscriptionLimitMap, trendMap] = await Promise.all([
@@ -83,7 +83,7 @@ export async function getFundDetail(code, options = {}) {
   return toUnifiedFund({ quote: fund, nav, updateTime: formatShanghaiTime() });
 }
 
-function toUnifiedFund({ quote, nav, updateTime, marketQuote, subscriptionLimit, trend }) {
+export function toUnifiedFund({ quote, nav, updateTime, marketQuote, subscriptionLimit, trend }) {
   const intraday = trend?.points || [];
   const marketPrice = marketQuote?.marketPrice ?? quote.marketPrice;
   const changeRate = marketQuote?.changeRate ?? quote.changeRate;
@@ -92,7 +92,12 @@ function toUnifiedFund({ quote, nav, updateTime, marketQuote, subscriptionLimit,
   const quoteTime = marketQuote?.quoteTime || quote.quoteTime || nav?.navQuoteTime || '';
   const premium = calculatePremium({
     marketPrice,
-    estimatedNav: quote.estimatedNav ?? nav?.estimatedNav,
+    estimatedNav: quote.estimatedNav,
+    estimatedNavSource: quote.navSource || quote.source,
+    estimatedNavTime: quote.navQuoteTime || quote.quoteTime || '',
+    supplementalEstimatedNav: nav?.estimatedNav,
+    supplementalNavSource: nav?.navSource || '',
+    supplementalNavTime: nav?.navQuoteTime || '',
     lastNav: quote.lastNav ?? nav?.lastNav,
   });
   const record = {
@@ -101,10 +106,16 @@ function toUnifiedFund({ quote, nav, updateTime, marketQuote, subscriptionLimit,
     category: quote.category,
     marketPrice,
     lastNav: quote.lastNav ?? nav?.lastNav ?? null,
-    estimatedNav: quote.estimatedNav ?? nav?.estimatedNav ?? null,
+    estimatedNav: premium.estimatedNav ?? quote.estimatedNav ?? nav?.estimatedNav ?? null,
     premiumRate: premium.premiumRate,
     premiumBasis: premium.basis,
     premiumNote: premium.note,
+    estimatedNavSource: premium.selectedNavSource,
+    estimatedNavTime: premium.selectedNavTime,
+    estimateConfidence: premium.estimateConfidence,
+    estimateDeviationRate: premium.estimateDeviationRate,
+    estimateWarning: premium.estimateWarning,
+    estimateSources: premium.estimateSources,
     changeRate,
     volume,
     turnover,

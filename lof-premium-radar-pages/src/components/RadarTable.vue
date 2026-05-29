@@ -72,7 +72,19 @@ function navDateText(row) {
 }
 
 function estimatedDateText(row) {
-  return row.navQuoteTime || row.navDate || row.quoteTime || '-';
+  const source = sourceLabel(row.estimatedNavSource);
+  const time = row.estimatedNavTime || row.navQuoteTime || row.navDate || row.quoteTime || '';
+  if (source && time) return `${source} · ${time}`;
+  return source || time || '-';
+}
+
+function sourceLabel(source) {
+  const text = String(source || '').toLowerCase();
+  if (text.includes('tiantian')) return '天天基金';
+  if (text.includes('jisilu')) return '集思录';
+  if (text.includes('haoetf')) return 'HaoETF';
+  if (text.includes('palmmicro') || text === 'lof') return 'Palmmicro';
+  return source || '';
 }
 
 function valueClass(value) {

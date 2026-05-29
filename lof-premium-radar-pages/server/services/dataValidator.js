@@ -15,6 +15,10 @@ export function validateFundRecord(record, options = {}) {
   if (record.priceDeviationRate !== undefined && record.priceDeviationRate !== null && Math.abs(Number(record.priceDeviationRate)) > 1) {
     reasons.push('不同数据源价格偏差超过 1%');
   }
+  if (record.estimateConfidence === 'low') {
+    const deviation = toNumber(record.estimateDeviationRate);
+    reasons.push(deviation === null ? '估算净值多源偏差过大' : `估算净值多源偏差过大 ${deviation.toFixed(2)}%`);
+  }
   if (isStaleQuoteTime(record.quoteTime, now, staleMs)) reasons.push('数据时间过旧');
 
   return {

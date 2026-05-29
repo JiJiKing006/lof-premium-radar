@@ -39,4 +39,11 @@ describe('dataValidator', () => {
     expect(result.abnormalReason).toContain('溢价率异常');
     expect(result.abnormalReason).toContain('数据时间过旧');
   });
+
+  it('marks low confidence multi-source estimates as abnormal', () => {
+    const result = validateFundRecord({ ...baseRecord, estimateConfidence: 'low', estimateDeviationRate: 2.3 });
+
+    expect(result.isAbnormal).toBe(true);
+    expect(result.abnormalReason).toContain('估算净值多源偏差过大');
+  });
 });

@@ -79,6 +79,22 @@ function valueClass(value: unknown, inverse = false) {
   const up = inverse ? number < 0 : number > 0;
   return up ? 'value-up' : 'value-down';
 }
+
+function sourceLabel(source: unknown) {
+  const text = String(source || '').toLowerCase();
+  if (text.includes('tiantian')) return '天天基金';
+  if (text.includes('jisilu')) return '集思录';
+  if (text.includes('haoetf')) return 'HaoETF';
+  if (text.includes('palmmicro') || text === 'lof') return 'Palmmicro';
+  return String(source || '');
+}
+
+function estimateReference(fund: FundItem) {
+  const source = sourceLabel(fund.estimatedNavSource);
+  const time = fund.estimatedNavTime || fund.navQuoteTime || fund.navDate || fund.quoteTime || '';
+  if (source && time) return `${source} · ${time}`;
+  return source || time || '-';
+}
 </script>
 
 <template>
@@ -113,6 +129,7 @@ function valueClass(value: unknown, inverse = false) {
           <article>
             <span>实时溢价率</span>
             <strong :class="valueClass(current.premiumRate)">{{ percentText(current.premiumRate) }}</strong>
+            <small>{{ current.premiumNote || '-' }}</small>
           </article>
           <article>
             <span>涨跌幅</span>
@@ -136,7 +153,8 @@ function valueClass(value: unknown, inverse = false) {
               <tr><th>基金代码</th><td>{{ current.code }}</td><th>基金名称</th><td>{{ current.name }}</td></tr>
               <tr><th>现价</th><td :class="valueClass(current.changeRate ?? current.changePercent)">{{ formatNumber(current.marketPrice ?? current.price) }}</td><th>涨跌幅</th><td :class="valueClass(current.changeRate ?? current.changePercent)">{{ percentText(current.changeRate ?? current.changePercent, { sign: true }) }}</td></tr>
               <tr><th>官方净值</th><td>{{ formatNumber(current.lastNav ?? current.nav) }}</td><th>净值日期</th><td>{{ current.navDate || '-' }}</td></tr>
-              <tr><th>估算净值</th><td>{{ formatNumber(current.estimatedNav ?? current.estimatedValue) }}</td><th>溢价率</th><td :class="valueClass(current.premiumRate)">{{ percentText(current.premiumRate) }}</td></tr>
+              <tr><th>估算净值</th><td>{{ formatNumber(current.estimatedNav ?? current.estimatedValue) }}</td><th>估值参考</th><td>{{ estimateReference(current) }}</td></tr>
+              <tr><th>实时溢价率</th><td :class="valueClass(current.premiumRate)">{{ percentText(current.premiumRate) }}</td><th>估值校验</th><td>{{ current.estimateWarning || current.premiumNote || '-' }}</td></tr>
               <tr><th>成交量</th><td>{{ amountText(current.volume) }}</td><th>成交额</th><td>{{ amountText(current.turnover ?? current.amount) }}</td></tr>
               <tr><th>申购状态</th><td>{{ purchaseText(current) }}</td><th>更新时间</th><td>{{ current.updateTime || '-' }}</td></tr>
             </tbody>
