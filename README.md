@@ -22,6 +22,22 @@ npm run build
 npm run preview
 ```
 
+## 一键部署
+
+先复制部署配置模板，并按服务器实际信息修改：
+
+```bash
+cp .env.deploy.example .env.deploy
+```
+
+然后执行：
+
+```bash
+npm run deploy
+```
+
+部署脚本会依次执行类型检查、测试、打包、上传，并在 Ubuntu 服务器上自动安装/检查 Node.js 20+、Nginx、systemd 服务和 Nginx 反向代理配置。`.env.deploy` 包含服务器地址和 SSH key 路径，已加入 `.gitignore`，不要提交。
+
 ## 数据刷新
 
 - 前端每 60 秒请求 `/api/funds`。
