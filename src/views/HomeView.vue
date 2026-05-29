@@ -1,28 +1,29 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import DataStatusBar from '../components/DataStatusBar.vue';
 import DetailPanel from '../components/DetailPanel.vue';
 import FilterTabs from '../components/FilterTabs.vue';
-import MarketIndexStrip from '../components/MarketIndexStrip.vue';
 import RadarTable from '../components/RadarTable.vue';
 import SearchBar from '../components/SearchBar.vue';
 import SortBar from '../components/SortBar.vue';
 import { useFilters } from '../composables/useFilters';
 import { useFunds } from '../composables/useFunds';
-import { useMarketIndices } from '../composables/useMarketIndices';
 import type { FundItem, FundSortKey } from '../types/fund';
 
+const AUTO_REFRESH_INTERVAL = 30_000;
 const section = ref('LOF');
 const selectedFund = ref<FundItem | null>(null);
 const excludePausedPurchase = ref(false);
 const sortDirection = ref<'asc' | 'desc'>('desc');
 const { funds, meta, initialLoading, polling, refreshNow } = useFunds(section);
-const { indices: indexRows, error: indexError } = useMarketIndices();
 const favoriteCodes = ref<Set<string>>(new Set(loadFavoriteCodes()));
 const toastText = ref('');
 const pulseCode = ref('');
+const manualRefreshing = ref(false);
+const nowTick = ref(Date.now());
 let toastTimer: number | undefined;
 let pulseTimer: number | undefined;
+let countdownTimer: number | undefined;
 const tabFunds = computed(() => {
   if (section.value !== 'WATCH') return funds.value;
   return funds.value.filter((fund) => favoriteCodes.value.has(fund.code));
@@ -31,7 +32,30 @@ const { query, sortKey, visibleFunds } = useFilters(tabFunds, excludePausedPurch
 const pullStart = ref<number | null>(null);
 const pullDistance = ref(0);
 
+const pollingPaused = computed(() => polling.paused.value);
+const pollingError = computed(() => polling.error.value);
+const pollingLastSuccessAt = computed(() => polling.lastSuccessAt.value);
+const nextRefreshIn = computed(() => {
+  if (pollingPaused.value) return null;
+  const lastSuccessMs = pollingLastSuccessAt.value ? Date.parse(pollingLastSuccessAt.value) : 0;
+  if (!lastSuccessMs) return Math.round(AUTO_REFRESH_INTERVAL / 1000);
+  return Math.max(0, Math.ceil((lastSuccessMs + AUTO_REFRESH_INTERVAL - nowTick.value) / 1000));
+});
 const abnormalCount = computed(() => funds.value.filter((fund) => fund.stale || fund.confidence < 70 || fund.errorMessage).length);
+const dataVersion = computed(() => {
+  const rowSignature = visibleFunds.value
+    .map((fund) => [
+      fund.code,
+      fund.marketPrice ?? fund.price ?? '',
+      fund.changeRate ?? fund.changePercent ?? '',
+      fund.premiumRate ?? '',
+      fund.lastNav ?? fund.nav ?? '',
+      fund.estimatedNav ?? fund.estimatedValue ?? '',
+      fund.turnover ?? fund.amount ?? '',
+    ].join(':'))
+    .join('|');
+  return `${meta.value?.updateTime || meta.value?.latestQuoteTime || 'initial'}:${rowSignature}`;
+});
 
 function onTouchStart(event: TouchEvent) {
   if (window.scrollY > 0) return;
@@ -47,6 +71,23 @@ function onTouchEnd() {
   if (pullDistance.value > 70) refreshNow();
   pullStart.value = null;
   pullDistance.value = 0;
+}
+
+async function handleManualRefresh() {
+  if (manualRefreshing.value) return;
+  const startedAt = Date.now();
+  manualRefreshing.value = true;
+  try {
+    await refreshNow();
+  } finally {
+    await keepManualRefreshVisible(startedAt);
+    manualRefreshing.value = false;
+  }
+}
+
+function keepManualRefreshVisible(startedAt: number) {
+  const remaining = 360 - (Date.now() - startedAt);
+  return remaining > 0 ? new Promise((resolve) => window.setTimeout(resolve, remaining)) : Promise.resolve();
 }
 
 function handleTableSort(key: FundSortKey) {
@@ -96,6 +137,16 @@ watch(section, () => {
   sortDirection.value = 'desc';
 });
 
+onMounted(() => {
+  countdownTimer = window.setInterval(() => {
+    nowTick.value = Date.now();
+  }, 1_000);
+});
+
+onBeforeUnmount(() => {
+  window.clearInterval(countdownTimer);
+});
+
 function loadFavoriteCodes(): string[] {
   try {
     const raw = window.localStorage.getItem('fund-watchlist');
@@ -129,7 +180,7 @@ function storeFavoriteCodes(codes: Set<string>) {
           <i></i>
         </div>
       </div>
-      <div class="radar-logo" :class="{ paused: polling.paused.value }" aria-label="实时雷达">
+      <div class="radar-logo" :class="{ paused: pollingPaused }" aria-label="实时雷达">
         <span class="radar-grid"></span>
         <span class="radar-sweep"></span>
         <span class="radar-core"></span>
@@ -140,17 +191,16 @@ function storeFavoriteCodes(codes: Set<string>) {
       {{ pullDistance > 70 ? '松开刷新' : '下拉刷新' }}
     </div>
 
-    <MarketIndexStrip :rows="indexRows" :error="indexError" />
-
     <div class="sticky-tools">
-      <SearchBar v-model="query" :refreshing="polling.refreshing.value" @refresh="refreshNow" />
+      <SearchBar v-model="query" :refreshing="manualRefreshing" @refresh="handleManualRefresh" />
       <DataStatusBar
         :meta="meta"
-        :refreshing="polling.refreshing.value"
-        :paused="polling.paused.value"
-        :error="polling.error.value"
-        :last-success-at="polling.lastSuccessAt.value"
+        :refreshing="manualRefreshing"
+        :paused="pollingPaused"
+        :error="pollingError"
+        :last-success-at="pollingLastSuccessAt"
         :abnormal-count="abnormalCount"
+        :next-refresh-in="nextRefreshIn"
       />
     </div>
 
@@ -171,6 +221,7 @@ function storeFavoriteCodes(codes: Set<string>) {
       :sort-direction="sortDirection"
       :favorite-codes="favoriteCodes"
       :pulse-code="pulseCode"
+      :data-version="dataVersion"
       @sort="handleTableSort"
       @toggle-favorite="toggleFavorite"
       @select="selectedFund = fundFromRaw($event)"

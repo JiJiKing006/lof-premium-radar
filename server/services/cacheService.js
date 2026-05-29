@@ -26,7 +26,7 @@ export const cache = new MemoryCache();
 
 export const cacheTtl = {
   quotes: 30_000,
-  indices: 15_000,
+  indices: 3_000,
   trends: 15_000,
   nav: 180_000,
   history: 5 * 60_000,

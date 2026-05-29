@@ -3,14 +3,15 @@ import { fetchFundsSnapshot } from '../api/funds';
 import type { FundItem, FundSnapshot } from '../types/fund';
 import { usePolling } from './usePolling';
 
+const AUTO_REFRESH_INTERVAL = 30_000;
+
 export function useFunds(section: Ref<string>) {
   const funds = ref<FundItem[]>([]);
   const meta = ref<FundSnapshot['meta'] | null>(null);
   const initialLoading = ref(true);
   let requestId = 0;
-  let trendRequestId = 0;
 
-async function load({ force = false } = {}) {
+  async function load({ force = false } = {}) {
     const currentRequestId = ++requestId;
     const requestSection = section.value;
     const previous = new Map(funds.value.map((fund) => [fund.code, fund]));
@@ -20,24 +21,9 @@ async function load({ force = false } = {}) {
     meta.value = snapshot.meta;
     storeSnapshot(requestSection, snapshot);
     initialLoading.value = false;
-    void enrichTrends({ force, sectionValue: requestSection });
   }
 
-  async function enrichTrends({ force = false, sectionValue = section.value } = {}) {
-    const currentTrendRequestId = ++trendRequestId;
-    try {
-      const snapshot = await fetchSectionSnapshot({ force, section: sectionValue, includeTrends: true });
-      if (currentTrendRequestId !== trendRequestId || sectionValue !== section.value) return;
-      const previous = new Map(funds.value.map((fund) => [fund.code, fund]));
-      funds.value = mergeRows(snapshot.rows, previous);
-      meta.value = snapshot.meta;
-      storeSnapshot(sectionValue, snapshot);
-    } catch {
-      // Keep the fast quote table visible if the heavier trend refresh fails.
-    }
-  }
-
-  const polling = usePolling(() => load(), { interval: 20_000, maxInterval: 60_000, immediate: true });
+  const polling = usePolling(() => load(), { interval: AUTO_REFRESH_INTERVAL, maxInterval: AUTO_REFRESH_INTERVAL, immediate: true });
 
   onMounted(() => {
     const cached = hydrateSnapshot(section.value);
@@ -158,5 +144,19 @@ function mergeRows(rows: FundItem[], previous: Map<string, FundItem>): FundItem[
 
 function changedFields(previous: FundItem | undefined, next: FundItem): string[] {
   if (!previous) return [];
-  return ['price', 'changePercent', 'premiumRate'].filter((key) => previous[key as keyof FundItem] !== next[key as keyof FundItem]);
+  return [
+    'price',
+    'marketPrice',
+    'changeRate',
+    'changePercent',
+    'changeValue',
+    'premiumRate',
+    'realtimePremium',
+    'lastNav',
+    'nav',
+    'estimatedNav',
+    'estimatedValue',
+    'turnover',
+    'amount',
+  ].filter((key) => previous[key as keyof FundItem] !== next[key as keyof FundItem]);
 }

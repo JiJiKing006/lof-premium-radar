@@ -89,7 +89,10 @@ function buildLimitText(status, dailyLimit) {
   if (/场内交易/.test(status)) return '场内交易';
   if (/暂停|停止|封闭|终止|失败/.test(status)) return status;
   if (/限|大额/.test(status)) return dailyLimit !== null ? `${status} ${moneyText(dailyLimit)}` : status;
-  if (/开放/.test(status)) return dailyLimit !== null ? `${status} / ${moneyText(dailyLimit)}` : status;
+  if (/开放/.test(status)) {
+    const limitText = dailyLimit !== null ? moneyText(dailyLimit) : '';
+    return /无限额|不限额/.test(limitText) ? '不限额' : status;
+  }
   return status;
 }
 

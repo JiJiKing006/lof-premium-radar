@@ -21,8 +21,8 @@ export function useMarketIndices() {
   onMounted(() => {
     void load();
     timer = window.setInterval(() => {
-      void load();
-    }, 30_000);
+      void load({ force: true });
+    }, 10_000);
   });
 
   onUnmounted(() => {

@@ -46,10 +46,11 @@ function formatNumber(value: unknown, digits = 3) {
   return number.toFixed(digits).replace(/\.?0+$/, '');
 }
 
-function percentText(value: unknown) {
+function percentText(value: unknown, { sign = false }: { sign?: boolean } = {}) {
   const number = Number(value);
   if (!Number.isFinite(number)) return '-';
-  return `${number.toFixed(2)}%`;
+  const prefix = sign && number > 0 ? '+' : '';
+  return `${prefix}${number.toFixed(2)}%`;
 }
 
 function amountText(value: unknown) {
@@ -61,7 +62,11 @@ function amountText(value: unknown) {
 }
 
 function purchaseText(fund: FundItem) {
-  return fund.purchaseLimit?.label || fund.purchaseLimit?.limitText || fund.subscriptionStatus || '未知';
+  const label = fund.purchaseLimit?.label || fund.purchaseLimit?.limitText || fund.subscriptionStatus || '未知';
+  const state = fund.purchaseLimit?.state || fund.subscriptionState || 'unknown';
+  if (state === 'open' && (/无限额|不限额/.test(label) || /开放/.test(label))) return '不限额';
+  if (/开放申购\s*\/\s*无限额|开放申购.*不限额/.test(label)) return '不限额';
+  return label;
 }
 
 function purchaseState(fund: FundItem) {
@@ -111,7 +116,7 @@ function valueClass(value: unknown, inverse = false) {
           </article>
           <article>
             <span>涨跌幅</span>
-            <strong :class="valueClass(current.changeRate ?? current.changePercent)">{{ percentText(current.changeRate ?? current.changePercent) }}</strong>
+            <strong :class="valueClass(current.changeRate ?? current.changePercent)">{{ percentText(current.changeRate ?? current.changePercent, { sign: true }) }}</strong>
           </article>
         </div>
       </div>
@@ -129,7 +134,7 @@ function valueClass(value: unknown, inverse = false) {
           <table class="detail-mini-table">
             <tbody>
               <tr><th>基金代码</th><td>{{ current.code }}</td><th>基金名称</th><td>{{ current.name }}</td></tr>
-              <tr><th>现价</th><td :class="valueClass(current.changeRate ?? current.changePercent)">{{ formatNumber(current.marketPrice ?? current.price) }}</td><th>涨跌幅</th><td :class="valueClass(current.changeRate ?? current.changePercent)">{{ percentText(current.changeRate ?? current.changePercent) }}</td></tr>
+              <tr><th>现价</th><td :class="valueClass(current.changeRate ?? current.changePercent)">{{ formatNumber(current.marketPrice ?? current.price) }}</td><th>涨跌幅</th><td :class="valueClass(current.changeRate ?? current.changePercent)">{{ percentText(current.changeRate ?? current.changePercent, { sign: true }) }}</td></tr>
               <tr><th>官方净值</th><td>{{ formatNumber(current.lastNav ?? current.nav) }}</td><th>净值日期</th><td>{{ current.navDate || '-' }}</td></tr>
               <tr><th>估算净值</th><td>{{ formatNumber(current.estimatedNav ?? current.estimatedValue) }}</td><th>溢价率</th><td :class="valueClass(current.premiumRate)">{{ percentText(current.premiumRate) }}</td></tr>
               <tr><th>成交量</th><td>{{ amountText(current.volume) }}</td><th>成交额</th><td>{{ amountText(current.turnover ?? current.amount) }}</td></tr>
@@ -193,7 +198,7 @@ function valueClass(value: unknown, inverse = false) {
                 <td :class="valueClass(item.changeRate)">{{ formatNumber(item.closePrice) }}</td>
                 <td>{{ formatNumber(item.unitNav, 4) }}</td>
                 <td :class="valueClass(item.premiumRate)">{{ percentText(item.premiumRate) }}</td>
-                <td :class="valueClass(item.navGrowthRate)">{{ percentText(item.navGrowthRate) }}</td>
+                <td :class="valueClass(item.navGrowthRate)">{{ percentText(item.navGrowthRate, { sign: true }) }}</td>
                 <td>{{ amountText(item.turnover) }}</td>
                 <td>{{ item.purchaseStatus || '-' }}</td>
               </tr>

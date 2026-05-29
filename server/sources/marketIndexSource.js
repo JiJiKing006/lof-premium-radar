@@ -12,7 +12,7 @@ const INDEXES = [
   { key: 'sz399006', secid: '0.399006', label: '创业板指' },
   { key: 'sh000300', secid: '1.000300', label: '沪深300' },
   { key: 'hsi', secid: '100.HSI', label: '恒生指数' },
-  { key: 'ndx', secid: '100.NDX', label: '纳斯达克100' },
+  { key: 'ndx100', secid: '100.NDX100', label: '纳斯达克100' },
   { key: 'spx', secid: '100.SPX', label: '标普500' },
 ];
 

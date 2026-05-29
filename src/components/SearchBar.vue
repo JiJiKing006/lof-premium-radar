@@ -18,8 +18,8 @@ defineEmits<{
         @input="$emit('update:modelValue', ($event.target as HTMLInputElement).value)"
       />
     </label>
-    <button type="button" :disabled="refreshing" @click="$emit('refresh')">
-      <span>刷新</span>
+    <button type="button" :disabled="refreshing" :class="{ refreshing }" @click="$emit('refresh')">
+      <span>{{ refreshing ? '更新中...' : '刷新' }}</span>
     </button>
   </section>
 </template>
