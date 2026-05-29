@@ -45,8 +45,10 @@ need_cmd ssh
 need_cmd scp
 
 SSH_OPTS=(-p "$DEPLOY_PORT" -o StrictHostKeyChecking=accept-new)
+SCP_OPTS=(-P "$DEPLOY_PORT" -o StrictHostKeyChecking=accept-new)
 if [[ -n "$DEPLOY_SSH_KEY" ]]; then
   SSH_OPTS+=(-i "$DEPLOY_SSH_KEY")
+  SCP_OPTS+=(-i "$DEPLOY_SSH_KEY")
 fi
 
 REMOTE="$DEPLOY_USER@$DEPLOY_HOST"
@@ -79,7 +81,7 @@ tar \
 
 echo "==> Uploading to $REMOTE:$DEPLOY_PATH"
 ssh "${SSH_OPTS[@]}" "$REMOTE" "mkdir -p '$DEPLOY_PATH/releases' '$DEPLOY_PATH/shared'"
-scp "${SSH_OPTS[@]}" "$ARCHIVE" "$REMOTE:$REMOTE_ARCHIVE"
+scp "${SCP_OPTS[@]}" "$ARCHIVE" "$REMOTE:$REMOTE_ARCHIVE"
 
 echo "==> Installing release on server"
 ssh "${SSH_OPTS[@]}" "$REMOTE" \
