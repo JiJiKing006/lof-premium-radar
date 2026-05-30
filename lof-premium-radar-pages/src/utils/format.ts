@@ -5,15 +5,16 @@ export function toNumber(value: unknown): number | null {
 }
 
 export function formatPercent(value: number | null): string {
-  return value === null ? '--' : `${value.toFixed(2)}%`;
+  return value === null ? '暂无数据' : `${value.toFixed(2)}%`;
 }
 
 export function formatNumber(value: number | null, digits = 3): string {
-  return value === null ? '--' : value.toFixed(digits);
+  return value === null ? '暂无数据' : value.toFixed(digits);
 }
 
 export function formatAmount(value: number | null): string {
-  if (value === null) return '--';
-  if (Math.abs(value) >= 10000) return `${(value / 10000).toFixed(1)}亿`;
-  return `${value.toFixed(0)}万`;
+  if (value === null) return '暂无数据';
+  if (Math.abs(value) >= 100_000_000) return `${(value / 100_000_000).toFixed(2)}亿`;
+  if (Math.abs(value) >= 10_000) return `${(value / 10_000).toFixed(1)}万`;
+  return value.toFixed(0);
 }

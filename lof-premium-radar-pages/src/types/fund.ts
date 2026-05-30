@@ -46,6 +46,7 @@ export interface FundItem {
   subscriptionStatus: string;
   subscriptionState: SubscriptionState;
   redemptionStatus: string;
+  market?: string;
   source: string;
   quoteSource?: string;
   subscriptionSource?: string;
@@ -119,6 +120,47 @@ export interface FundHistorySnapshot {
   rows: FundHistoryRow[];
 }
 
+export interface HotArbitrageItem {
+  rank: number;
+  code: string;
+  name: string;
+  type: FundType;
+  premiumRate: number;
+  premiumDirection: 'premium' | 'discount';
+  amount: number;
+  turnover: number;
+  volume: number | null;
+  avgAmount5d: number | null;
+  volumeRatio: number | null;
+  hotScore: number;
+  arbitrageSpaceScore: number;
+  activityScore: number;
+  anomalyScore: number | null;
+  freshnessScore: number;
+  quoteTime: string;
+  updateTime: string;
+  source: string;
+  quoteSource?: string;
+  isPreview?: boolean;
+}
+
+export interface HotArbitrageSnapshot {
+  meta: {
+    sourceId: string;
+    sourceTitle: string;
+    sourceProvider: string;
+    rowCount: number;
+    allCount?: number;
+    updateTime?: string;
+    latestQuoteTime?: string;
+    sourceStatus?: string;
+    stale?: boolean;
+    status?: string;
+    scoring?: string;
+  };
+  rows: HotArbitrageItem[];
+}
+
 export type FundFilter =
   | 'all'
   | 'highPremium'
@@ -129,3 +171,5 @@ export type FundFilter =
   | 'abnormal';
 
 export type FundSortKey = 'premiumRate' | 'turnover' | 'changeRate' | 'price' | 'lastNav' | 'estimatedNav' | 'volume';
+
+export type MarketFilter = 'ALL' | 'SH' | 'SZ';

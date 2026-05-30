@@ -1,4 +1,4 @@
-import type { FundHistorySnapshot, FundItem, FundSnapshot, FundType } from '../types/fund';
+import type { FundHistorySnapshot, FundItem, FundSnapshot, FundType, HotArbitrageSnapshot } from '../types/fund';
 import { toNumber } from '../utils/format';
 import { computeRiskTags, normalizeSubscriptionState } from '../utils/risk';
 import { isStale } from '../utils/time';
@@ -61,6 +61,18 @@ export async function fetchFundHistory(code: string, { force = false, limit = 60
   return (await response.json()) as FundHistorySnapshot;
 }
 
+export async function fetchHotArbitrageSnapshot({ force = false, section = 'ALL', limit = 20 } = {}): Promise<HotArbitrageSnapshot> {
+  const params = new URLSearchParams({ t: String(Date.now()), limit: String(limit) });
+  if (section && section !== 'WATCH') params.set('category', section.toUpperCase());
+  if (force) params.set('force', '1');
+  const response = await fetch(`/api/funds/hot-arbitrage?${params.toString()}`, {
+    headers: { Accept: 'application/json' },
+    cache: 'no-store',
+  });
+  if (!response.ok) throw new Error(`热门套利榜接口返回 ${response.status}`);
+  return (await response.json()) as HotArbitrageSnapshot;
+}
+
 function normalizeMeta(meta: Record<string, unknown>, section: string): FundSnapshot['meta'] {
   return {
     sourceId: String(meta.sourceId || section),
@@ -109,6 +121,7 @@ function normalizeFund(row: RawFundRow, meta: FundSnapshot['meta']): FundItem {
     subscriptionStatus: subscriptionStatus || '--',
     subscriptionState,
     redemptionStatus: row.redeemStatus || row.purchaseLimit?.redeemStatus || '--',
+    market: normalizeExchange(row),
     source: row.source || meta.sourceProvider || 'internal',
     updatedAt,
     stale,
@@ -154,6 +167,7 @@ function normalizeUnifiedFund(row: RawFundRow, meta: FundSnapshot['meta']): Fund
     subscriptionStatus: '--',
     subscriptionState: 'unknown',
     redemptionStatus: '--',
+    market: normalizeExchange(row),
     source: row.source || meta.sourceProvider || 'internal',
     quoteSource: row.quoteSource || '',
     subscriptionSource: row.subscriptionSource || '',
@@ -189,6 +203,17 @@ function normalizeUnifiedType(value: unknown): FundType {
   if (text === 'LOF') return 'LOF';
   if (text === 'ETF') return 'ETF';
   return 'QDII';
+}
+
+function normalizeExchange(row: RawFundRow): string {
+  const explicit = String(row.exchange || row.exchangeMarket || row.marketCode || '').toUpperCase();
+  if (explicit.includes('SH') || explicit.includes('SSE') || explicit.includes('沪')) return 'SH';
+  if (explicit.includes('SZ') || explicit.includes('SZSE') || explicit.includes('深')) return 'SZ';
+
+  const code = String(row.code || '').replace(/^(SH|SZ)/i, '');
+  if (/^(15|16|18)/.test(code)) return 'SZ';
+  if (/^(50|51|52|56|58)/.test(code)) return 'SH';
+  return '';
 }
 
 function buildUpdatedAt(row: RawFundRow, meta: FundSnapshot['meta']): string {

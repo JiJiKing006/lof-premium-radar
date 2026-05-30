@@ -2421,6 +2421,198 @@ td small {
   color: var(--red);
 }
 
+.hot-arbitrage {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 10px;
+  padding: 10px;
+  border: 1px solid var(--grid);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 10px 26px rgba(26, 47, 71, 0.08);
+}
+
+.hot-arbitrage-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.hot-arbitrage h2 {
+  margin: 0;
+  color: #07131f;
+  font-size: 18px;
+  font-weight: 950;
+  line-height: 1.15;
+}
+
+.hot-arbitrage p {
+  margin: 5px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 850;
+  line-height: 1.4;
+}
+
+.preview-pill {
+  flex: 0 0 auto;
+  padding: 5px 8px;
+  border: 1px solid rgba(211, 47, 47, 0.2);
+  border-radius: 999px;
+  background: rgba(211, 47, 47, 0.08);
+  color: var(--red);
+  font-size: 11px;
+  font-weight: 950;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.hot-table-wrap {
+  overflow-x: auto;
+  border: 1px solid rgba(23, 58, 94, 0.1);
+  border-radius: 8px;
+  background: #fff;
+  -webkit-overflow-scrolling: touch;
+}
+
+.hot-table {
+  width: 100%;
+  min-width: 760px;
+  border-collapse: collapse;
+  color: var(--ink);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.hot-table th,
+.hot-table td {
+  height: 38px;
+  padding: 6px 7px;
+  border-bottom: 1px solid rgba(23, 58, 94, 0.08);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.hot-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: #f6f8fa;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 950;
+}
+
+.hot-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.hot-table tbody tr:nth-child(even) {
+  background: #fbfcfd;
+}
+
+.hot-table .rank-col {
+  width: 34px;
+  padding-right: 2px;
+  text-align: center;
+}
+
+.hot-rank {
+  display: inline-grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  border-radius: 6px;
+  background: var(--navy);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 950;
+}
+
+.hot-table .fund-col {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  min-width: 148px;
+  max-width: 176px;
+  background: inherit;
+  box-shadow: 8px 0 12px rgba(255, 255, 255, 0.78);
+}
+
+.hot-table thead .fund-col {
+  z-index: 3;
+  background: #f6f8fa;
+}
+
+.hot-table .fund-col strong,
+.hot-table .fund-col span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hot-table .fund-col strong {
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 950;
+  line-height: 1.15;
+}
+
+.hot-table .fund-col span {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 850;
+}
+
+.hot-table .number-col {
+  text-align: right;
+}
+
+.hot-table .hot-score-cell {
+  color: var(--orange);
+  font-weight: 950;
+}
+
+.hot-table .time-col,
+.hot-table .source-col {
+  max-width: 132px;
+  overflow: hidden;
+  color: var(--muted);
+  text-overflow: ellipsis;
+}
+
+@media (max-width: 520px) {
+  .hot-arbitrage {
+    padding: 8px;
+  }
+
+  .hot-arbitrage-head {
+    align-items: flex-start;
+  }
+
+  .hot-arbitrage p {
+    font-size: 11px;
+  }
+
+  .hot-table {
+    min-width: 700px;
+    font-size: 11px;
+  }
+
+  .hot-table th,
+  .hot-table td {
+    height: 34px;
+    padding: 5px 6px;
+  }
+
+  .hot-table .fund-col {
+    min-width: 132px;
+    max-width: 148px;
+  }
+}
+
 @keyframes card-in {
   from {
     opacity: 0;

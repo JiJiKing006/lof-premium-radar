@@ -3,11 +3,14 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import DataStatusBar from '../components/DataStatusBar.vue';
 import DetailPanel from '../components/DetailPanel.vue';
 import FilterTabs from '../components/FilterTabs.vue';
+import HotArbitragePanel from '../components/HotArbitragePanel.vue';
 import RadarTable from '../components/RadarTable.vue';
 import SearchBar from '../components/SearchBar.vue';
 import SortBar from '../components/SortBar.vue';
 import { useFilters } from '../composables/useFilters';
 import { useFunds } from '../composables/useFunds';
+import { useHotArbitrage } from '../composables/useHotArbitrage';
+import { hotArbitragePreviewRows } from '../mocks/hotArbitragePreview';
 import type { FundItem, FundSortKey } from '../types/fund';
 
 const AUTO_REFRESH_INTERVAL = 30_000;
@@ -16,6 +19,7 @@ const selectedFund = ref<FundItem | null>(null);
 const excludePausedPurchase = ref(false);
 const sortDirection = ref<'asc' | 'desc'>('desc');
 const { funds, meta, initialLoading, polling, refreshNow } = useFunds(section);
+const { rows: hotArbitrageRows, loading: hotArbitrageLoading, error: hotArbitrageError, refreshHotArbitrage } = useHotArbitrage(section);
 const favoriteCodes = ref<Set<string>>(new Set(loadFavoriteCodes()));
 const toastText = ref('');
 const pulseCode = ref('');
@@ -42,6 +46,18 @@ const nextRefreshIn = computed(() => {
   return Math.max(0, Math.ceil((lastSuccessMs + AUTO_REFRESH_INTERVAL - nowTick.value) / 1000));
 });
 const abnormalCount = computed(() => funds.value.filter((fund) => fund.stale || fund.confidence < 70 || fund.errorMessage).length);
+const hotPreviewEnabled = isDevMode();
+const displayedHotArbitrageRows = computed(() => {
+  if (hotArbitrageRows.value.length) return hotArbitrageRows.value;
+  if (!hotPreviewEnabled || hotArbitrageLoading.value || hotArbitrageError.value) return [];
+  return hotArbitragePreviewRows;
+});
+const hotArbitragePreview = computed(() => !hotArbitrageRows.value.length && displayedHotArbitrageRows.value.some((row) => row.isPreview));
+const shouldShowHotArbitrage = computed(() => (
+  hotArbitrageLoading.value
+  || Boolean(hotArbitrageError.value)
+  || displayedHotArbitrageRows.value.length > 0
+));
 const dataVersion = computed(() => {
   const rowSignature = visibleFunds.value
     .map((fund) => [
@@ -79,6 +95,7 @@ async function handleManualRefresh() {
   manualRefreshing.value = true;
   try {
     await refreshNow();
+    await refreshHotArbitrage();
   } finally {
     await keepManualRefreshVisible(startedAt);
     manualRefreshing.value = false;
@@ -164,6 +181,11 @@ function storeFavoriteCodes(codes: Set<string>) {
     // Ignore local storage errors.
   }
 }
+
+function isDevMode() {
+  const env = (import.meta as unknown as { env?: { DEV?: boolean; MODE?: string } }).env;
+  return Boolean(env?.DEV || env?.MODE === 'development');
+}
 </script>
 
 <template>
@@ -213,19 +235,27 @@ function storeFavoriteCodes(codes: Set<string>) {
       :section="section === 'WATCH' ? selectedFund.type : section"
       @back="selectedFund = null"
     />
-    <RadarTable
-      v-else
-      :rows="visibleFunds.map((fund) => fund.raw || fund)"
-      :loading="initialLoading"
-      :sort-key="sortKey"
-      :sort-direction="sortDirection"
-      :favorite-codes="favoriteCodes"
-      :pulse-code="pulseCode"
-      :data-version="dataVersion"
-      @sort="handleTableSort"
-      @toggle-favorite="toggleFavorite"
-      @select="selectedFund = fundFromRaw($event)"
-    />
+    <template v-else>
+      <HotArbitragePanel
+        v-if="shouldShowHotArbitrage"
+        :rows="displayedHotArbitrageRows"
+        :loading="hotArbitrageLoading"
+        :error="hotArbitrageError"
+        :preview="hotArbitragePreview"
+      />
+      <RadarTable
+        :rows="visibleFunds.map((fund) => fund.raw || fund)"
+        :loading="initialLoading"
+        :sort-key="sortKey"
+        :sort-direction="sortDirection"
+        :favorite-codes="favoriteCodes"
+        :pulse-code="pulseCode"
+        :data-version="dataVersion"
+        @sort="handleTableSort"
+        @toggle-favorite="toggleFavorite"
+        @select="selectedFund = fundFromRaw($event)"
+      />
+    </template>
 
     <Transition name="toast">
       <div v-if="toastText" class="watch-toast" role="status">{{ toastText }}</div>

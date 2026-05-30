@@ -1,0 +1,7 @@
+interface:
+  display_name: "LOF ETF Data Guardian"
+  short_description: "Guard real fund data quality"
+  default_prompt: "Use $lof-etf-data-guardian to review fund data authenticity, source attribution, timestamps, fallback logic, and premium-rate calculations."
+
+policy:
+  allow_implicit_invocation: true

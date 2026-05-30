@@ -6,6 +6,7 @@ import { createServer as createViteServer } from 'vite';
 import { getDataSourceHealth } from './services/sourceHealth.js';
 import { getFundDetail, getFundList, getFundQuotes } from './services/fundAggregator.js';
 import { getFundHistory } from './services/fundHistoryService.js';
+import { getHotArbitrageList } from './services/hotArbitrageService.js';
 import { fetchMarketIndices } from './sources/marketIndexSource.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -47,6 +48,23 @@ app.get('/api/funds/quotes', async (request, response) => {
   } catch (error) {
     response.status(503).json({
       meta: { status: error.message || '行情服务不可用', stale: true },
+      rows: [],
+    });
+  }
+});
+
+app.get('/api/funds/hot-arbitrage', async (request, response) => {
+  try {
+    const snapshot = await getHotArbitrageList({
+      category: String(request.query.category || 'ALL'),
+      limit: Number(request.query.limit || 20),
+      force: request.query.force === '1',
+    });
+    response.setHeader('Cache-Control', 'no-store');
+    response.json(snapshot);
+  } catch (error) {
+    response.status(503).json({
+      meta: { status: error.message || '热门套利榜不可用', stale: true },
       rows: [],
     });
   }
