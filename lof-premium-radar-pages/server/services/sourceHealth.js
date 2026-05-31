@@ -20,21 +20,11 @@ export function recordSourceFailure(source, error, latency = null) {
 }
 
 export function getDataSourceHealth() {
-  const names = ['palmmicro', 'haoetf', 'eastmoney', 'eastmoney-index', 'eastmoney-trend', 'eastmoney-history-nav', 'eastmoney-history-price', 'tiantian-subscription', 'sina', 'akshare', 'tiantian', 'jisilu', 'lof', 'cache'];
+  const names = ['palmmicro', 'haoetf', 'eastmoney', 'eastmoney-index', 'eastmoney-trend', 'eastmoney-history-nav', 'eastmoney-history-price', 'tiantian-subscription', 'sse-share', 'szse-share', 'sina', 'akshare', 'tiantian', 'jisilu', 'lof', 'cache'];
   return Object.fromEntries(names.map((name) => [name, health.get(name) || { ok: false, latency: null, lastSuccessTime: '', error: '尚未请求' }]));
 }
 
 export function formatShanghaiTime(date = new Date()) {
-  const parts = new Intl.DateTimeFormat('zh-CN', {
-    timeZone: 'Asia/Shanghai',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: false,
-  }).formatToParts(date);
-  const pick = (type) => parts.find((part) => part.type === type)?.value || '';
-  return `${pick('year')}-${pick('month')}-${pick('day')} ${pick('hour')}:${pick('minute')}:${pick('second')}`;
+  const shanghai = new Date(date.getTime() + 8 * 60 * 60_000);
+  return `${shanghai.toISOString().slice(0, 10)} ${shanghai.toISOString().slice(11, 19)}`;
 }

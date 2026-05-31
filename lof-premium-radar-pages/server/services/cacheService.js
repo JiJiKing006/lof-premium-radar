@@ -29,6 +29,7 @@ export const cacheTtl = {
   indices: 3_000,
   trends: 15_000,
   nav: 60_000,
+  exchangeShares: 10 * 60_000,
   history: 5 * 60_000,
   fundList: 10 * 60_000,
 };

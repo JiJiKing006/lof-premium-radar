@@ -67,15 +67,21 @@ async function fetchFreshQuotes(category, cacheKey) {
   throw new Error(errors.join('；') || '行情数据源全部不可用');
 }
 
-function sourcePlan(category) {
+export function sourcePlan(category) {
   if (category === 'LOF') {
     return [
       { name: 'palmmicro', status: 'primary', hasNav: true, fetcher: fetchPalmmicroLofQuotes },
+      { name: 'eastmoney', status: 'fallback', hasNav: false, fetcher: fetchEastmoneyQuotes },
+      { name: 'sina', status: 'fallback', hasNav: false, fetcher: fetchSinaQuotes },
+      { name: 'akshare', status: 'fallback', hasNav: false, fetcher: fetchAkshareQuotes },
     ];
   }
   if (category === 'QDII' || category === 'ETF') {
     return [
       { name: 'haoetf', status: 'primary', hasNav: true, fetcher: () => fetchHaoetfQuotes(category) },
+      { name: 'eastmoney', status: 'fallback', hasNav: false, fetcher: fetchEastmoneyQuotes },
+      { name: 'sina', status: 'fallback', hasNav: false, fetcher: fetchSinaQuotes },
+      { name: 'akshare', status: 'fallback', hasNav: false, fetcher: fetchAkshareQuotes },
     ];
   }
   return [

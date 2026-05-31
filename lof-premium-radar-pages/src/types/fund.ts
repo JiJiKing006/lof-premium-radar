@@ -36,6 +36,7 @@ export interface FundItem {
   premiumNote?: string;
   estimatedNavSource?: string;
   estimatedNavTime?: string;
+  navSource?: string;
   estimateConfidence?: string;
   estimateDeviationRate?: number | null;
   estimateWarning?: string;
@@ -43,6 +44,10 @@ export interface FundItem {
   volume: number | null;
   amount: number | null;
   turnover?: number | null;
+  shareAmount?: string;
+  shareChange?: string;
+  shareSource?: string;
+  shareTime?: string;
   subscriptionStatus: string;
   subscriptionState: SubscriptionState;
   redemptionStatus: string;
@@ -141,7 +146,6 @@ export interface HotArbitrageItem {
   updateTime: string;
   source: string;
   quoteSource?: string;
-  isPreview?: boolean;
 }
 
 export interface HotArbitrageSnapshot {

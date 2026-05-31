@@ -40,18 +40,9 @@ function isValidSameDayCloseQuote(quoteTime, now) {
   const match = String(quoteTime).match(/^(\d{4}-\d{2}-\d{2}) (\d{2}):(\d{2})/);
   if (!match) return false;
   const [, quoteDate, hour, minute] = match;
-  const nowParts = new Intl.DateTimeFormat('zh-CN', {
-    timeZone: 'Asia/Shanghai',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  }).formatToParts(new Date(now));
-  const pick = (type) => nowParts.find((part) => part.type === type)?.value || '';
-  const nowDate = `${pick('year')}-${pick('month')}-${pick('day')}`;
-  const nowMinutes = Number(pick('hour')) * 60 + Number(pick('minute'));
+  const shanghai = new Date(now + 8 * 60 * 60_000);
+  const nowDate = shanghai.toISOString().slice(0, 10);
+  const nowMinutes = shanghai.getUTCHours() * 60 + shanghai.getUTCMinutes();
   const quoteMinutes = Number(hour) * 60 + Number(minute);
   return quoteDate === nowDate && nowMinutes >= 15 * 60 + 30 && quoteMinutes >= 14 * 60 + 55;
 }

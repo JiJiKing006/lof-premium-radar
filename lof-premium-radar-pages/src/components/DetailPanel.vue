@@ -2,7 +2,8 @@
 import { computed, onMounted, ref, watch } from 'vue';
 import { fetchFundDetail, fetchFundHistory } from '../api/funds';
 import type { FundHistoryRow, FundItem } from '../types/fund';
-import Sparkline from './Sparkline.vue';
+import { formatShareChangeText, formatShareValue, shareChangeClass } from '../utils/format';
+import { sourceLabel, sourceReference } from '../utils/sourceLinks';
 
 const props = defineProps<{
   row: FundItem;
@@ -15,9 +16,10 @@ const detail = ref<FundItem>(props.row);
 const history = ref<FundHistoryRow[]>([]);
 const loading = ref(true);
 const error = ref('');
+const historySkeletonRows = Array.from({ length: 8 }, (_, index) => index);
 
 const current = computed(() => detail.value || props.row);
-const minuteRows = computed(() => (current.value.intraday || []).slice(-36).reverse());
+const latestHistory = computed(() => history.value[0]);
 
 onMounted(loadDetail);
 watch(() => props.row.code, loadDetail);
@@ -42,20 +44,20 @@ async function loadDetail() {
 
 function formatNumber(value: unknown, digits = 3) {
   const number = Number(value);
-  if (!Number.isFinite(number)) return '-';
+  if (!Number.isFinite(number)) return '暂无数据';
   return number.toFixed(digits).replace(/\.?0+$/, '');
 }
 
 function percentText(value: unknown, { sign = false }: { sign?: boolean } = {}) {
   const number = Number(value);
-  if (!Number.isFinite(number)) return '-';
+  if (!Number.isFinite(number)) return '暂无数据';
   const prefix = sign && number > 0 ? '+' : '';
   return `${prefix}${number.toFixed(2)}%`;
 }
 
 function amountText(value: unknown) {
   const number = Number(value);
-  if (!Number.isFinite(number)) return '-';
+  if (!Number.isFinite(number)) return '暂无数据';
   if (Math.abs(number) >= 100_000_000) return `${(number / 100_000_000).toFixed(2)}亿`;
   if (Math.abs(number) >= 10_000) return `${(number / 10_000).toFixed(1)}万`;
   return number.toFixed(0);
@@ -80,20 +82,34 @@ function valueClass(value: unknown, inverse = false) {
   return up ? 'value-up' : 'value-down';
 }
 
-function sourceLabel(source: unknown) {
-  const text = String(source || '').toLowerCase();
-  if (text.includes('tiantian')) return '天天基金';
-  if (text.includes('jisilu')) return '集思录';
-  if (text.includes('haoetf')) return 'HaoETF';
-  if (text.includes('palmmicro') || text === 'lof') return 'Palmmicro';
-  return String(source || '');
+function navSource(fund: FundItem) {
+  return fund.navSource || (fund.raw?.navSource as string) || fund.source || '';
 }
 
-function estimateReference(fund: FundItem) {
-  const source = sourceLabel(fund.estimatedNavSource);
-  const time = fund.estimatedNavTime || fund.navQuoteTime || fund.navDate || fund.quoteTime || '';
-  if (source && time) return `${source} · ${time}`;
-  return source || time || '-';
+function estimatedSource(fund: FundItem) {
+  return fund.estimatedNavSource || (fund.raw?.estimatedNavSource as string) || '';
+}
+
+function sourceText(source: unknown) {
+  return sourceLabel(source) || '暂无数据';
+}
+
+function sourceHref(source: unknown, fund: FundItem = current.value) {
+  return sourceReference(source, fund.code, fund.type)?.url || '';
+}
+
+function shareSourceText(fund: FundItem) {
+  if (!hasShareData(fund)) return '暂无数据';
+  return sourceText(fund.shareSource);
+}
+
+function shareSourceHref(fund: FundItem) {
+  if (!hasShareData(fund)) return '';
+  return sourceHref(fund.shareSource, fund);
+}
+
+function hasShareData(fund: FundItem) {
+  return Boolean(fund.shareAmount || fund.shareChange);
 }
 </script>
 
@@ -102,7 +118,6 @@ function estimateReference(fund: FundItem) {
     <div class="detail-scroll">
       <nav class="detail-nav">
         <button type="button" @click="$emit('back')">返回列表</button>
-        <span>{{ current.type }} · {{ current.code }}</span>
       </nav>
 
       <div class="detail-hero">
@@ -135,6 +150,10 @@ function estimateReference(fund: FundItem) {
             <span>涨跌幅</span>
             <strong :class="valueClass(current.changeRate ?? current.changePercent)">{{ percentText(current.changeRate ?? current.changePercent, { sign: true }) }}</strong>
           </article>
+          <article>
+            <span>上日净值涨幅</span>
+            <strong :class="valueClass(latestHistory?.navGrowthRate)">{{ percentText(latestHistory?.navGrowthRate, { sign: true }) }}</strong>
+          </article>
         </div>
       </div>
       <div v-if="error" class="detail-warning">{{ error }}</div>
@@ -142,53 +161,137 @@ function estimateReference(fund: FundItem) {
       <section class="detail-section">
         <header>
           <strong>实时行情</strong>
-          <span>行情、净值、成交与当日走势</span>
+          <span>行情、净值、成交、份额</span>
         </header>
         <div class="detail-live-grid">
-          <div class="detail-chart-cell">
-            <Sparkline :points="current.intraday || []" />
-          </div>
-          <table class="detail-mini-table">
-            <tbody>
-              <tr><th>基金代码</th><td>{{ current.code }}</td><th>基金名称</th><td>{{ current.name }}</td></tr>
-              <tr><th>现价</th><td :class="valueClass(current.changeRate ?? current.changePercent)">{{ formatNumber(current.marketPrice ?? current.price) }}</td><th>涨跌幅</th><td :class="valueClass(current.changeRate ?? current.changePercent)">{{ percentText(current.changeRate ?? current.changePercent, { sign: true }) }}</td></tr>
-              <tr><th>官方净值</th><td>{{ formatNumber(current.lastNav ?? current.nav) }}</td><th>净值日期</th><td>{{ current.navDate || '-' }}</td></tr>
-              <tr><th>估算净值</th><td>{{ formatNumber(current.estimatedNav ?? current.estimatedValue) }}</td><th>估值参考</th><td>{{ estimateReference(current) }}</td></tr>
-              <tr><th>实时溢价率</th><td :class="valueClass(current.premiumRate)">{{ percentText(current.premiumRate) }}</td><th>估值校验</th><td>{{ current.estimateWarning || current.premiumNote || '-' }}</td></tr>
-              <tr><th>成交量</th><td>{{ amountText(current.volume) }}</td><th>成交额</th><td>{{ amountText(current.turnover ?? current.amount) }}</td></tr>
-              <tr><th>申购状态</th><td>{{ purchaseText(current) }}</td><th>更新时间</th><td>{{ current.updateTime || '-' }}</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </section>
+          <div class="detail-field-columns" aria-label="实时行情字段">
+            <table class="detail-two-col-table" aria-label="实时行情字段">
+              <tbody>
+                <tr>
+                  <th scope="row">基金代码</th>
+                  <td>{{ current.code }}</td>
+                </tr>
+                <tr>
+                  <th scope="row">基金名称</th>
+                  <td>{{ current.name }}</td>
+                </tr>
+                <tr>
+                  <th scope="row">现价</th>
+                  <td>{{ formatNumber(current.marketPrice ?? current.price) }}</td>
+                </tr>
+                <tr>
+                  <th scope="row">涨跌幅</th>
+                  <td :class="valueClass(current.changeRate ?? current.changePercent)">{{ percentText(current.changeRate ?? current.changePercent, { sign: true }) }}</td>
+                </tr>
+                <tr>
+                  <th scope="row">实时溢价率</th>
+                  <td :class="valueClass(current.premiumRate)">{{ percentText(current.premiumRate) }}</td>
+                </tr>
+                <tr>
+                  <th scope="row">官方净值</th>
+                  <td>
+                    <span class="detail-value-stack">
+                      <strong>{{ formatNumber(current.lastNav ?? current.nav) }}</strong>
+                      <small>
+                        <a
+                          v-if="sourceHref(navSource(current), current)"
+                          class="source-link"
+                          :href="sourceHref(navSource(current), current)"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >{{ sourceText(navSource(current)) }}</a>
+                        <template v-else>{{ sourceText(navSource(current)) }}</template>
+                      </small>
+                    </span>
+                  </td>
+                </tr>
+                <tr>
+                  <th scope="row">净值日期</th>
+                  <td>{{ current.navDate || '暂无数据' }}</td>
+                </tr>
+                <tr>
+                  <th scope="row">更新时间</th>
+                  <td>{{ current.updateTime || '暂无数据' }}</td>
+                </tr>
+              </tbody>
+            </table>
 
-      <section class="detail-section">
-        <header>
-          <strong>当日分时</strong>
-          <span>真实分钟线，按最新时间倒序</span>
-        </header>
-        <div class="detail-table-wrap">
-          <table class="detail-data-table">
-            <thead>
-              <tr>
-                <th>时间</th>
-                <th>价格</th>
-                <th>成交量</th>
-                <th>成交额</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="point in minuteRows" :key="`${point.time}-${point.price}`">
-                <td>{{ point.time || '-' }}</td>
-                <td>{{ formatNumber(point.price) }}</td>
-                <td>{{ amountText(point.volume) }}</td>
-                <td>{{ amountText(point.turnover) }}</td>
-              </tr>
-              <tr v-if="!minuteRows.length">
-                <td colspan="4" class="empty-state">暂无分时数据</td>
-              </tr>
-            </tbody>
-          </table>
+            <table class="detail-two-col-table" aria-label="实时行情字段续表">
+              <tbody>
+                <tr>
+                  <th scope="row">上日净值涨幅</th>
+                  <td :class="valueClass(latestHistory?.navGrowthRate)">{{ percentText(latestHistory?.navGrowthRate, { sign: true }) }}</td>
+                </tr>
+                <tr>
+                  <th scope="row">估算净值</th>
+                  <td>
+                    <span class="detail-value-stack">
+                      <strong>{{ formatNumber(current.estimatedNav ?? current.estimatedValue) }}</strong>
+                      <small>
+                        <a
+                          v-if="sourceHref(estimatedSource(current), current)"
+                          class="source-link"
+                          :href="sourceHref(estimatedSource(current), current)"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >{{ sourceText(estimatedSource(current)) }}</a>
+                        <template v-else>{{ sourceText(estimatedSource(current)) }}</template>
+                      </small>
+                    </span>
+                  </td>
+                </tr>
+                <tr>
+                  <th scope="row">估值时间</th>
+                  <td>{{ current.estimatedNavTime || current.navQuoteTime || current.navDate || current.quoteTime || '暂无数据' }}</td>
+                </tr>
+                <tr>
+                  <th scope="row">场内份额</th>
+                  <td>
+                    <span class="detail-value-stack">
+                      <strong>{{ formatShareValue(current.shareAmount) }}</strong>
+                      <small v-if="shareSourceHref(current)">
+                        <a
+                          class="source-link"
+                          :href="shareSourceHref(current)"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >{{ shareSourceText(current) }}</a>
+                      </small>
+                      <small v-else-if="hasShareData(current)">{{ shareSourceText(current) }}</small>
+                    </span>
+                  </td>
+                </tr>
+                <tr>
+                  <th scope="row">较上一日份额</th>
+                  <td>
+                    <span class="detail-value-stack">
+                      <strong :class="shareChangeClass(current.shareChange)">{{ hasShareData(current) ? formatShareValue(current.shareChange) : '暂无数据' }}</strong>
+                      <small v-if="hasShareData(current)">{{ current.shareTime || '暂无数据' }}</small>
+                    </span>
+                  </td>
+                </tr>
+                <tr>
+                  <th scope="row">成交额</th>
+                  <td>{{ amountText(current.turnover ?? current.amount) }}</td>
+                </tr>
+                <tr>
+                  <th scope="row">成交量</th>
+                  <td>{{ amountText(current.volume) }}</td>
+                </tr>
+                <tr>
+                  <th scope="row">申购状态</th>
+                  <td>{{ purchaseText(current) }}</td>
+                </tr>
+                <tr>
+                  <th scope="row">估值校验</th>
+                  <td>{{ current.estimateWarning || current.premiumNote || '暂无数据' }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="detail-source-note">
+            数据参考：行情 {{ sourceText(current.quoteSource || current.source) }}；净值 {{ sourceText(navSource(current)) }}；份额 {{ shareSourceText(current) }}。
+          </p>
         </div>
       </section>
 
@@ -202,29 +305,58 @@ function estimateReference(fund: FundItem) {
             <thead>
               <tr>
                 <th>日期</th>
+                <th>开盘</th>
+                <th>最高</th>
+                <th>最低</th>
                 <th>收盘价</th>
+                <th>场内涨幅</th>
                 <th>单位净值</th>
                 <th>历史溢价率</th>
                 <th>净值涨幅</th>
+                <th>成交量</th>
                 <th>成交额</th>
                 <th>申购状态</th>
               </tr>
             </thead>
             <tbody>
-              <tr v-for="item in history" :key="item.date">
-                <td>{{ item.date }}</td>
-                <td :class="valueClass(item.changeRate)">{{ formatNumber(item.closePrice) }}</td>
-                <td>{{ formatNumber(item.unitNav, 4) }}</td>
-                <td :class="valueClass(item.premiumRate)">{{ percentText(item.premiumRate) }}</td>
-                <td :class="valueClass(item.navGrowthRate)">{{ percentText(item.navGrowthRate, { sign: true }) }}</td>
-                <td>{{ amountText(item.turnover) }}</td>
-                <td>{{ item.purchaseStatus || '-' }}</td>
-              </tr>
+              <template v-if="loading">
+                <tr
+                  v-for="row in historySkeletonRows"
+                  :key="`history-skeleton-${row}`"
+                  class="skeleton-row"
+                  aria-hidden="true"
+                >
+                  <td class="date-cell"><span class="skeleton-line skeleton-date"></span></td>
+                  <td><span class="skeleton-line skeleton-num"></span></td>
+                  <td><span class="skeleton-line skeleton-num"></span></td>
+                  <td><span class="skeleton-line skeleton-num"></span></td>
+                  <td><span class="skeleton-line skeleton-num"></span></td>
+                  <td><span class="skeleton-line skeleton-num"></span></td>
+                  <td><span class="skeleton-line skeleton-num"></span></td>
+                  <td><span class="skeleton-line skeleton-num"></span></td>
+                  <td><span class="skeleton-line skeleton-num long"></span></td>
+                  <td><span class="skeleton-line skeleton-num long"></span></td>
+                  <td><span class="skeleton-line skeleton-note"></span></td>
+                </tr>
+              </template>
+              <template v-else>
+                <tr v-for="item in history" :key="item.date">
+                  <td class="date-cell">{{ item.date }}</td>
+                  <td>{{ formatNumber(item.openPrice) }}</td>
+                  <td>{{ formatNumber(item.highPrice) }}</td>
+                  <td>{{ formatNumber(item.lowPrice) }}</td>
+                  <td :class="valueClass(item.changeRate)">{{ formatNumber(item.closePrice) }}</td>
+                  <td :class="valueClass(item.changeRate)">{{ percentText(item.changeRate, { sign: true }) }}</td>
+                  <td>{{ formatNumber(item.unitNav, 4) }}</td>
+                  <td :class="valueClass(item.premiumRate)">{{ percentText(item.premiumRate) }}</td>
+                  <td :class="valueClass(item.navGrowthRate)">{{ percentText(item.navGrowthRate, { sign: true }) }}</td>
+                  <td>{{ amountText(item.volume) }}</td>
+                  <td>{{ amountText(item.turnover) }}</td>
+                  <td>{{ item.purchaseStatus || '暂无数据' }}</td>
+                </tr>
+              </template>
               <tr v-if="!history.length && !loading">
-                <td colspan="7" class="empty-state">暂无历史数据</td>
-              </tr>
-              <tr v-if="loading">
-                <td colspan="7" class="empty-state">正在加载历史数据</td>
+                <td colspan="11" class="empty-state">暂无历史数据</td>
               </tr>
             </tbody>
           </table>

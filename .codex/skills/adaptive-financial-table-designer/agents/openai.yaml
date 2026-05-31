@@ -1,0 +1,4 @@
+interface:
+  display_name: "Adaptive Financial Table Designer"
+  short_description: "Optimize LOF/ETF fund table widths, row heights, and mobile readability."
+  default_prompt: "Use $adaptive-financial-table-designer to optimize a LOF/ETF fund table for adaptive column widths and mobile readability."
