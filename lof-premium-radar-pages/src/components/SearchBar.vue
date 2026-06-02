@@ -1,8 +1,7 @@
 <script setup lang="ts">
-defineProps<{ modelValue: string; refreshing?: boolean }>();
+defineProps<{ modelValue: string }>();
 defineEmits<{
   'update:modelValue': [value: string];
-  refresh: [];
 }>();
 </script>
 
@@ -18,8 +17,5 @@ defineEmits<{
         @input="$emit('update:modelValue', ($event.target as HTMLInputElement).value)"
       />
     </label>
-    <button type="button" :disabled="refreshing" :class="{ refreshing }" @click="$emit('refresh')">
-      <span>{{ refreshing ? '更新中...' : '刷新' }}</span>
-    </button>
   </section>
 </template>

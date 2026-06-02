@@ -5,6 +5,7 @@ import { fetchEastmoneyQuotes } from '../sources/eastmoneySource.js';
 import { fetchHaoetfQuotes } from '../sources/haoetfSource.js';
 import { fetchPalmmicroLofQuotes } from '../sources/palmmicroSource.js';
 import { fetchSinaQuotes } from '../sources/sinaSource.js';
+import { normalizeCategory as normalizeFundCategory } from './fundNormalizer.js';
 
 const inFlight = new Map();
 
@@ -34,11 +35,12 @@ async function fetchFreshQuotes(category, cacheKey) {
     const startedAt = Date.now();
     try {
       const rows = await source.fetcher();
-      if (!Array.isArray(rows) || !rows.length) throw new Error(`${source.name} 返回空数组`);
+      const categoryRows = filterRowsForCategory(rows, category);
+      if (!Array.isArray(categoryRows) || !categoryRows.length) throw new Error(`${source.name} ${category} 返回空数组`);
       const latency = Date.now() - startedAt;
       recordSourceSuccess(source.name, latency);
       const payload = {
-        rows: rows.map((row) => ({ ...row, sourceStatus: source.status })),
+        rows: categoryRows.map((row) => ({ ...row, sourceStatus: source.status })),
         source: source.name,
         sourceStatus: source.status,
         hasNav: source.hasNav,
@@ -65,6 +67,12 @@ async function fetchFreshQuotes(category, cacheKey) {
 
   recordSourceFailure('cache', new Error('没有可用缓存'));
   throw new Error(errors.join('；') || '行情数据源全部不可用');
+}
+
+export function filterRowsForCategory(rows, category) {
+  if (!Array.isArray(rows)) return [];
+  if (category === 'ALL') return rows;
+  return rows.filter((row) => normalizeFundCategory(row) === category);
 }
 
 export function sourcePlan(category) {

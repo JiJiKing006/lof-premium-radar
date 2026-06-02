@@ -52,4 +52,20 @@ describe('premiumService', () => {
     expect(result.estimateConfidence).toBe('high');
     expect(result.estimateWarning).toBe('');
   });
+
+  it('prefers Sina estimates over third-party aggregator estimates', () => {
+    const result = calculatePremium({
+      marketPrice: 1.25,
+      estimatedNav: 1.2,
+      estimatedNavSource: 'haoetf',
+      estimatedNavTime: '2026-05-29 15:00:00',
+      supplementalEstimatedNav: 1.19,
+      supplementalNavSource: 'sina',
+      supplementalNavTime: '2026-05-29 15:00:00',
+      lastNav: 1.1,
+    });
+
+    expect(result.estimatedNav).toBe(1.19);
+    expect(result.selectedNavSource).toBe('sina');
+  });
 });

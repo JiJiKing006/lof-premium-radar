@@ -3,13 +3,11 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import DataStatusBar from '../components/DataStatusBar.vue';
 import DetailPanel from '../components/DetailPanel.vue';
 import FilterTabs from '../components/FilterTabs.vue';
-import HotArbitragePanel from '../components/HotArbitragePanel.vue';
 import RadarTable from '../components/RadarTable.vue';
 import SearchBar from '../components/SearchBar.vue';
 import SortBar from '../components/SortBar.vue';
 import { useFilters } from '../composables/useFilters';
 import { useFunds } from '../composables/useFunds';
-import { useHotArbitrage } from '../composables/useHotArbitrage';
 import type { FundItem, FundSortKey } from '../types/fund';
 
 const AUTO_REFRESH_INTERVAL = 30_000;
@@ -17,12 +15,10 @@ const section = ref('LOF');
 const selectedFund = ref<FundItem | null>(null);
 const excludePausedPurchase = ref(false);
 const sortDirection = ref<'asc' | 'desc'>('desc');
-const { funds, meta, initialLoading, polling, refreshNow } = useFunds(section);
-const { rows: hotArbitrageRows, loading: hotArbitrageLoading, error: hotArbitrageError, refreshHotArbitrage } = useHotArbitrage(section);
+const { funds, meta, initialLoading, polling } = useFunds(section);
 const favoriteCodes = ref<Set<string>>(new Set(loadFavoriteCodes()));
 const toastText = ref('');
 const pulseCode = ref('');
-const manualRefreshing = ref(false);
 const nowTick = ref(Date.now());
 const showBackTop = ref(false);
 let toastTimer: number | undefined;
@@ -34,9 +30,6 @@ const tabFunds = computed(() => {
   return funds.value.filter((fund) => favoriteCodes.value.has(fund.code));
 });
 const { query, sortKey, visibleFunds } = useFilters(tabFunds, excludePausedPurchase, sortDirection);
-const pullStart = ref<number | null>(null);
-const pullDistance = ref(0);
-
 const pollingPaused = computed(() => polling.paused.value);
 const pollingError = computed(() => polling.error.value);
 const pollingLastSuccessAt = computed(() => polling.lastSuccessAt.value);
@@ -47,15 +40,6 @@ const nextRefreshIn = computed(() => {
   return Math.max(0, Math.ceil((lastSuccessMs + AUTO_REFRESH_INTERVAL - nowTick.value) / 1000));
 });
 const abnormalCount = computed(() => funds.value.filter((fund) => fund.stale || fund.confidence < 70 || fund.errorMessage).length);
-const displayedHotArbitrageRows = computed(() => hotArbitrageRows.value);
-const showHotArbitrageEntry = computed(() => displayedHotArbitrageRows.value.length > 0);
-const hotDrawerOpen = ref(false);
-const hotTabTop = ref<number | null>(loadHotTabTop());
-const hotTabDragging = ref(false);
-const hotTabStyle = computed(() => (hotTabTop.value === null ? {} : { '--hot-tab-top': `${hotTabTop.value}px` }));
-let hotTabPointerId: number | null = null;
-let hotTabStartY = 0;
-let hotTabStartTop = 0;
 const dataVersion = computed(() => {
   const rowSignature = visibleFunds.value
     .map((fund) => [
@@ -70,40 +54,6 @@ const dataVersion = computed(() => {
     .join('|');
   return `${meta.value?.updateTime || meta.value?.latestQuoteTime || 'initial'}:${rowSignature}`;
 });
-
-function onTouchStart(event: TouchEvent) {
-  if (window.scrollY > 0) return;
-  pullStart.value = event.touches[0]?.clientY ?? null;
-}
-
-function onTouchMove(event: TouchEvent) {
-  if (pullStart.value === null) return;
-  pullDistance.value = Math.max(0, (event.touches[0]?.clientY ?? 0) - pullStart.value);
-}
-
-function onTouchEnd() {
-  if (pullDistance.value > 70) refreshNow();
-  pullStart.value = null;
-  pullDistance.value = 0;
-}
-
-async function handleManualRefresh() {
-  if (manualRefreshing.value) return;
-  const startedAt = Date.now();
-  manualRefreshing.value = true;
-  try {
-    await refreshNow();
-    await refreshHotArbitrage();
-  } finally {
-    await keepManualRefreshVisible(startedAt);
-    manualRefreshing.value = false;
-  }
-}
-
-function keepManualRefreshVisible(startedAt: number) {
-  const remaining = 360 - (Date.now() - startedAt);
-  return remaining > 0 ? new Promise((resolve) => window.setTimeout(resolve, remaining)) : Promise.resolve();
-}
 
 function handleTableSort(key: FundSortKey) {
   if (sortKey.value === key) {
@@ -120,7 +70,6 @@ function fundFromRaw(raw: Record<string, unknown>): FundItem {
 
 function handleSelectFund(raw: Record<string, unknown>) {
   selectedFund.value = fundFromRaw(raw);
-  hotDrawerOpen.value = false;
 }
 
 function handleDetailBack() {
@@ -154,50 +103,6 @@ function showToast(message: string) {
   }, 1800);
 }
 
-function onHotTabPointerDown(event: PointerEvent) {
-  if (event.button !== 0) return;
-  event.preventDefault();
-  hotTabPointerId = event.pointerId;
-  hotTabStartY = event.clientY;
-  hotTabStartTop = hotTabTop.value ?? Math.round(window.innerHeight * 0.48);
-  hotTabDragging.value = false;
-  window.addEventListener('pointermove', onHotTabPointerMove);
-  window.addEventListener('pointerup', onHotTabPointerUp);
-  window.addEventListener('pointercancel', onHotTabPointerCancel);
-}
-
-function onHotTabPointerMove(event: PointerEvent) {
-  if (hotTabPointerId !== event.pointerId) return;
-  const deltaY = event.clientY - hotTabStartY;
-  if (Math.abs(deltaY) > 4) hotTabDragging.value = true;
-  hotTabTop.value = clampHotTabTop(hotTabStartTop + deltaY);
-}
-
-function onHotTabPointerUp(event: PointerEvent) {
-  if (hotTabPointerId !== event.pointerId) return;
-  cleanupHotTabDrag();
-  if (hotTabDragging.value) {
-    storeHotTabTop(hotTabTop.value);
-    window.setTimeout(() => {
-      hotTabDragging.value = false;
-    }, 0);
-    return;
-  }
-  hotDrawerOpen.value = true;
-}
-
-function onHotTabPointerCancel() {
-  cleanupHotTabDrag();
-  hotTabDragging.value = false;
-}
-
-function cleanupHotTabDrag() {
-  hotTabPointerId = null;
-  window.removeEventListener('pointermove', onHotTabPointerMove);
-  window.removeEventListener('pointerup', onHotTabPointerUp);
-  window.removeEventListener('pointercancel', onHotTabPointerCancel);
-}
-
 function refreshScrollTargets() {
   cleanupScrollTargets();
   scrollTargets = Array.from(document.querySelectorAll('.table-scroll, .detail-scroll'));
@@ -226,22 +131,11 @@ function scrollToPageTop() {
   window.setTimeout(syncBackTopVisibility, 360);
 }
 
-function clampHotTabTop(value: number) {
-  const min = 74;
-  const max = Math.max(min, window.innerHeight - 74);
-  return Math.min(max, Math.max(min, Math.round(value)));
-}
-
 watch(section, () => {
   selectedFund.value = null;
   excludePausedPurchase.value = false;
   sortKey.value = 'premiumRate';
   sortDirection.value = 'desc';
-  hotDrawerOpen.value = false;
-});
-
-watch(showHotArbitrageEntry, (visible) => {
-  if (!visible) hotDrawerOpen.value = false;
 });
 
 watch(selectedFund, () => {
@@ -267,7 +161,6 @@ onBeforeUnmount(() => {
   window.clearInterval(countdownTimer);
   window.removeEventListener('scroll', syncBackTopVisibility);
   cleanupScrollTargets();
-  cleanupHotTabDrag();
 });
 
 function loadFavoriteCodes(): string[] {
@@ -288,34 +181,10 @@ function storeFavoriteCodes(codes: Set<string>) {
   }
 }
 
-function loadHotTabTop(): number | null {
-  try {
-    const value = Number(window.localStorage.getItem('hot-drawer-tab-top'));
-    return Number.isFinite(value) ? clampHotTabTop(value) : null;
-  } catch {
-    return null;
-  }
-}
-
-function storeHotTabTop(value: number | null) {
-  if (value === null) return;
-  try {
-    window.localStorage.setItem('hot-drawer-tab-top', String(value));
-  } catch {
-    // Ignore local storage errors.
-  }
-}
-
 </script>
 
 <template>
-  <main
-    class="mobile-shell"
-    :class="{ 'detail-mode': selectedFund }"
-    @touchstart.passive="onTouchStart"
-    @touchmove.passive="onTouchMove"
-    @touchend.passive="onTouchEnd"
-  >
+  <main class="mobile-shell" :class="{ 'detail-mode': selectedFund }">
     <template v-if="!selectedFund">
       <header class="mobile-header">
         <div class="mobile-brand">
@@ -336,15 +205,10 @@ function storeHotTabTop(value: number | null) {
         </div>
       </header>
 
-      <div class="pull-hint" :style="{ height: `${Math.min(pullDistance, 76)}px` }">
-        {{ pullDistance > 70 ? '松开刷新' : '下拉刷新' }}
-      </div>
-
       <div class="sticky-tools">
-        <SearchBar v-model="query" :refreshing="manualRefreshing" @refresh="handleManualRefresh" />
+        <SearchBar v-model="query" />
         <DataStatusBar
           :meta="meta"
-          :refreshing="manualRefreshing"
           :paused="pollingPaused"
           :error="pollingError"
           :last-success-at="pollingLastSuccessAt"
@@ -383,53 +247,6 @@ function storeHotTabTop(value: number | null) {
       <strong>jijiking</strong>
     </footer>
     <div class="bottom-safe-area" aria-hidden="true"></div>
-
-    <button
-      v-if="showHotArbitrageEntry && !selectedFund"
-      type="button"
-      class="hot-drawer-tab"
-      :class="{ dragging: hotTabDragging }"
-      :style="hotTabStyle"
-      :aria-expanded="hotDrawerOpen"
-      aria-controls="hot-drawer"
-      @pointerdown="onHotTabPointerDown"
-      @keydown.enter.prevent="hotDrawerOpen = true"
-      @keydown.space.prevent="hotDrawerOpen = true"
-    >
-      <span>热门</span>
-      <b>{{ displayedHotArbitrageRows.length }}</b>
-    </button>
-
-    <Transition name="drawer-fade">
-      <div
-        v-if="hotDrawerOpen"
-        class="hot-drawer-mask"
-        role="presentation"
-        @click="hotDrawerOpen = false"
-      ></div>
-    </Transition>
-    <Transition name="drawer-slide">
-      <aside
-        v-if="hotDrawerOpen"
-        id="hot-drawer"
-        class="hot-drawer"
-        aria-label="热门观察侧边栏"
-      >
-        <div class="hot-drawer-head">
-          <div>
-            <strong>热门观察</strong>
-            <span>仅作套利信号辅助</span>
-          </div>
-          <button type="button" aria-label="关闭热门观察" @click="hotDrawerOpen = false">×</button>
-        </div>
-        <HotArbitragePanel
-          :rows="displayedHotArbitrageRows"
-          :loading="false"
-          :error="hotArbitrageError"
-          compact
-        />
-      </aside>
-    </Transition>
 
     <Transition name="toast">
       <div v-if="toastText" class="watch-toast" role="status">{{ toastText }}</div>

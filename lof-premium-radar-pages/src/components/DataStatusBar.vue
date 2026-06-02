@@ -4,7 +4,6 @@ import type { FundSnapshot } from '../types/fund';
 
 const props = defineProps<{
   meta: FundSnapshot['meta'] | null;
-  refreshing: boolean;
   paused: boolean;
   error?: string;
   lastSuccessAt?: string | null;
@@ -14,9 +13,9 @@ const props = defineProps<{
 
 const timeText = computed(() => props.meta?.updateTime || props.meta?.latestQuoteTime || props.lastSuccessAt || '-');
 const refreshText = computed(() => {
-  if (props.paused) return '暂停刷新';
-  if (typeof props.nextRefreshIn !== 'number') return '30秒自动刷新';
-  return `${props.nextRefreshIn}秒后自动刷新`;
+  if (props.paused) return '自动更新暂停';
+  if (typeof props.nextRefreshIn !== 'number') return '自动更新';
+  return `${props.nextRefreshIn}秒后自动更新`;
 });
 </script>
 

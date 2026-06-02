@@ -1,7 +1,0 @@
-interface:
-  display_name: "LOF ETF Product Designer"
-  short_description: "Design mobile fund tools"
-  default_prompt: "Use $lof-etf-product-designer to design or improve a mobile-first LOF/ETF/QDII fund premium product experience."
-
-policy:
-  allow_implicit_invocation: true

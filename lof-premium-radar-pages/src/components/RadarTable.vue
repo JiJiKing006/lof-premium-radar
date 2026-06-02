@@ -244,7 +244,7 @@ function columnWidthVar(column) {
 <template>
   <section class="table-card board" :style="tableStyle" aria-label="LOF 溢价表格">
     <div class="table-meta board-topline">
-      <span class="table-title">LOF套利表格</span>
+      <span class="table-title">基金观察表格</span>
       <strong>{{ rows.length }}</strong>
       <span>条记录</span>
     </div>

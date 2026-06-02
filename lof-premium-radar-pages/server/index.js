@@ -4,6 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createServer as createViteServer } from 'vite';
 import { getDataSourceHealth } from './services/sourceHealth.js';
+import { createDevServerOptions } from './services/devServerOptions.js';
 import { getFundDetail, getFundList, getFundQuotes } from './services/fundAggregator.js';
 import { getFundHistory } from './services/fundHistoryService.js';
 import { getHotArbitrageList } from './services/hotArbitrageService.js';
@@ -130,11 +131,7 @@ if (isProduction) {
     response.sendFile(path.join(root, 'dist', 'index.html'));
   });
 } else {
-  const vite = await createViteServer({
-    root,
-    server: { middlewareMode: true },
-    appType: 'spa',
-  });
+  const vite = await createViteServer(createDevServerOptions({ root, port }));
   app.use(vite.middlewares);
 }
 

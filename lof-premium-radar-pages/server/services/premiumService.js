@@ -101,10 +101,12 @@ function compareCandidateQuality(left, right) {
 function sourcePriority(source) {
   const text = String(source || '').toLowerCase();
   if (text.includes('tiantian')) return 95;
-  if (text.includes('jisilu')) return 90;
-  if (text.includes('haoetf')) return 85;
-  if (text.includes('palmmicro')) return 80;
-  if (text === 'lof') return 75;
+  if (text.includes('sina')) return 92;
+  if (text.includes('eastmoney')) return 90;
+  if (text.includes('jisilu')) return 82;
+  if (text.includes('haoetf')) return 78;
+  if (text.includes('palmmicro')) return 75;
+  if (text === 'lof') return 72;
   return 70;
 }
 
