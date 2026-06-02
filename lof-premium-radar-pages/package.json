@@ -10,7 +10,12 @@
     "preview": "NODE_ENV=production node server/index.js",
     "typecheck": "vue-tsc --noEmit",
     "test": "vitest run",
-    "lint": "vite --host 127.0.0.1 --version"
+    "lint": "vite --host 127.0.0.1 --version",
+    "workflow:next": "node scripts/workflow.mjs next",
+    "workflow:prompt": "node scripts/workflow.mjs prompt",
+    "workflow:check": "node scripts/workflow.mjs check",
+    "workflow:complete": "node scripts/workflow.mjs complete",
+    "workflow:changelog": "node scripts/workflow.mjs changelog"
   },
   "dependencies": {
     "@vitejs/plugin-vue": "^6.0.7",

@@ -11,7 +11,7 @@ const props = defineProps<{
   nextRefreshIn?: number | null;
 }>();
 
-const timeText = computed(() => props.meta?.updateTime || props.meta?.latestQuoteTime || props.lastSuccessAt || '-');
+const timeText = computed(() => props.meta?.updateTime || props.meta?.latestQuoteTime || props.lastSuccessAt || '暂无数据');
 const refreshText = computed(() => {
   if (props.paused) return '自动更新暂停';
   if (typeof props.nextRefreshIn !== 'number') return '自动更新';

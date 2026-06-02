@@ -20,6 +20,7 @@ export function useFilters(
         String(fund.raw?.indexName || '').toLowerCase().includes(keyword);
 
       if (!matchesKeyword) return false;
+      if (!hasRenderablePremiumRate(fund)) return false;
       if (marketFilter.value !== 'ALL' && inferExchange(fund) !== marketFilter.value) return false;
       if (excludePausedPurchase.value && isPausedPurchase(fund)) return false;
       return true;
@@ -36,6 +37,17 @@ export function useFilters(
   return { query, sortKey, visibleFunds };
 }
 
+function hasRenderablePremiumRate(fund: FundItem): boolean {
+  return displayPremiumRateValue(fund) !== null;
+}
+
+function displayPremiumRateValue(fund: FundItem): number | null {
+  const value = fund.premiumRate ?? fund.raw?.premiumRate ?? fund.raw?.realtimePremiumValue ?? fund.raw?.realtimePremium;
+  if (value === null || value === undefined || value === '') return null;
+  const number = Number(String(value).replace('%', '').replace(/,/g, ''));
+  return Number.isFinite(number) ? number : null;
+}
+
 function inferExchange(fund: FundItem): MarketFilter | '' {
   const market = String(fund.market || fund.raw?.market || fund.raw?.exchange || '').toUpperCase();
   if (market.includes('SH') || market.includes('SSE') || market.includes('沪')) return 'SH';
@@ -48,6 +60,7 @@ function inferExchange(fund: FundItem): MarketFilter | '' {
 }
 
 function sortValue(fund: FundItem, key: FundSortKey): number {
+  if (key === 'premiumRate') return displayPremiumRateValue(fund) ?? Number.NEGATIVE_INFINITY;
   if (key === 'price') return fund.marketPrice ?? fund.price ?? Number.NEGATIVE_INFINITY;
   if (key === 'turnover') return fund.turnover ?? fund.amount ?? Number.NEGATIVE_INFINITY;
   if (key === 'changeRate') return fund.changeRate ?? fund.changePercent ?? Number.NEGATIVE_INFINITY;

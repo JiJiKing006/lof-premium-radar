@@ -136,12 +136,17 @@ async function loadTiantian(navMap, codes) {
   }
 }
 
-function selectTiantianCodes(quotes) {
+export function selectTiantianCodes(quotes) {
   return quotes
-    .filter((row) => row.category === 'QDII' || row.category === 'LOF')
+    .filter((row) => row.category === 'QDII' || row.category === 'LOF' || isNasdaqTechnologyQuote(row))
     .sort((left, right) => (right.turnover || 0) - (left.turnover || 0))
     .map((row) => row.code)
     .slice(0, TIANTIAN_LIMIT);
+}
+
+export function isNasdaqTechnologyQuote(row = {}) {
+  const text = `${row.code || ''} ${row.name || ''} ${row.fundName || ''} ${row.indexName || ''}`;
+  return /纳斯达克|纳指|NASDAQ/i.test(text) || /标普科技/.test(text);
 }
 
 function chunk(items, size) {

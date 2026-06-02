@@ -5,7 +5,7 @@ export function toNumber(value) {
 }
 
 export function formatEmpty(value) {
-  return value === null || value === undefined || value === '' ? '-' : value;
+  return value === null || value === undefined || value === '' ? '暂无数据' : value;
 }
 
 export function premiumClass(value) {
@@ -27,5 +27,5 @@ export function priceClass(row) {
 export function quoteDateTime(row) {
   const date = row.quoteDate || '';
   const time = row.quoteTime || '';
-  return `${date} ${time}`.trim() || '-';
+  return `${date} ${time}`.trim() || '暂无数据';
 }

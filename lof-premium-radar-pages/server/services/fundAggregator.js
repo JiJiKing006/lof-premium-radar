@@ -35,7 +35,10 @@ export async function getFundQuotes({ category = '', force = false, includeTrend
       exchangeShare: exchangeShareMap.get(quote.code),
     }),
   );
-  const filtered = normalizedCategory === 'ALL' ? rows : rows.filter((row) => row.category === normalizedCategory);
+  const dedupedRows = dedupeFundsByCodePriority(rows);
+  const filtered = filterRenderablePremiumRows(
+    normalizedCategory === 'ALL' ? dedupedRows : dedupedRows.filter((row) => row.category === normalizedCategory),
+  );
 
   return {
     meta: {
@@ -44,7 +47,7 @@ export async function getFundQuotes({ category = '', force = false, includeTrend
       sourceProvider: quotePayload.source,
       sourceStatus: quotePayload.sourceStatus,
       rowCount: filtered.length,
-      allCount: rows.length,
+      allCount: dedupedRows.length,
       warn: quotePayload.errors?.join('；') || '',
       latestQuoteTime: latestQuoteTime(filtered),
       updateTime,
@@ -54,6 +57,23 @@ export async function getFundQuotes({ category = '', force = false, includeTrend
     },
     rows: filtered,
   };
+}
+
+export function dedupeFundsByCodePriority(rows) {
+  const byCode = new Map();
+  rows.forEach((row) => {
+    const code = normalizeFundCode(row.code);
+    if (!code) return;
+    const existing = byCode.get(code);
+    if (!existing || categoryRank(row.category) < categoryRank(existing.category)) {
+      byCode.set(code, row);
+    }
+  });
+  return [...byCode.values()];
+}
+
+export function filterRenderablePremiumRows(rows) {
+  return rows.filter((row) => Number.isFinite(row.premiumRate));
 }
 
 export async function getFundList({ category = '', force = false } = {}) {
@@ -186,4 +206,16 @@ function latestQuoteTime(rows) {
     .filter(Boolean)
     .sort()
     .at(-1) || '';
+}
+
+function normalizeFundCode(code) {
+  return String(code || '').replace(/^(SZ|SH)/i, '').trim();
+}
+
+function categoryRank(category) {
+  const text = String(category || '').toUpperCase();
+  if (text === 'LOF') return 0;
+  if (text === 'QDII') return 1;
+  if (text === 'ETF') return 2;
+  return 99;
 }

@@ -12,15 +12,16 @@ export async function getFundHistory(code, { limit = 60, force = false } = {}) {
     if (cached) return cached;
   }
 
-  const [navRows, priceRows] = await Promise.all([
+  const [navRows, priceSnapshot] = await Promise.all([
     fetchNavHistory(normalizedCode, { limit, force }),
     fetchPriceHistory(normalizedCode, { limit, force }),
   ]);
+  const priceRows = priceSnapshot.rows;
   const priceMap = new Map(priceRows.map((row) => [row.date, row]));
   const rows = navRows.map((nav) => {
     const price = priceMap.get(nav.date);
     const close = price?.close ?? null;
-    const premiumRate = close !== null && nav.unitNav ? (close / nav.unitNav - 1) * 100 : null;
+    const premiumRate = calculateHistoricalPremium({ close, unitNav: nav.unitNav });
     return {
       date: nav.date,
       unitNav: nav.unitNav,
@@ -37,22 +38,31 @@ export async function getFundHistory(code, { limit = 60, force = false } = {}) {
       purchaseStatus: nav.purchaseStatus,
       redemptionStatus: nav.redemptionStatus,
       navSource: 'eastmoney-f10',
-      priceSource: price ? 'eastmoney-kline' : '',
+      priceSource: price ? priceSnapshot.source : '',
     };
   });
 
+  const sourceProvider = priceSnapshot.source === 'sina-kline' ? 'eastmoney,sina' : 'eastmoney';
   const payload = {
     meta: {
       code: normalizedCode,
       rowCount: rows.length,
       navCount: navRows.length,
       priceCount: priceRows.length,
-      sourceProvider: 'eastmoney',
+      sourceProvider,
+      priceSource: priceSnapshot.source,
       status: 'ok',
     },
     rows,
   };
   return cache.set(cacheKey, payload, cacheTtl.history);
+}
+
+export function calculateHistoricalPremium({ close, unitNav }) {
+  if (!Number.isFinite(close) || !Number.isFinite(unitNav) || unitNav <= 0) return null;
+  const ratio = close / unitNav;
+  if (ratio < 0.2 || ratio > 5) return null;
+  return (ratio - 1) * 100;
 }
 
 async function fetchNavHistory(code, { limit }) {
@@ -101,6 +111,16 @@ async function fetchNavHistory(code, { limit }) {
 }
 
 async function fetchPriceHistory(code, { limit }) {
+  const eastmoneyRows = await fetchEastmoneyPriceHistory(code, { limit });
+  if (eastmoneyRows.length) return { source: 'eastmoney-kline', rows: eastmoneyRows };
+
+  const sinaRows = await fetchSinaPriceHistory(code, { limit });
+  if (sinaRows.length) return { source: 'sina-kline', rows: sinaRows };
+
+  return { source: '', rows: [] };
+}
+
+async function fetchEastmoneyPriceHistory(code, { limit }) {
   const startedAt = Date.now();
   try {
     const url = new URL('https://push2his.eastmoney.com/api/qt/stock/kline/get');
@@ -144,9 +164,50 @@ async function fetchPriceHistory(code, { limit }) {
   }
 }
 
+async function fetchSinaPriceHistory(code, { limit }) {
+  const startedAt = Date.now();
+  try {
+    const url = new URL('https://money.finance.sina.com.cn/quotes_service/api/json_v2.php/CN_MarketData.getKLineData');
+    url.searchParams.set('symbol', `${exchangePrefix(code)}${code}`);
+    url.searchParams.set('scale', '240');
+    url.searchParams.set('ma', 'no');
+    url.searchParams.set('datalen', String(Math.min(Math.max(limit, 20), 120)));
+    const response = await fetch(url, {
+      signal: AbortSignal.timeout(12_000),
+      headers: {
+        accept: 'application/json,text/plain,*/*',
+        referer: 'https://finance.sina.com.cn/',
+        'user-agent': 'Mozilla/5.0 LOF-Premium-Radar/0.1',
+      },
+    });
+    if (!response.ok) throw new Error(`新浪历史价格返回 ${response.status}`);
+    const json = await response.json();
+    const rows = (Array.isArray(json) ? json : []).map((row) => ({
+      date: clean(row.day),
+      open: toNumber(row.open),
+      close: toNumber(row.close),
+      high: toNumber(row.high),
+      low: toNumber(row.low),
+      volume: toNumber(row.volume) !== null ? toNumber(row.volume) / 100 : null,
+      turnover: null,
+      changeRate: null,
+    })).filter((row) => row.date);
+    if (!rows.length) throw new Error('新浪历史价格为空或字段变更');
+    recordSourceSuccess('sina-history-price', Date.now() - startedAt);
+    return rows;
+  } catch (error) {
+    recordSourceFailure('sina-history-price', error, Date.now() - startedAt);
+    return [];
+  }
+}
+
 function secid(code) {
   const normalized = normalizeCode(code);
   return `${normalized.startsWith('5') ? '1' : '0'}.${normalized}`;
+}
+
+function exchangePrefix(code) {
+  return /^(5|6)/.test(normalizeCode(code)) ? 'sh' : 'sz';
 }
 
 function clean(value) {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { toUnifiedFund } from './fundAggregator.js';
+import { dedupeFundsByCodePriority, filterRenderablePremiumRows, toUnifiedFund } from './fundAggregator.js';
 
 describe('fundAggregator', () => {
   it('calculates realtime premium from the selected cross-checked estimate', () => {
@@ -101,5 +101,29 @@ describe('fundAggregator', () => {
     expect(row.shareAmount).toBe('');
     expect(row.shareChange).toBe('');
     expect(row.shareSource).toBe('');
+  });
+
+  it('filters rows without a calculable premium rate from list output', () => {
+    const rows = filterRenderablePremiumRows([
+      { code: '160916', premiumRate: -0.69 },
+      { code: '167302', premiumRate: null },
+      { code: '159001', premiumRate: Number.NaN },
+    ]);
+
+    expect(rows.map((row) => row.code)).toEqual(['160916']);
+  });
+
+  it('deduplicates funds by code and prefers LOF before QDII before ETF', () => {
+    const rows = dedupeFundsByCodePriority([
+      { code: '159001', name: 'ETF版本', category: 'ETF' },
+      { code: 'SZ159001', name: 'QDII版本', category: 'QDII' },
+      { code: '159001', name: 'LOF版本', category: 'LOF' },
+      { code: '513100', name: '纳指ETF', category: 'ETF' },
+    ]);
+
+    expect(rows).toEqual([
+      { code: '159001', name: 'LOF版本', category: 'LOF' },
+      { code: '513100', name: '纳指ETF', category: 'ETF' },
+    ]);
   });
 });

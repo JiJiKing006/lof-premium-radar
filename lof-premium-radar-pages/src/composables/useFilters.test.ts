@@ -44,4 +44,23 @@ describe('useFilters', () => {
 
     expect(visibleFunds.value.map((item) => item.code)).toEqual(['161125', '160216']);
   });
+
+  it('removes funds whose realtime premium would render as unavailable on the home page', () => {
+    const funds = ref([
+      fund({ code: '160001', name: '可展示溢价率', premiumRate: 0 }),
+      fund({ code: '160002', name: '空溢价率', premiumRate: null }),
+      fund({ code: '160003', name: '文本空溢价率', premiumRate: Number.NaN }),
+      fund({
+        code: '160004',
+        name: '原始字段可展示',
+        premiumRate: null,
+        raw: { realtimePremium: '1.23%' },
+      }),
+    ]);
+    const excludePausedPurchase = ref(false);
+    const sortDirection = ref<'asc' | 'desc'>('desc');
+    const { visibleFunds } = useFilters(funds, excludePausedPurchase, sortDirection);
+
+    expect(visibleFunds.value.map((item) => item.code)).toEqual(['160004', '160001']);
+  });
 });

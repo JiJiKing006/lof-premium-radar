@@ -68,4 +68,20 @@ describe('premiumService', () => {
     expect(result.estimatedNav).toBe(1.19);
     expect(result.selectedNavSource).toBe('sina');
   });
+
+  it('prefers Eastmoney estimates over Sina, Jisilu, and HaoETF estimates', () => {
+    const result = calculatePremium({
+      marketPrice: 1.25,
+      estimatedNav: 1.19,
+      estimatedNavSource: 'sina',
+      estimatedNavTime: '2026-05-29 15:00:00',
+      supplementalEstimatedNav: 1.18,
+      supplementalNavSource: 'eastmoney',
+      supplementalNavTime: '2026-05-29 15:00:00',
+      lastNav: 1.1,
+    });
+
+    expect(result.estimatedNav).toBe(1.18);
+    expect(result.selectedNavSource).toBe('eastmoney');
+  });
 });

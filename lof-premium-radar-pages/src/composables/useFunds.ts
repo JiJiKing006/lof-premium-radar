@@ -4,6 +4,14 @@ import type { FundItem, FundSnapshot } from '../types/fund';
 import { usePolling } from './usePolling';
 
 const AUTO_REFRESH_INTERVAL = 30_000;
+const PREFETCH_LEAD_MS = 5_000;
+
+interface PreparedSnapshot {
+  requestId: number;
+  section: string;
+  previous: Map<string, FundItem>;
+  snapshot: FundSnapshot;
+}
 
 export function useFunds(section: Ref<string>) {
   const funds = ref<FundItem[]>([]);
@@ -11,40 +19,50 @@ export function useFunds(section: Ref<string>) {
   const initialLoading = ref(true);
   let requestId = 0;
 
-  async function load({ force = false } = {}) {
+  async function prepareSnapshot({ force = false } = {}): Promise<PreparedSnapshot> {
     const currentRequestId = ++requestId;
     const requestSection = section.value;
     const previous = new Map(funds.value.map((fund) => [fund.code, fund]));
     const snapshot = await fetchSectionSnapshot({ force, section: requestSection, includeTrends: false });
-    if (currentRequestId !== requestId || requestSection !== section.value) return;
-    funds.value = mergeRows(snapshot.rows, previous);
-    meta.value = snapshot.meta;
-    storeSnapshot(requestSection, snapshot);
+    return { requestId: currentRequestId, section: requestSection, previous, snapshot };
+  }
+
+  function applySnapshot(prepared: PreparedSnapshot) {
+    if (prepared.requestId !== requestId || prepared.section !== section.value) return;
+    funds.value = mergeRows(prepared.snapshot.rows, prepared.previous);
+    meta.value = prepared.snapshot.meta;
+    storeSnapshot(prepared.section, prepared.snapshot);
     initialLoading.value = false;
   }
 
-  const polling = usePolling(() => load(), { interval: AUTO_REFRESH_INTERVAL, maxInterval: AUTO_REFRESH_INTERVAL, immediate: true });
+  const polling = usePolling(() => prepareSnapshot(), {
+    interval: AUTO_REFRESH_INTERVAL,
+    maxInterval: AUTO_REFRESH_INTERVAL,
+    immediate: true,
+    prefetchLeadMs: PREFETCH_LEAD_MS,
+    onData: applySnapshot,
+  });
 
-  onMounted(() => {
+  function hydrateSectionSnapshot() {
     const cached = hydrateSnapshot(section.value);
     if (cached) {
       funds.value = mergeRows(cached.rows, new Map());
       meta.value = { ...cached.meta, stale: true };
       initialLoading.value = false;
+      return;
     }
+    funds.value = [];
+    meta.value = null;
+  }
+
+  onMounted(() => {
+    hydrateSectionSnapshot();
     polling.start();
   });
 
   watch(section, () => {
     initialLoading.value = true;
-    funds.value = [];
-    meta.value = null;
-    const cached = hydrateSnapshot(section.value);
-    if (cached) {
-      funds.value = mergeRows(cached.rows, new Map());
-      meta.value = { ...cached.meta, stale: true };
-      initialLoading.value = false;
-    }
+    hydrateSectionSnapshot();
     polling.refreshNow();
   });
 

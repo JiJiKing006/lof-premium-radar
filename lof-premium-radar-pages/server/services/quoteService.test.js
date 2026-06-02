@@ -3,9 +3,9 @@ import { filterRowsForCategory, sourcePlan } from './quoteService.js';
 
 describe('quoteService', () => {
   it('keeps complete category feeds before broad quote fallbacks', () => {
-    expect(sourcePlan('LOF').map((source) => source.name)).toEqual(['palmmicro', 'eastmoney', 'sina', 'akshare']);
-    expect(sourcePlan('ETF').map((source) => source.name)).toEqual(['haoetf', 'eastmoney', 'sina', 'akshare']);
-    expect(sourcePlan('QDII').map((source) => source.name)).toEqual(['haoetf', 'eastmoney', 'sina', 'akshare']);
+    expect(sourcePlan('LOF').map((source) => source.name)).toEqual(['eastmoney', 'sina', 'akshare', 'palmmicro']);
+    expect(sourcePlan('ETF').map((source) => source.name)).toEqual(['eastmoney', 'sina', 'haoetf', 'akshare']);
+    expect(sourcePlan('QDII').map((source) => source.name)).toEqual(['eastmoney', 'sina', 'haoetf', 'akshare']);
   });
 
   it('filters source rows by requested category before accepting a fallback source', () => {

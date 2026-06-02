@@ -1,5 +1,5 @@
 <script setup>
-import { computed, shallowRef, ref, watchEffect } from 'vue';
+import { computed, onBeforeUnmount, shallowRef, ref, watchEffect } from 'vue';
 import { formatEmpty, premiumClass, priceClass } from '../domain/funds';
 import { computeSmartColumnWidths, createColumnWidthVars, stabilizeColumnWidths } from '../utils/adaptiveTableColumns';
 import { sourceLabel, sourceReference } from '../utils/sourceLinks';
@@ -14,16 +14,23 @@ const props = defineProps({
   dataVersion: { type: String, default: '' },
 });
 
-defineEmits(['sort', 'select', 'toggleFavorite']);
+const emit = defineEmits(['sort', 'select', 'toggleFavorite']);
 
-const SECURITY_COL_MIN_WIDTH = 102;
-const SECURITY_COL_MAX_WIDTH = 138;
-const SECURITY_COL_DEFAULT_WIDTH = 116;
-const SECURITY_COL_STORAGE_KEY = 'fund-security-col-width-v4';
+const SECURITY_COL_MIN_WIDTH = 132;
+const SECURITY_COL_MAX_WIDTH = 196;
+const SECURITY_COL_DEFAULT_WIDTH = 152;
+const SECURITY_COL_STORAGE_KEY = 'fund-security-col-width-v6';
 const skeletonRows = Array.from({ length: 10 }, (_, index) => index);
 
-const securityColWidth = ref(loadSecurityColWidth());
+const userSecurityColWidth = ref(loadSecurityColWidth());
+const securityColWidth = computed(() => userSecurityColWidth.value ?? estimateSecurityColumnWidth(props.rows));
 const stableColumnWidths = shallowRef({});
+const tableScroll = ref(null);
+let gestureStartX = 0;
+let gestureStartY = 0;
+let gestureStartScrollLeft = 0;
+let suppressRowClick = false;
+let suppressClickTimer;
 
 const columns = [
   {
@@ -32,9 +39,9 @@ const columns = [
     disabled: true,
     type: 'status',
     priority: 'low',
-    minWidth: 36,
-    preferredWidth: 36,
-    maxWidth: 36,
+    minWidth: 44,
+    preferredWidth: 44,
+    maxWidth: 44,
     nowrap: true,
     value: () => '',
   },
@@ -51,37 +58,37 @@ const columns = [
     value: (row) => `${row.name || ''} ${row.code || ''}`,
   },
   {
-    key: 'changeRate',
-    title: '涨跌幅',
+    key: 'premiumRate',
+    title: '实时溢价率',
     type: 'percent',
-    priority: 'medium',
-    minWidth: 58,
-    preferredWidth: 66,
-    maxWidth: 76,
+    priority: 'high',
+    minWidth: 92,
+    preferredWidth: 102,
+    maxWidth: 116,
     nowrap: true,
-    value: (row) => percentText(row.changeRate ?? row.changePercent ?? row.changeValue, { sign: true }),
+    value: (row) => `${percentText(row.premiumRate ?? row.realtimePremiumValue ?? row.realtimePremium)} ${row.premiumNote || ''}`,
   },
   {
     key: 'price',
     title: '现价',
     type: 'number',
     priority: 'high',
-    minWidth: 56,
-    preferredWidth: 64,
-    maxWidth: 72,
+    minWidth: 66,
+    preferredWidth: 72,
+    maxWidth: 84,
     nowrap: true,
-    value: (row) => navText(row.marketPrice ?? row.price, '-'),
+    value: (row) => valueText(row.marketPrice ?? row.price),
   },
   {
-    key: 'premiumRate',
-    title: '实时溢价率',
+    key: 'changeRate',
+    title: '涨跌幅',
     type: 'percent',
     priority: 'high',
-    minWidth: 78,
-    preferredWidth: 90,
-    maxWidth: 104,
+    minWidth: 70,
+    preferredWidth: 76,
+    maxWidth: 88,
     nowrap: true,
-    value: (row) => `${percentText(row.premiumRate ?? row.realtimePremiumValue ?? row.realtimePremium)} ${row.premiumNote || ''}`,
+    value: (row) => percentText(row.changeRate ?? row.changePercent ?? row.changeValue, { sign: true }),
   },
   {
     key: 'lastNav',
@@ -92,7 +99,7 @@ const columns = [
     preferredWidth: 94,
     maxWidth: 108,
     clamp: 2,
-    value: (row) => `${navText(row.lastNav ?? row.nav)} ${sourceText(navSource(row))} ${navDateText(row)}`,
+    value: (row) => `${officialNavText(row.lastNav ?? row.nav)} ${sourceText(navSource(row))} ${navDateText(row)}`,
   },
   {
     key: 'estimatedNav',
@@ -103,7 +110,7 @@ const columns = [
     preferredWidth: 94,
     maxWidth: 108,
     clamp: 2,
-    value: (row) => `${navText(row.estimatedNav ?? row.estimatedValue)} ${sourceText(estimatedSource(row))} ${estimatedTimeText(row)}`,
+    value: (row) => `${valueText(row.estimatedNav ?? row.estimatedValue)} ${sourceText(estimatedSource(row))} ${estimatedTimeText(row)}`,
   },
 ];
 
@@ -113,20 +120,28 @@ watchEffect(() => {
   stableColumnWidths.value = stabilizeColumnWidths(stableColumnWidths.value, widths);
 });
 
+onBeforeUnmount(() => {
+  window.clearTimeout(suppressClickTimer);
+});
+
 const tableStyle = computed(() => {
   return createColumnWidthVars(stableColumnWidths.value);
 });
 
 function percentText(value, { sign = false } = {}) {
-  if (value === null || value === undefined || value === '') return '-';
+  if (value === null || value === undefined || value === '') return '暂无数据';
   const number = Number(value);
   if (!Number.isFinite(number)) return formatEmpty(value);
   const prefix = sign && number > 0 ? '+' : '';
   return `${prefix}${number.toFixed(2)}%`;
 }
 
-function navText(value, fallback = '未公布') {
-  return value === null || value === undefined || value === '' ? fallback : value;
+function valueText(value) {
+  return value === null || value === undefined || value === '' ? '暂无数据' : value;
+}
+
+function officialNavText(value) {
+  return value === null || value === undefined || value === '' ? '净值未公布' : value;
 }
 
 function hasValue(value) {
@@ -142,6 +157,21 @@ function purchaseLimit(row) {
   };
 }
 
+function estimateSecurityColumnWidth(rows) {
+  const labels = rows.map((row) => purchaseLimit(row).label || '');
+  const longestLabel = labels.reduce((longest, label) => Math.max(longest, visibleTextWeight(label)), 0);
+  const width = SECURITY_COL_DEFAULT_WIDTH + Math.max(0, longestLabel - 5) * 8;
+  return Math.min(SECURITY_COL_MAX_WIDTH, Math.max(SECURITY_COL_DEFAULT_WIDTH, width));
+}
+
+function visibleTextWeight(value) {
+  return Array.from(String(value || '')).reduce((total, char) => {
+    if (/[\u3400-\u9fff]/u.test(char)) return total + 1;
+    if (/[0-9]/u.test(char)) return total + 0.58;
+    return total + 0.68;
+  }, 0);
+}
+
 function normalizePurchaseLabel(label, state) {
   const text = String(label || '').trim();
   if (state === 'open' && (/无限额|不限额/.test(text) || /开放/.test(text))) return '不限额';
@@ -150,7 +180,7 @@ function normalizePurchaseLabel(label, state) {
 }
 
 function navDateText(row) {
-  return row.navDate || row.navQuoteTime || row.quoteTime || '-';
+  return row.navDate || row.navQuoteTime || row.quoteTime || '暂无数据';
 }
 
 function navSource(row) {
@@ -187,6 +217,39 @@ function isChanged(row, keys) {
   return keys.some((key) => row.changedFields?.includes(key));
 }
 
+function beginTableGesture(event) {
+  gestureStartX = event.clientX;
+  gestureStartY = event.clientY;
+  gestureStartScrollLeft = tableScroll.value?.scrollLeft || 0;
+  suppressRowClick = false;
+}
+
+function trackTableGesture(event) {
+  const deltaX = event.clientX - gestureStartX;
+  const deltaY = event.clientY - gestureStartY;
+  const scrollDelta = Math.abs((tableScroll.value?.scrollLeft || 0) - gestureStartScrollLeft);
+  if ((Math.abs(deltaX) > 8 && Math.abs(deltaX) > Math.abs(deltaY)) || scrollDelta > 2) {
+    suppressRowClick = true;
+  }
+}
+
+function endTableGesture() {
+  window.clearTimeout(suppressClickTimer);
+  suppressClickTimer = window.setTimeout(() => {
+    suppressRowClick = false;
+  }, 220);
+}
+
+function handleRowClick(row, event) {
+  if (suppressRowClick) {
+    event.preventDefault();
+    event.stopPropagation();
+    suppressRowClick = false;
+    return;
+  }
+  emit('select', row);
+}
+
 function beginSecurityResize(event) {
   event.preventDefault();
   event.stopPropagation();
@@ -200,7 +263,7 @@ function beginSecurityResize(event) {
       SECURITY_COL_MAX_WIDTH,
       Math.max(SECURITY_COL_MIN_WIDTH, startWidth + moveEvent.clientX - startX),
     );
-    securityColWidth.value = nextWidth;
+    userSecurityColWidth.value = nextWidth;
   }
 
   function onEnd() {
@@ -218,13 +281,13 @@ function beginSecurityResize(event) {
 function loadSecurityColWidth() {
   try {
     const storedValue = window.localStorage.getItem(SECURITY_COL_STORAGE_KEY);
-    if (storedValue === null) return SECURITY_COL_DEFAULT_WIDTH;
+    if (storedValue === null) return null;
     const value = Number(storedValue);
     return Number.isFinite(value)
       ? Math.min(SECURITY_COL_MAX_WIDTH, Math.max(SECURITY_COL_MIN_WIDTH, value))
-      : SECURITY_COL_DEFAULT_WIDTH;
+      : null;
   } catch {
-    return SECURITY_COL_DEFAULT_WIDTH;
+    return null;
   }
 }
 
@@ -245,11 +308,24 @@ function columnWidthVar(column) {
   <section class="table-card board" :style="tableStyle" aria-label="LOF 溢价表格">
     <div class="table-meta board-topline">
       <span class="table-title">基金观察表格</span>
-      <strong>{{ rows.length }}</strong>
-      <span>条记录</span>
+      <template v-if="loading">
+        <strong>回显中</strong>
+      </template>
+      <template v-else>
+        <strong>{{ rows.length }}</strong>
+        <span>条记录</span>
+      </template>
+      <small>{{ loading ? '数据加载期间展示骨架屏' : '横向滑动查看净值与估算字段' }}</small>
     </div>
 
-    <div class="table-scroll table-wrap">
+    <div
+      ref="tableScroll"
+      class="table-scroll table-wrap"
+      @pointerdown="beginTableGesture"
+      @pointermove="trackTableGesture"
+      @pointerup="endTableGesture"
+      @pointercancel="endTableGesture"
+    >
       <table>
         <colgroup>
           <col
@@ -288,7 +364,7 @@ function columnWidthVar(column) {
           <template v-if="loading">
             <tr
               v-for="row in skeletonRows"
-              :key="`market-skeleton-${row}`"
+              :key="`fund-skeleton-${row}`"
               class="data-row skeleton-row"
               aria-hidden="true"
             >
@@ -301,12 +377,12 @@ function columnWidthVar(column) {
                   <span class="skeleton-line skeleton-code"></span>
                 </div>
               </td>
-              <td data-key="changeRate"><span class="skeleton-line skeleton-num"></span></td>
-              <td data-key="price"><span class="skeleton-line skeleton-num short"></span></td>
               <td data-key="premiumRate">
                 <span class="skeleton-line skeleton-num"></span>
                 <span class="skeleton-line skeleton-note"></span>
               </td>
+              <td data-key="price"><span class="skeleton-line skeleton-num short"></span></td>
+              <td data-key="changeRate"><span class="skeleton-line skeleton-num"></span></td>
               <td data-key="lastNav">
                 <span class="skeleton-line skeleton-num short"></span>
                 <span class="skeleton-line skeleton-note"></span>
@@ -326,7 +402,7 @@ function columnWidthVar(column) {
             :key="row.code"
             class="data-row"
             :style="{ animationDelay: `${Math.min(index, 12) * 18}ms` }"
-            @click="$emit('select', row)"
+            @click="handleRowClick(row, $event)"
           >
             <td class="favorite" data-key="favorite">
               <button
@@ -353,16 +429,16 @@ function columnWidthVar(column) {
                 </span>
               </div>
             </td>
-            <td data-key="changeRate" :class="[valueClass(row.changeRate ?? row.changePercent ?? row.changeValue), { 'sorted-column': sortKey === 'changeRate', changed: isChanged(row, ['changeRate', 'changePercent', 'changeValue']) }]">{{ percentText(row.changeRate ?? row.changePercent ?? row.changeValue, { sign: true }) }}</td>
-            <td data-key="price" :class="[priceClass({ change: row.changeRate ?? row.change }), { 'sorted-column': sortKey === 'price', changed: isChanged(row, ['price', 'marketPrice']) }]">
-              <strong>{{ navText(row.marketPrice ?? row.price, '-') }}</strong>
-            </td>
             <td data-key="premiumRate" :class="[premiumClass(row.premiumRate ?? row.realtimePremium), { 'sorted-column': sortKey === 'premiumRate', changed: isChanged(row, ['premiumRate', 'realtimePremium']) }]">
               <strong>{{ percentText(row.premiumRate ?? row.realtimePremiumValue ?? row.realtimePremium) }}</strong>
-              <small>{{ row.premiumNote || '-' }}</small>
+              <small>{{ row.premiumNote || '暂无数据' }}</small>
             </td>
+            <td data-key="price" :class="[priceClass({ change: row.changeRate ?? row.change }), { 'sorted-column': sortKey === 'price', changed: isChanged(row, ['price', 'marketPrice']) }]">
+              <strong>{{ valueText(row.marketPrice ?? row.price) }}</strong>
+            </td>
+            <td data-key="changeRate" :class="[valueClass(row.changeRate ?? row.changePercent ?? row.changeValue), { 'sorted-column': sortKey === 'changeRate', changed: isChanged(row, ['changeRate', 'changePercent', 'changeValue']) }]">{{ percentText(row.changeRate ?? row.changePercent ?? row.changeValue, { sign: true }) }}</td>
             <td data-key="lastNav" :class="{ 'sorted-column': sortKey === 'lastNav', changed: isChanged(row, ['lastNav', 'nav']) }">
-              <strong>{{ navText(row.lastNav ?? row.nav) }}</strong>
+              <strong>{{ officialNavText(row.lastNav ?? row.nav) }}</strong>
               <small>
                 <template v-if="hasValue(row.lastNav ?? row.nav)">
                   <a
@@ -376,11 +452,11 @@ function columnWidthVar(column) {
                   <span v-else>{{ sourceText(navSource(row)) }}</span>
                   <span class="nav-date-text">{{ navDateText(row) }}</span>
                 </template>
-                <template v-else>未公布</template>
+                <template v-else>净值未公布</template>
               </small>
             </td>
             <td data-key="estimatedNav" :class="{ 'sorted-column': sortKey === 'estimatedNav', changed: isChanged(row, ['estimatedNav', 'estimatedValue']) }">
-              <strong>{{ navText(row.estimatedNav ?? row.estimatedValue) }}</strong>
+              <strong>{{ valueText(row.estimatedNav ?? row.estimatedValue) }}</strong>
               <small>
                 <template v-if="hasValue(row.estimatedNav ?? row.estimatedValue)">
                   <a
@@ -401,5 +477,6 @@ function columnWidthVar(column) {
         </tbody>
       </table>
     </div>
+    <p class="table-scroll-hint">横向滑动查看更多字段</p>
   </section>
 </template>

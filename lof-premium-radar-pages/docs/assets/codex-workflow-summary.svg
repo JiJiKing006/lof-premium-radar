@@ -1,0 +1,172 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="2100" viewBox="0 0 1600 2100">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#f8fbff"/>
+      <stop offset="45%" stop-color="#f4fff9"/>
+      <stop offset="100%" stop-color="#fff8ee"/>
+    </linearGradient>
+    <linearGradient id="navy" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#10213f"/>
+      <stop offset="100%" stop-color="#1e4c78"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="10" stdDeviation="16" flood-color="#18314f" flood-opacity="0.14"/>
+    </filter>
+    <style>
+      .title { font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", Arial, sans-serif; font-size: 58px; font-weight: 800; fill: #0f1f3a; }
+      .subtitle { font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", Arial, sans-serif; font-size: 28px; font-weight: 500; fill: #42607c; }
+      .section-title { font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", Arial, sans-serif; font-size: 34px; font-weight: 800; fill: #0f1f3a; }
+      .card-title { font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", Arial, sans-serif; font-size: 30px; font-weight: 800; fill: #13213a; }
+      .body { font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", Arial, sans-serif; font-size: 24px; font-weight: 500; fill: #283b52; }
+      .body-small { font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", Arial, sans-serif; font-size: 21px; font-weight: 500; fill: #435a70; }
+      .mono { font-family: "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace; font-size: 22px; font-weight: 700; fill: #18324f; }
+      .pill { font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", Arial, sans-serif; font-size: 22px; font-weight: 800; fill: #0f5132; }
+      .white { fill: #ffffff; }
+      .muted { fill: #6c7c8d; }
+      .green { fill: #107a4d; }
+      .red { fill: #b42318; }
+      .blue { fill: #155eef; }
+      .line { stroke: #d7e2ec; stroke-width: 2; }
+      .arrow { stroke: #406d9f; stroke-width: 8; stroke-linecap: round; stroke-linejoin: round; fill: none; marker-end: url(#arrowHead); }
+    </style>
+    <marker id="arrowHead" markerWidth="14" markerHeight="14" refX="11" refY="7" orient="auto">
+      <path d="M2,2 L12,7 L2,12 Z" fill="#406d9f"/>
+    </marker>
+  </defs>
+
+  <rect width="1600" height="2100" fill="url(#bg)"/>
+
+  <rect x="82" y="66" width="1436" height="210" rx="34" fill="url(#navy)" filter="url(#shadow)"/>
+  <text x="132" y="150" class="title white">基金套利网站：单人 + AI Codex 工作流</text>
+  <text x="132" y="205" class="subtitle white">你只写简单需求，Codex 负责根据项目结构扩展提示、开发、验证、记录</text>
+  <text x="132" y="252" class="body-small white">核心原则：真实数据优先 · 需求进 todo · 完成要测试 · 状态要记录</text>
+
+  <rect x="92" y="322" width="1416" height="270" rx="26" fill="#ffffff" stroke="#cfe0f3" stroke-width="2" filter="url(#shadow)"/>
+  <text x="132" y="377" class="section-title">你需要做的事情</text>
+  <g>
+    <rect x="132" y="420" width="390" height="120" rx="22" fill="#eff8ff" stroke="#9bc8ff"/>
+    <text x="164" y="465" class="card-title">1. 打开 todo.md</text>
+    <text x="164" y="504" class="body-small">只在需求列表里写一句话</text>
+    <text x="164" y="535" class="mono">docs/todo.md</text>
+  </g>
+  <g>
+    <rect x="604" y="420" width="390" height="120" rx="22" fill="#f0fdf4" stroke="#9be4b5"/>
+    <text x="636" y="465" class="card-title">2. 写有序列表需求</text>
+    <text x="636" y="504" class="body-small">格式固定，内容可以很简单</text>
+    <text x="636" y="535" class="mono">1. [待开发] 优化数据来源</text>
+  </g>
+  <g>
+    <rect x="1076" y="420" width="390" height="120" rx="22" fill="#fff7ed" stroke="#f8c77e"/>
+    <text x="1108" y="465" class="card-title">3. 让 Codex 执行</text>
+    <text x="1108" y="504" class="body-small">直接说：开始执行 todo 下一个需求</text>
+    <text x="1108" y="535" class="mono">npm run workflow:prompt</text>
+  </g>
+  <path d="M535 480 H585" class="arrow"/>
+  <path d="M1007 480 H1057" class="arrow"/>
+
+  <rect x="92" y="638" width="1416" height="548" rx="26" fill="#ffffff" stroke="#d8e5ef" stroke-width="2" filter="url(#shadow)"/>
+  <text x="132" y="695" class="section-title">完整流程</text>
+
+  <g transform="translate(132 735)">
+    <rect width="244" height="170" rx="22" fill="#f5f9ff" stroke="#bdd3f0"/>
+    <circle cx="42" cy="42" r="26" fill="#dbeafe"/>
+    <text x="33" y="51" class="card-title blue">1</text>
+    <text x="28" y="95" class="card-title">记录需求</text>
+    <text x="28" y="132" class="body-small">你只写一句需求</text>
+    <text x="28" y="160" class="body-small">状态写 [待开发]</text>
+  </g>
+  <path d="M390 820 H462" class="arrow"/>
+
+  <g transform="translate(482 735)">
+    <rect width="244" height="170" rx="22" fill="#f7fee7" stroke="#b8df73"/>
+    <circle cx="42" cy="42" r="26" fill="#dcfce7"/>
+    <text x="33" y="51" class="card-title green">2</text>
+    <text x="28" y="95" class="card-title">生成提示词</text>
+    <text x="28" y="132" class="body-small">workflow 读取 todo</text>
+    <text x="28" y="160" class="body-small">自动补项目规则</text>
+  </g>
+  <path d="M740 820 H812" class="arrow"/>
+
+  <g transform="translate(832 735)">
+    <rect width="244" height="170" rx="22" fill="#fef6ff" stroke="#e5b8ee"/>
+    <circle cx="42" cy="42" r="26" fill="#f3e8ff"/>
+    <text x="33" y="51" class="card-title">3</text>
+    <text x="28" y="95" class="card-title">Codex 开发</text>
+    <text x="28" y="132" class="body-small">先优化需求</text>
+    <text x="28" y="160" class="body-small">再改代码实现</text>
+  </g>
+  <path d="M1090 820 H1162" class="arrow"/>
+
+  <g transform="translate(1182 735)">
+    <rect width="244" height="170" rx="22" fill="#fff7ed" stroke="#f7c172"/>
+    <circle cx="42" cy="42" r="26" fill="#ffedd5"/>
+    <text x="33" y="51" class="card-title">4</text>
+    <text x="28" y="95" class="card-title">完成验证</text>
+    <text x="28" y="132" class="body-small">测试 + 页面 + 接口</text>
+    <text x="28" y="160" class="body-small">真实数据检查</text>
+  </g>
+
+  <g transform="translate(248 970)">
+    <rect width="480" height="150" rx="22" fill="#eefbf5" stroke="#8bd6ad"/>
+    <text x="34" y="55" class="card-title">5. 更新记录</text>
+    <text x="34" y="95" class="body">通过后把需求状态改成</text>
+    <text x="34" y="130" class="mono">[已开发]</text>
+  </g>
+  <path d="M1320 916 C1320 1036 828 1045 748 1045" class="arrow"/>
+
+  <g transform="translate(872 970)">
+    <rect width="480" height="150" rx="22" fill="#f8fafc" stroke="#bfd0df"/>
+    <text x="34" y="55" class="card-title">6. 追加 changelog</text>
+    <text x="34" y="95" class="body">记录改了哪些文件、跑了哪些测试</text>
+    <text x="34" y="130" class="mono">docs/changelog.md</text>
+  </g>
+  <path d="M742 1045 H850" class="arrow"/>
+
+  <rect x="92" y="1234" width="690" height="430" rx="26" fill="#ffffff" stroke="#d8e5ef" stroke-width="2" filter="url(#shadow)"/>
+  <text x="132" y="1293" class="section-title">todo.md 推荐格式</text>
+  <rect x="132" y="1330" width="610" height="280" rx="18" fill="#0f172a"/>
+  <text x="164" y="1382" class="mono white"># 待开发需求清单</text>
+  <text x="164" y="1430" class="mono white">## P0（立即开发）</text>
+  <text x="164" y="1480" class="mono white">1. [待开发] 优化数据来源</text>
+  <text x="164" y="1526" class="mono white">2. [开发中] 添加纳斯达克科技数据</text>
+  <text x="164" y="1572" class="mono white">3. [已开发] 建立工作流自动化</text>
+
+  <rect x="818" y="1234" width="690" height="430" rx="26" fill="#ffffff" stroke="#d8e5ef" stroke-width="2" filter="url(#shadow)"/>
+  <text x="858" y="1293" class="section-title">状态含义</text>
+  <g transform="translate(858 1338)">
+    <rect width="168" height="56" rx="28" fill="#fff7ed" stroke="#fed7aa"/>
+    <text x="34" y="37" class="pill">待开发</text>
+    <text x="200" y="37" class="body">你刚写进去，还没开始处理</text>
+  </g>
+  <g transform="translate(858 1426)">
+    <rect width="168" height="56" rx="28" fill="#eff6ff" stroke="#bfdbfe"/>
+    <text x="34" y="37" class="pill blue">开发中</text>
+    <text x="200" y="37" class="body">Codex 正在拆需求、改代码</text>
+  </g>
+  <g transform="translate(858 1514)">
+    <rect width="168" height="56" rx="28" fill="#fefce8" stroke="#fde68a"/>
+    <text x="34" y="37" class="pill">测试中</text>
+    <text x="200" y="37" class="body">代码已改，正在验证效果</text>
+  </g>
+  <g transform="translate(858 1602)">
+    <rect width="168" height="56" rx="28" fill="#ecfdf3" stroke="#86efac"/>
+    <text x="34" y="37" class="pill green">已开发</text>
+    <text x="200" y="37" class="body">测试通过，已记录 changelog</text>
+  </g>
+
+  <rect x="92" y="1712" width="1416" height="278" rx="26" fill="#ffffff" stroke="#d8e5ef" stroke-width="2" filter="url(#shadow)"/>
+  <text x="132" y="1770" class="section-title">Codex 完成前必须检查</text>
+  <g transform="translate(132 1815)">
+    <circle cx="18" cy="18" r="14" fill="#dcfce7"/><text x="48" y="27" class="body">交互是否正常：tab、搜索、排序、详情页、移动端横向滚动</text>
+    <circle cx="18" cy="72" r="14" fill="#dcfce7"/><text x="48" y="81" class="body">展示是否正常：无错位、无大面积空白、缺失值清楚显示</text>
+    <circle cx="18" cy="126" r="14" fill="#dcfce7"/><text x="48" y="135" class="body">数据来源是否正常：source、updateTime、sourceStatus、stale 都要合理</text>
+  </g>
+  <g transform="translate(842 1815)">
+    <circle cx="18" cy="18" r="14" fill="#fee2e2"/><text x="48" y="27" class="body">不能伪造、硬编码、随机生成行情/净值/溢价率</text>
+    <circle cx="18" cy="72" r="14" fill="#fee2e2"/><text x="48" y="81" class="body">官方净值和估算净值必须分开，不能互相替代</text>
+    <circle cx="18" cy="126" r="14" fill="#fee2e2"/><text x="48" y="135" class="body">如果数据不全，要说明是源站缺失、限流还是代码问题</text>
+  </g>
+
+  <rect x="92" y="2025" width="1416" height="48" rx="24" fill="#e8f3ff"/>
+  <text x="132" y="2058" class="body-small">一句话记住：你写需求，workflow 生成执行提示，Codex 开发并验证，最后 todo 标记 [已开发]。</text>
+</svg>

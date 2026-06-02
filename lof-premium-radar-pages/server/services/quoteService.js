@@ -78,17 +78,17 @@ export function filterRowsForCategory(rows, category) {
 export function sourcePlan(category) {
   if (category === 'LOF') {
     return [
-      { name: 'palmmicro', status: 'primary', hasNav: true, fetcher: fetchPalmmicroLofQuotes },
-      { name: 'eastmoney', status: 'fallback', hasNav: false, fetcher: fetchEastmoneyQuotes },
+      { name: 'eastmoney', status: 'primary', hasNav: false, fetcher: fetchEastmoneyQuotes },
       { name: 'sina', status: 'fallback', hasNav: false, fetcher: fetchSinaQuotes },
       { name: 'akshare', status: 'fallback', hasNav: false, fetcher: fetchAkshareQuotes },
+      { name: 'palmmicro', status: 'fallback', hasNav: true, fetcher: fetchPalmmicroLofQuotes },
     ];
   }
   if (category === 'QDII' || category === 'ETF') {
     return [
-      { name: 'haoetf', status: 'primary', hasNav: true, fetcher: () => fetchHaoetfQuotes(category) },
-      { name: 'eastmoney', status: 'fallback', hasNav: false, fetcher: fetchEastmoneyQuotes },
+      { name: 'eastmoney', status: 'primary', hasNav: false, fetcher: fetchEastmoneyQuotes },
       { name: 'sina', status: 'fallback', hasNav: false, fetcher: fetchSinaQuotes },
+      { name: 'haoetf', status: 'fallback', hasNav: true, fetcher: () => fetchHaoetfQuotes(category) },
       { name: 'akshare', status: 'fallback', hasNav: false, fetcher: fetchAkshareQuotes },
     ];
   }
