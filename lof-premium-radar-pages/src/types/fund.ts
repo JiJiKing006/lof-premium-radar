@@ -56,7 +56,7 @@ export interface FundItem {
   quoteSource?: string;
   subscriptionSource?: string;
   trendSource?: string;
-  sourceStatus?: 'primary' | 'fallback' | 'cache';
+  sourceStatus?: 'primary' | 'fallback' | 'cache' | 'missing';
   purchaseLimit?: { state?: string; label?: string; limitText?: string };
   intraday?: Array<{ time?: string; price?: number | null; volume?: number | null; turnover?: number | null }>;
   quoteTime?: string;

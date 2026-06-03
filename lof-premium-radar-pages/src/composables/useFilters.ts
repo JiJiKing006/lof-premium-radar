@@ -20,7 +20,7 @@ export function useFilters(
         String(fund.raw?.indexName || '').toLowerCase().includes(keyword);
 
       if (!matchesKeyword) return false;
-      if (!hasRenderablePremiumRate(fund)) return false;
+      if (!isLofFund(fund) && !hasRenderablePremiumRate(fund)) return false;
       if (marketFilter.value !== 'ALL' && inferExchange(fund) !== marketFilter.value) return false;
       if (excludePausedPurchase.value && isPausedPurchase(fund)) return false;
       return true;
@@ -39,6 +39,10 @@ export function useFilters(
 
 function hasRenderablePremiumRate(fund: FundItem): boolean {
   return displayPremiumRateValue(fund) !== null;
+}
+
+function isLofFund(fund: FundItem): boolean {
+  return String(fund.type || fund.raw?.category || fund.raw?.type || '').toUpperCase() === 'LOF';
 }
 
 function displayPremiumRateValue(fund: FundItem): number | null {

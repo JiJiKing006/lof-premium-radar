@@ -45,11 +45,12 @@ describe('useFilters', () => {
     expect(visibleFunds.value.map((item) => item.code)).toEqual(['161125', '160216']);
   });
 
-  it('removes funds whose realtime premium would render as unavailable on the home page', () => {
+  it('keeps LOF rows without premium while still removing unavailable non-LOF premiums', () => {
     const funds = ref([
       fund({ code: '160001', name: '可展示溢价率', premiumRate: 0 }),
-      fund({ code: '160002', name: '空溢价率', premiumRate: null }),
-      fund({ code: '160003', name: '文本空溢价率', premiumRate: Number.NaN }),
+      fund({ code: '501312', name: '海外科技LOF', type: 'LOF', premiumRate: null }),
+      fund({ code: '513100', name: '纳指ETF', type: 'QDII', premiumRate: null }),
+      fund({ code: '159001', name: '文本空溢价率ETF', type: 'ETF', premiumRate: Number.NaN }),
       fund({
         code: '160004',
         name: '原始字段可展示',
@@ -61,6 +62,6 @@ describe('useFilters', () => {
     const sortDirection = ref<'asc' | 'desc'>('desc');
     const { visibleFunds } = useFilters(funds, excludePausedPurchase, sortDirection);
 
-    expect(visibleFunds.value.map((item) => item.code)).toEqual(['160004', '160001']);
+    expect(visibleFunds.value.map((item) => item.code)).toEqual(['160004', '160001', '501312']);
   });
 });

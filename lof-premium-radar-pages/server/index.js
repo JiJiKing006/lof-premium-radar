@@ -9,6 +9,7 @@ import { getFundDetail, getFundList, getFundQuotes } from './services/fundAggreg
 import { getFundHistory } from './services/fundHistoryService.js';
 import { getHotArbitrageList } from './services/hotArbitrageService.js';
 import { fetchMarketIndices } from './sources/marketIndexSource.js';
+import { isAdminPasswordValid, visitorAnalytics } from './services/visitorAnalytics.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, '..');
@@ -125,6 +126,40 @@ app.get('/api/health', (_request, response) => {
   response.json({ ok: true, at: new Date().toISOString() });
 });
 
+app.post('/api/analytics/visit', async (request, response) => {
+  try {
+    const stats = await visitorAnalytics.recordVisit({
+      deviceId: request.body?.deviceId,
+      path: request.body?.path || request.path,
+      userAgent: request.get('user-agent') || '',
+      ip: clientIp(request),
+    });
+    response.setHeader('Cache-Control', 'no-store');
+    response.json({ ok: true, totalVisitors: stats.totalVisitors });
+  } catch (error) {
+    response.status(400).json({ ok: false, error: error.message || '访问记录失败' });
+  }
+});
+
+app.post('/api/admin/login', (request, response) => {
+  if (!isAdminPasswordValid(request.body?.password)) {
+    response.status(401).json({ ok: false, error: '密码错误' });
+    return;
+  }
+  response.setHeader('Cache-Control', 'no-store');
+  response.json({ ok: true });
+});
+
+app.get('/api/admin/visitors', async (request, response) => {
+  if (!isAdminPasswordValid(request.get('x-admin-password'))) {
+    response.status(401).json({ ok: false, error: '未授权' });
+    return;
+  }
+  const stats = await visitorAnalytics.getStats();
+  response.setHeader('Cache-Control', 'no-store');
+  response.json(stats);
+});
+
 if (isProduction) {
   app.use(express.static(path.join(root, 'dist')));
   app.get('*', (_request, response) => {
@@ -143,3 +178,9 @@ app.listen(port, () => {
     }
   }, 200);
 });
+
+function clientIp(request) {
+  return String(request.headers['x-forwarded-for'] || request.socket.remoteAddress || '')
+    .split(',')[0]
+    .trim();
+}

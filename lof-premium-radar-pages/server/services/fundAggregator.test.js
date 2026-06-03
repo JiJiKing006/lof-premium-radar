@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { dedupeFundsByCodePriority, filterRenderablePremiumRows, toUnifiedFund } from './fundAggregator.js';
+import { dedupeFundsByCodePriority, filterRenderablePremiumRows, mergeMarketQuoteMaps, toUnifiedFund } from './fundAggregator.js';
 
 describe('fundAggregator', () => {
   it('calculates realtime premium from the selected cross-checked estimate', () => {
@@ -111,6 +111,93 @@ describe('fundAggregator', () => {
     ]);
 
     expect(rows.map((row) => row.code)).toEqual(['160916']);
+  });
+
+  it('keeps LOF rows even when premium is unavailable', () => {
+    const rows = filterRenderablePremiumRows([
+      { code: '160916', category: 'LOF', premiumRate: -0.69 },
+      { code: '162719', category: 'LOF', premiumRate: null, source: 'sina' },
+      { code: '161125', category: 'LOF', premiumRate: null, dataStatus: 'missing_quote' },
+      { code: '513100', category: 'QDII', premiumRate: null, dataStatus: 'missing_quote' },
+    ], 'LOF');
+
+    expect(rows.map((row) => row.code)).toEqual(['160916', '162719', '161125']);
+  });
+
+  it('carries missing quote status through unified LOF rows', () => {
+    const row = toUnifiedFund({
+      quote: {
+        code: '161125',
+        name: '标普500LOF',
+        category: 'LOF',
+        marketPrice: null,
+        lastNav: null,
+        estimatedNav: null,
+        source: 'quote-missing',
+        sourceStatus: 'missing',
+        dataStatus: 'missing_quote',
+        referenceSource: 'palmmicro',
+      },
+      updateTime: '2026-05-29 15:01:00',
+    });
+
+    expect(row.dataStatus).toBe('missing_quote');
+    expect(row.referenceSource).toBe('palmmicro');
+  });
+
+  it('shows the real supplemental quote source when a row gets market data later', () => {
+    const row = toUnifiedFund({
+      quote: {
+        code: '501300',
+        name: '美元债LOF',
+        category: 'LOF',
+        marketPrice: null,
+        lastNav: null,
+        estimatedNav: null,
+        source: 'quote-missing',
+        sourceStatus: 'missing',
+        dataStatus: 'missing_quote',
+        referenceSource: 'palmmicro',
+      },
+      marketQuote: {
+        code: '501300',
+        marketPrice: 0.942,
+        changeRate: -0.21,
+        source: 'eastmoney',
+        quoteTime: '2026-06-03 10:12:00',
+      },
+      nav: {
+        code: '501300',
+        lastNav: 0.9437,
+        navSource: 'jisilu',
+        navQuoteTime: '2026-06-03 10:12:00',
+      },
+      updateTime: '2026-06-03 10:13:00',
+    });
+
+    expect(row.source).toBe('eastmoney');
+    expect(row.quoteSource).toBe('eastmoney');
+    expect(row.dataStatus).toBe('missing_quote');
+    expect(row.referenceSource).toBe('palmmicro');
+  });
+
+  it('uses fallback quote maps when the primary quote is missing or zero', () => {
+    const primary = new Map([
+      ['501225', { code: '501225', marketPrice: 0, source: 'eastmoney' }],
+      ['161125', { code: '161125', marketPrice: 3.24, source: 'eastmoney' }],
+    ]);
+    const fallback = new Map([
+      ['501225', { code: '501225', marketPrice: 4.546, source: 'sina' }],
+      ['501312', { code: '501312', marketPrice: 2.419, source: 'sina' }],
+      ['161125', { code: '161125', marketPrice: 3.23, source: 'sina' }],
+    ]);
+
+    const merged = mergeMarketQuoteMaps(primary, fallback);
+
+    expect(merged.get('501225')?.source).toBe('sina');
+    expect(merged.get('501225')?.marketPrice).toBe(4.546);
+    expect(merged.get('501312')?.marketPrice).toBe(2.419);
+    expect(merged.get('161125')?.source).toBe('eastmoney');
   });
 
   it('deduplicates funds by code and prefers LOF before QDII before ETF', () => {

@@ -1,5 +1,17 @@
 # 变更记录
 
+## 2026-06-03
+
+- 功能：优化 LOF 条目名单和 QDII 黄金类基金过滤
+- 修改文件：server/services/quoteService.js, server/services/quoteService.test.js, docs/todo.md
+- 测试结果：npx vitest run server/services/quoteService.test.js, 真实 LOF/QDII 数据冒烟, npm run workflow:check, npm test, npm run typecheck, npm run build
+- 上线状态：未上线
+
+- 功能：新增用户访问埋点和后台管理系统
+- 修改文件：server/index.js, server/services/visitorAnalytics.js, server/services/visitorAnalytics.test.js, src/App.vue, src/api/analytics.ts, src/views/HomeView.vue, src/views/AdminView.vue, src/styles/app.css, scripts/deploy.sh, scripts/deploy.test.mjs, docs/todo.md
+- 测试结果：npx vitest run server/services/visitorAnalytics.test.js, npx vitest run server/services/visitorAnalytics.test.js scripts/deploy.test.mjs, npm run typecheck, npm test, npm run build, 本地 API 冒烟, /admin 页面登录冒烟
+- 上线状态：未上线
+
 ## 2026-06-02
 
 - 功能：建立单人 + AI Codex 开发工作流

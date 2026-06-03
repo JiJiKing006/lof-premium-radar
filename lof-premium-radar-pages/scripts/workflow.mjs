@@ -117,6 +117,7 @@ export function buildCodexPrompt(task) {
     '- 只有用户明确要求“测试”“验证”“跑一下”时，才执行对应测试或冒烟验证命令。',
     '- 即使不运行测试，开发时仍必须遵守数据真实性规则：不能 mock、随机数、硬编码基金行情、旧缓存冒充实时数据。',
     '- 如果涉及金融数据口径，代码层面仍要保留 source、updateTime、sourceStatus、stale 或错误原因，缺失值显示 暂无数据 或 净值未公布。',
+    '- 金融数据验证时，检查是否出现大面积 暂无数据 或 净值未公布。',
     '',
     '收尾要求：',
     '- 完成后更新 docs/todo.md 和 docs/changelog.md。',

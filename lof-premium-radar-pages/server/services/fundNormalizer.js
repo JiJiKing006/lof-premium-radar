@@ -1,8 +1,14 @@
 const QDII_KEYWORDS = ['QDII', '纳指', '纳斯达克', '标普', '恒生科技', '恒生', '日经', '美股', '美国', '港股', '海外', '德国', '法国'];
 const ETF_KEYWORDS = ['ETF'];
 const LOF_KEYWORDS = ['LOF'];
+const CATEGORY_OVERRIDES_BY_CODE = new Map([
+  ['160644', 'LOF'],
+]);
 
 export function normalizeCategory(row = {}) {
+  const codeOverride = CATEGORY_OVERRIDES_BY_CODE.get(normalizeCode(row.code || row.fundCode || row.f12));
+  if (codeOverride) return codeOverride;
+
   const fieldText = upper(row.category, row.fundType, row.securityType, row.marketType);
   if (fieldText.includes('QDII')) return 'QDII';
   if (fieldText.includes('LOF')) return 'LOF';
@@ -22,7 +28,7 @@ export function normalizeMarket(row = {}) {
   if (/日本|日经/.test(text)) return '日股';
   if (/全球|海外|国际/.test(text)) return '全球';
   if (/债|国债|信用债|可转债/.test(text)) return '债券';
-  if (/商品|黄金|白银|原油|豆粕|能源/.test(text)) return '商品';
+  if (/商品|黄金|白银|原油|石油|油气|豆粕|能源/.test(text)) return '商品';
   if (/沪深|中证|创业板|科创|上证|深证|A股/.test(text)) return 'A股';
   return '其他';
 }

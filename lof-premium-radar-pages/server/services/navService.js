@@ -4,6 +4,7 @@ import { recordSourceFailure, recordSourceSuccess } from './sourceHealth.js';
 import { fetchJisiluQdiiSnapshot } from '../sources/jisiluQdiiProvider.js';
 import { fetchLofSnapshot } from '../sources/lofProvider.js';
 import { fetchTiantianNav } from '../sources/tiantianSource.js';
+import { fetchEastmoneyFundNav } from '../sources/eastmoneyFundNavSource.js';
 
 const NAV_KEY = 'nav:map';
 const TIANTIAN_LIMIT = 100;
@@ -55,6 +56,7 @@ async function fetchFreshNavMap(quotes) {
 
   await Promise.allSettled([loadJisilu(navMap), loadLof(navMap)]);
   await loadTiantian(navMap, selectTiantianCodes(quotes));
+  await loadEastmoneyFundNav(navMap, selectEastmoneyNavCodes(quotes, navMap));
 
   return cache.set(NAV_KEY, navMap, cacheTtl.nav);
 }
@@ -136,12 +138,54 @@ async function loadTiantian(navMap, codes) {
   }
 }
 
+async function loadEastmoneyFundNav(navMap, codes) {
+  if (!codes.length) return;
+  const startedAt = Date.now();
+  let success = 0;
+  try {
+    for (const group of chunk(codes, 6)) {
+      const results = await Promise.allSettled(group.map((code) => fetchEastmoneyFundNav(code)));
+      for (const result of results) {
+        if (result.status !== 'fulfilled') continue;
+        const row = result.value;
+        const existing = navMap.get(row.code) || {};
+        navMap.set(row.code, {
+          ...existing,
+          ...row,
+          lastNav: row.lastNav ?? existing.lastNav ?? null,
+          estimatedNav: existing.estimatedNav ?? row.estimatedNav ?? null,
+          navDate: row.navDate || existing.navDate || '',
+          navQuoteTime: row.navQuoteTime || existing.navQuoteTime || '',
+          navSource: 'eastmoney',
+        });
+        success += 1;
+      }
+    }
+    if (!success) throw new Error('东方财富基金净值未返回有效净值');
+    recordSourceSuccess('eastmoney-fund-nav', Date.now() - startedAt);
+  } catch (error) {
+    recordSourceFailure('eastmoney-fund-nav', error, Date.now() - startedAt);
+  }
+}
+
 export function selectTiantianCodes(quotes) {
   return quotes
     .filter((row) => row.category === 'QDII' || row.category === 'LOF' || isNasdaqTechnologyQuote(row))
     .sort((left, right) => (right.turnover || 0) - (left.turnover || 0))
     .map((row) => row.code)
     .slice(0, TIANTIAN_LIMIT);
+}
+
+export function selectEastmoneyNavCodes(quotes, navMap = new Map()) {
+  return quotes
+    .filter((row) => row.category === 'LOF')
+    .filter((row) => {
+      const code = normalizeCode(row.code);
+      const nav = navMap.get(code);
+      return !nav?.lastNav || String(nav.navSource || '').toLowerCase() === 'lof';
+    })
+    .map((row) => normalizeCode(row.code))
+    .filter(Boolean);
 }
 
 export function isNasdaqTechnologyQuote(row = {}) {

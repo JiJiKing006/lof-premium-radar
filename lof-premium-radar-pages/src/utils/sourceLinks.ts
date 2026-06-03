@@ -24,6 +24,7 @@ export function sourceLabel(source: unknown): string {
   if (text.includes('jisilu')) return '集思录';
   if (text.includes('haoetf')) return 'HaoETF';
   if (text.includes('palmmicro') || text === 'lof') return 'Palmmicro';
+  if (text === 'quote-missing') return '暂无行情';
   if (text.includes('sina')) return '新浪财经';
   if (text.includes('akshare')) return 'AkShare';
   if (text === 'sse' || text.includes('sse-share')) return '上交所';
@@ -37,7 +38,7 @@ export function sourceReference(source: unknown, code?: string, type?: FundType 
   const raw = String(source || '').trim();
   const text = raw.toLowerCase();
   const fundCode = String(code || '').replace(/^(SH|SZ)/i, '');
-  if (!raw || text === 'cache' || text === 'internal' || /样式预览|暂无数据/.test(raw)) return null;
+  if (!raw || text === 'cache' || text === 'internal' || text === 'quote-missing' || /样式预览|暂无数据/.test(raw)) return null;
 
   if (text.includes('eastmoney') || text.includes('tiantian')) {
     return {

@@ -73,7 +73,7 @@ function normalizeSinaLine(line, fundBySymbol) {
   const changeRate = previousClose ? ((marketPrice / previousClose) - 1) * 100 : null;
   const quoteTime = normalizeQuoteTime(values[30], values[31]);
   const name = values[0] || fund.name;
-  const category = normalizeCategory({ name, category: fund.categoryText });
+  const category = normalizeCategory({ code: fund.code, name, category: fund.categoryText });
   const base = {
     code: fund.code,
     name,

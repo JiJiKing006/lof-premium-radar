@@ -6,6 +6,7 @@ import { formatShanghaiTime } from './sourceHealth.js';
 import { fetchEastmoneyQuoteMap, fetchEastmoneyTrendMap } from '../sources/eastmoneySupplementSource.js';
 import { fetchExchangeShareMap } from '../sources/exchangeShareSource.js';
 import { fetchSubscriptionLimitMap } from '../sources/subscriptionLimitSource.js';
+import { fetchSinaQuoteMap } from '../sources/sinaSupplementSource.js';
 
 const SUPPLEMENT_TIMEOUT_MS = 3_000;
 const NAV_SUPPLEMENT_TIMEOUT_MS = 3_500;
@@ -17,13 +18,15 @@ export async function getFundQuotes({ category = '', force = false, includeTrend
   const codes = quotePayload.rows.map((quote) => quote.code);
   const navPromise = getNavMap(quotePayload.rows, { force });
   const quoteRowsHaveNav = quotePayload.rows.length > 0 && quotePayload.rows.every(hasQuoteNav);
-  const [navMap, marketQuoteMap, subscriptionLimitMap, trendMap, exchangeShareMap] = await Promise.all([
+  const [navMap, eastmoneyQuoteMap, sinaQuoteMap, subscriptionLimitMap, trendMap, exchangeShareMap] = await Promise.all([
     quoteRowsHaveNav ? withMapTimeout(navPromise, NAV_SUPPLEMENT_TIMEOUT_MS) : navPromise,
     fetchEastmoneyQuoteMap(codes, { force }),
+    fetchSinaQuoteMap(codes, { force }),
     withMapTimeout(fetchSubscriptionLimitMap(codes, { force }), SUPPLEMENT_TIMEOUT_MS),
     includeTrends ? withMapTimeout(fetchEastmoneyTrendMap(codes, { force }), SUPPLEMENT_TIMEOUT_MS) : Promise.resolve(new Map()),
     withMapTimeout(fetchExchangeShareMap(codes, { force }), SUPPLEMENT_TIMEOUT_MS),
   ]);
+  const marketQuoteMap = mergeMarketQuoteMaps(eastmoneyQuoteMap, sinaQuoteMap);
   const rows = quotePayload.rows.map((quote) =>
     toUnifiedFund({
       quote,
@@ -38,6 +41,7 @@ export async function getFundQuotes({ category = '', force = false, includeTrend
   const dedupedRows = dedupeFundsByCodePriority(rows);
   const filtered = filterRenderablePremiumRows(
     normalizedCategory === 'ALL' ? dedupedRows : dedupedRows.filter((row) => row.category === normalizedCategory),
+    normalizedCategory,
   );
 
   return {
@@ -72,8 +76,24 @@ export function dedupeFundsByCodePriority(rows) {
   return [...byCode.values()];
 }
 
-export function filterRenderablePremiumRows(rows) {
-  return rows.filter((row) => Number.isFinite(row.premiumRate));
+export function filterRenderablePremiumRows(rows, category = '') {
+  const normalizedCategory = String(category || '').toUpperCase();
+  return rows.filter((row) => {
+    if (normalizedCategory === 'LOF' && row.category === 'LOF') return true;
+    if (Number.isFinite(row.premiumRate)) return true;
+    return false;
+  });
+}
+
+export function mergeMarketQuoteMaps(primaryMap = new Map(), fallbackMap = new Map()) {
+  const merged = new Map(primaryMap);
+  for (const [code, fallback] of fallbackMap.entries()) {
+    const primary = merged.get(code);
+    if (!hasUsableMarketPrice(primary) && hasUsableMarketPrice(fallback)) {
+      merged.set(code, fallback);
+    }
+  }
+  return merged;
 }
 
 export async function getFundList({ category = '', force = false } = {}) {
@@ -118,6 +138,8 @@ export function toUnifiedFund({ quote, nav, updateTime, marketQuote, subscriptio
   const volume = marketQuote?.volume ?? quote.volume;
   const turnover = marketQuote?.turnover ?? quote.turnover;
   const quoteTime = marketQuote?.quoteTime || quote.quoteTime || nav?.navQuoteTime || '';
+  const quoteSource = marketQuote?.source || quote.source;
+  const displaySource = marketQuote?.source || quote.source;
   const verifiedShare = exchangeShare || (isExchangeShareSource(quote.shareSource) ? quote : null);
   const premium = calculatePremium({
     marketPrice,
@@ -153,12 +175,14 @@ export function toUnifiedFund({ quote, nav, updateTime, marketQuote, subscriptio
     shareSource: verifiedShare?.shareSource || '',
     shareTime: verifiedShare?.shareTime || '',
     purchaseLimit: subscriptionLimit || quote.purchaseLimit || { state: 'unknown', label: '未知' },
-    source: quote.source,
-    quoteSource: marketQuote?.source || quote.source,
+    source: displaySource,
+    quoteSource,
     subscriptionSource: subscriptionLimit?.source || '',
     trendSource: trend?.source || '',
     navSource: nav?.navSource || '',
     sourceStatus: quote.sourceStatus,
+    dataStatus: quote.dataStatus || '',
+    referenceSource: quote.referenceSource || '',
     quoteTime,
     updateTime,
     isRealtime: Boolean(quoteTime && quote.sourceStatus !== 'cache'),
@@ -180,6 +204,11 @@ function isExchangeShareSource(source) {
 function hasQuoteNav(quote) {
   return quote.lastNav !== null && quote.lastNav !== undefined && quote.lastNav !== ''
     && quote.estimatedNav !== null && quote.estimatedNav !== undefined && quote.estimatedNav !== '';
+}
+
+function hasUsableMarketPrice(row) {
+  const price = Number(row?.marketPrice);
+  return Number.isFinite(price) && price > 0;
 }
 
 function withMapTimeout(promise, timeoutMs) {

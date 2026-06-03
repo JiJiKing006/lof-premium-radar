@@ -5,6 +5,27 @@ import { formatShanghaiTime } from '../services/sourceHealth.js';
 const PALMMICRO_LOF_URL = 'https://palmmicro.com/woody/res/lofcn.php?sort=premium';
 
 export async function fetchPalmmicroLofQuotes({ signal } = {}) {
+  const html = await fetchPalmmicroHtml(signal);
+  const $ = load(html);
+  const referenceRows = parseReferenceRows($);
+  const quoteMap = new Map(referenceRows.map((row) => [row.code, row]));
+  const rows = parseEstRows($, quoteMap, html);
+  if (!rows.length) throw new Error('Palmmicro LOF 表格为空或字段变更');
+  return rows;
+}
+
+export async function fetchPalmmicroLofReferenceRows({ signal } = {}) {
+  const html = await fetchPalmmicroHtml(signal);
+  const rows = parsePalmmicroLofReferenceRowsFromHtml(html);
+  if (!rows.length) throw new Error('Palmmicro LOF 参考数据表为空或字段变更');
+  return rows;
+}
+
+export function parsePalmmicroLofReferenceRowsFromHtml(html) {
+  return parseReferenceRows(load(html));
+}
+
+async function fetchPalmmicroHtml(signal) {
   const response = await fetch(`${PALMMICRO_LOF_URL}&t=${Date.now()}`, {
     signal: signal || AbortSignal.timeout(12_000),
     headers: {
@@ -15,29 +36,28 @@ export async function fetchPalmmicroLofQuotes({ signal } = {}) {
   });
   if (!response.ok) throw new Error(`Palmmicro LOF 返回 ${response.status}`);
 
-  const html = await response.text();
-  const $ = load(html);
-  const quoteMap = parseReferenceRows($);
-  const rows = parseEstRows($, quoteMap, html);
-  if (!rows.length) throw new Error('Palmmicro LOF 表格为空或字段变更');
-  return rows;
+  return response.text();
 }
 
 function parseReferenceRows($) {
-  const map = new Map();
+  const rows = [];
   $('#referencetable tr').slice(1).each((_, tr) => {
     const cells = $(tr).children('td').map((__, td) => clean($(td).text())).get();
     const code = normalizeCode(cells[0]);
     if (!code) return;
-    map.set(code, {
+    const row = {
       code,
+      name: cells[5] || code,
+      category: 'LOF',
       marketPrice: toNumber(cells[1]),
       changeRate: toNumber(cells[2]),
       quoteTime: cells[3] && cells[4] ? `${cells[3]} ${cells[4].length === 5 ? `${cells[4]}:00` : cells[4]}` : '',
-      name: cells[5] || code,
-    });
+      source: 'palmmicro-reference',
+      sourceStatus: 'reference',
+    };
+    rows.push({ ...row, market: inferMarket(row.name) });
   });
-  return map;
+  return rows;
 }
 
 function parseEstRows($, quoteMap, html) {
@@ -82,6 +102,7 @@ function parseUpdateTime(html) {
 }
 
 function inferMarket(name) {
+  if (/债|美元债|国债|信用债|可转债/.test(name)) return '债券';
   if (/恒生|港股|H股|香港/.test(name)) return '港股';
   if (/纳斯达克|纳指|标普|美国|REIT|美元/.test(name)) return '美股';
   if (/印度|全球|海外/.test(name)) return '全球';

@@ -6,11 +6,13 @@ import FilterTabs from '../components/FilterTabs.vue';
 import RadarTable from '../components/RadarTable.vue';
 import SearchBar from '../components/SearchBar.vue';
 import SortBar from '../components/SortBar.vue';
+import { recordVisitor } from '../api/analytics';
 import { useFilters } from '../composables/useFilters';
 import { useFunds } from '../composables/useFunds';
 import type { FundItem, FundSortKey } from '../types/fund';
 
 const AUTO_REFRESH_INTERVAL = 30_000;
+const VISITOR_DEVICE_KEY = 'lof-visitor-device-id';
 const section = ref('LOF');
 const selectedFund = ref<FundItem | null>(null);
 const excludePausedPurchase = ref(false);
@@ -169,6 +171,7 @@ watch(visibleFunds, () => {
 });
 
 onMounted(() => {
+  recordCurrentVisit();
   countdownTimer = window.setInterval(() => {
     nowTick.value = Date.now();
   }, 1_000);
@@ -198,6 +201,27 @@ function storeFavoriteCodes(codes: Set<string>) {
   } catch {
     // Ignore local storage errors.
   }
+}
+
+function recordCurrentVisit() {
+  try {
+    recordVisitor(getOrCreateDeviceId()).catch(() => {});
+  } catch {
+    // Analytics must never block the fund radar.
+  }
+}
+
+function getOrCreateDeviceId() {
+  const existing = window.localStorage.getItem(VISITOR_DEVICE_KEY);
+  if (existing) return existing;
+  const next = createDeviceId();
+  window.localStorage.setItem(VISITOR_DEVICE_KEY, next);
+  return next;
+}
+
+function createDeviceId() {
+  if (window.crypto?.randomUUID) return window.crypto.randomUUID();
+  return `visitor-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
 </script>

@@ -54,7 +54,7 @@ function normalizeRow(cell) {
   const base = {
     code,
     name: cell.f14,
-    category: normalizeCategory({ name: cell.f14 }),
+    category: normalizeCategory({ code, name: cell.f14 }),
     marketPrice,
     changeRate: toNumber(cell.f3),
     volume: toNumber(cell.f5),
