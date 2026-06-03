@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isNasdaqTechnologyQuote, selectEastmoneyNavCodes, selectTiantianCodes } from './navService.js';
+import { mergeHaoetfNavRow, mergeLofNavRow, isNasdaqTechnologyQuote, selectEastmoneyNavCodes, selectTiantianCodes } from './navService.js';
 
 describe('navService', () => {
   it('includes Nasdaq technology ETFs in Tiantian NAV supplementation', () => {
@@ -36,5 +36,83 @@ describe('navService', () => {
       { code: '501300', category: 'LOF' },
       { code: '513100', category: 'QDII' },
     ], navMap)).toEqual(['160723', '501300']);
+  });
+
+  it('uses Palmmicro reference EST as an estimated NAV fallback for LOF rows without realtime EST', () => {
+    const row = mergeLofNavRow({}, {
+      code: 'SH501225',
+      officialEstValue: 3.323,
+      referenceEstValue: 3.312,
+      realtimeEstValue: null,
+      realtimeEst: '',
+      estDate: '2026-05-26',
+      quoteDate: '2026-05-27',
+      quoteTime: '15:00',
+      purchaseLimit: { limitText: '暂停申购' },
+    });
+
+    expect(row).toMatchObject({
+      code: '501225',
+      lastNav: 3.323,
+      estimatedNav: 3.312,
+      navDate: '2026-05-26',
+      navQuoteTime: '2026-05-27 15:00',
+      navSource: 'lof',
+      estimatedNavSource: 'lof',
+    });
+  });
+
+  it('uses Palmmicro official EST as the last LOF estimated NAV fallback', () => {
+    const row = mergeLofNavRow({
+      code: '501225',
+      lastNav: 3.3418,
+      navSource: 'eastmoney',
+      navDate: '2026-06-02',
+    }, {
+      code: 'SH501225',
+      officialEstValue: 3.407,
+      referenceEstValue: null,
+      referenceEst: '',
+      realtimeEstValue: null,
+      realtimeEst: '',
+      estDate: '2026-06-03',
+      quoteDate: '2026-06-03',
+      quoteTime: '15:00',
+    });
+
+    expect(row).toMatchObject({
+      code: '501225',
+      lastNav: 3.3418,
+      estimatedNav: 3.407,
+      navSource: 'eastmoney',
+      estimatedNavSource: 'lof',
+      navDate: '2026-06-02',
+      navQuoteTime: '2026-06-03 15:00',
+    });
+  });
+
+  it('uses HaoETF estimated NAV without overwriting a stronger official NAV source', () => {
+    const row = mergeHaoetfNavRow({
+      code: '513100',
+      lastNav: 2.087,
+      navSource: 'eastmoney',
+      navDate: '2026-06-02',
+    }, {
+      code: '513100',
+      lastNav: 2.08,
+      estimatedNav: 2.0855,
+      navQuoteTime: '2026-06-03 15:00:00',
+      navDate: '2026-06-02',
+    });
+
+    expect(row).toMatchObject({
+      code: '513100',
+      lastNav: 2.087,
+      estimatedNav: 2.0855,
+      navSource: 'eastmoney',
+      estimatedNavSource: 'haoetf',
+      navDate: '2026-06-02',
+      navQuoteTime: '2026-06-03 15:00:00',
+    });
   });
 });

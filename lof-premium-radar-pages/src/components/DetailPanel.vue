@@ -60,8 +60,8 @@ async function loadDetail() {
   detail.value = props.row;
   try {
     const [fund, historySnapshot] = await Promise.all([
-      fetchFundDetail(props.row.code, { section: props.section }),
-      fetchFundHistory(props.row.code, { limit: 80 }),
+      fetchFundDetail(props.row.code, { section: props.section, force: true }),
+      fetchFundHistory(props.row.code, { limit: 80, force: true }),
     ]);
     detail.value = fund;
     history.value = historySnapshot.rows || [];

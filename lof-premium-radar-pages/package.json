@@ -11,6 +11,7 @@
     "typecheck": "vue-tsc --noEmit",
     "test": "vitest run",
     "lint": "vite --host 127.0.0.1 --version",
+    "audit:data": "node scripts/audit-data-quality.mjs --all",
     "workflow:next": "node scripts/workflow.mjs next",
     "workflow:prompt": "node scripts/workflow.mjs prompt",
     "workflow:check": "node scripts/workflow.mjs check",

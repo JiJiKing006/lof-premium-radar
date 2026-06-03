@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-06-03 15:07:55",
+  "updatedAt": "2026-06-03 23:52:26",
   "visitors": {
     "41ff7b9b-630e-427b-a898-96ddca8855f9": {
       "deviceId": "41ff7b9b-630e-427b-a898-96ddca8855f9",
@@ -18,13 +18,13 @@
       "deviceId": "84b51a41-0292-4da7-a394-663f31a32767",
       "firstSeenAt": "2026-06-03 14:57:30",
       "firstSeenDate": "2026-06-03",
-      "lastSeenAt": "2026-06-03 15:07:55",
+      "lastSeenAt": "2026-06-03 23:52:26",
       "lastSeenDate": "2026-06-03",
       "firstPath": "/",
       "lastPath": "/",
       "userAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Mobile/15E148 Safari/604.1",
       "ip": "::ffff:127.0.0.1",
-      "visits": 2
+      "visits": 14
     }
   }
 }

@@ -52,6 +52,8 @@ export function parseLofHtml(html, sourceUrl) {
   const $ = load(html);
   const title = normalizeText($('title').first().text()) || 'LOF基金';
   const table = findListTable($);
+  const referenceMap = parseReferenceMap($);
+  const isEstimationTable = isEstimationTableElement($, table);
   const rows = [];
 
   table.find('tr').each((index, element) => {
@@ -61,7 +63,9 @@ export function parseLofHtml(html, sourceUrl) {
       .get();
 
     if (!cells.length || cells[0] === '代码') return;
-    const row = mapListRow($, element, cells, index);
+    const row = isEstimationTable
+      ? mapEstimationRow($, element, cells, index, referenceMap)
+      : mapListRow($, element, cells, index);
     if (row?.code && row?.name) rows.push(row);
   });
 
@@ -91,10 +95,23 @@ export function normalizeSnapshot(snapshot) {
 }
 
 function findListTable($) {
+  const estimationTable = $('#estimationtable').first();
+  if (estimationTable.length) return estimationTable;
+
+  const headerMatched = $('table')
+    .filter((_, table) => {
+      if ($(table).attr('id') === 'referencetable') return false;
+      const headers = $(table).find('th').map((__, th) => normalizeText($(th).text())).get();
+      return headers.includes('官方EST') && headers.includes('参考EST');
+    })
+    .last();
+  if (headerMatched.length) return headerMatched;
+
   let best = $('table').first();
   let bestScore = -1;
 
   $('table').each((_, table) => {
+    if ($(table).attr('id') === 'referencetable') return;
     const text = normalizeText($(table).text());
     const score = ['代码', '价格', '日期', '实时', '溢价'].reduce(
       (total, keyword) => total + (text.includes(keyword) ? 1 : 0),
@@ -107,6 +124,30 @@ function findListTable($) {
   });
 
   return best;
+}
+
+function isEstimationTableElement($, table) {
+  const headers = table.find('th').map((_, th) => normalizeText($(th).text())).get();
+  return table.attr('id') === 'estimationtable'
+    || (headers.includes('官方EST') && headers.includes('参考EST'));
+}
+
+function parseReferenceMap($) {
+  const rows = new Map();
+  $('#referencetable tr').slice(1).each((_, tr) => {
+    const cells = $(tr).children('td').map((__, td) => normalizeText($(td).text())).get();
+    const code = normalizeCode(cells[0]);
+    if (!code) return;
+    rows.set(code, {
+      code,
+      price: cells[1] || '',
+      change: cells[2] || '',
+      quoteDate: cells[3] || '',
+      quoteTime: cells[4] || '',
+      name: cells[5] || code,
+    });
+  });
+  return rows;
 }
 
 function mapListRow($, rowElement, cells, rank) {
@@ -144,6 +185,42 @@ function mapListRow($, rowElement, cells, rank) {
     realtimeEstValue: parseNumber(data.realtimeEst),
     realtimePremium: data.realtimePremium,
     realtimePremiumValue: percentValue(data.realtimePremium),
+  };
+}
+
+function mapEstimationRow($, rowElement, cells, rank, referenceMap) {
+  const firstLink = $(rowElement).find('a[href]').first();
+  const href = firstLink.attr('href');
+  const normalizedCode = normalizeCode(cells[0]);
+  const reference = referenceMap.get(normalizedCode) || {};
+  const name = reference.name || firstLink.text() || normalizedCode;
+  if (!normalizedCode || !name) return null;
+
+  return {
+    rank,
+    code: normalizedCode,
+    name,
+    href: href ? new URL(href, sources.lof.url).toString() : '',
+    purchaseLimit: null,
+    price: reference.price || '',
+    priceValue: parseNumber(reference.price),
+    change: reference.change || '',
+    changeValue: percentValue(reference.change),
+    quoteDate: reference.quoteDate || '',
+    quoteTime: reference.quoteTime || '',
+    officialEst: cells[1] || '',
+    officialEstValue: parseNumber(cells[1]),
+    estDate: cells[2] || '',
+    officialPremium: cells[3] || '',
+    officialPremiumValue: percentValue(cells[3]),
+    referenceEst: cells[4] || '',
+    referenceEstValue: parseNumber(cells[4]),
+    referencePremium: cells[5] || '',
+    referencePremiumValue: percentValue(cells[5]),
+    realtimeEst: cells[6] || '',
+    realtimeEstValue: parseNumber(cells[6]),
+    realtimePremium: cells[7] || '',
+    realtimePremiumValue: percentValue(cells[7]),
   };
 }
 

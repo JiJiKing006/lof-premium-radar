@@ -33,6 +33,34 @@ describe('fundAggregator', () => {
     expect(row.abnormalReason).toContain('估算净值多源偏差过大');
   });
 
+  it('keeps estimated NAV source separate from official NAV source', () => {
+    const row = toUnifiedFund({
+      quote: {
+        code: '501225',
+        name: '全球芯片LOF',
+        category: 'LOF',
+        marketPrice: 4.545,
+        source: 'sina',
+        sourceStatus: 'fallback',
+        quoteTime: '2026-06-03 15:00:00',
+      },
+      nav: {
+        code: '501225',
+        lastNav: 3.3418,
+        estimatedNav: 3.371,
+        navSource: 'eastmoney',
+        estimatedNavSource: 'lof',
+        navQuoteTime: '2026-06-03 15:00:00',
+      },
+      updateTime: '2026-06-03 15:01:00',
+    });
+
+    expect(row.estimatedNav).toBe(3.371);
+    expect(row.estimatedNavSource).toBe('lof');
+    expect(row.navSource).toBe('eastmoney');
+    expect(row.premiumBasis).toBe('estimatedNav');
+  });
+
   it('carries verified exchange share amount and previous-day share change into unified rows', () => {
     const row = toUnifiedFund({
       quote: {

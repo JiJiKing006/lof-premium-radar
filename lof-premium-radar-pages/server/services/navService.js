@@ -5,6 +5,7 @@ import { fetchJisiluQdiiSnapshot } from '../sources/jisiluQdiiProvider.js';
 import { fetchLofSnapshot } from '../sources/lofProvider.js';
 import { fetchTiantianNav } from '../sources/tiantianSource.js';
 import { fetchEastmoneyFundNav } from '../sources/eastmoneyFundNavSource.js';
+import { fetchHaoetfQuotes } from '../sources/haoetfSource.js';
 
 const NAV_KEY = 'nav:map';
 const TIANTIAN_LIMIT = 100;
@@ -56,6 +57,7 @@ async function fetchFreshNavMap(quotes) {
 
   await Promise.allSettled([loadJisilu(navMap), loadLof(navMap)]);
   await loadTiantian(navMap, selectTiantianCodes(quotes));
+  await loadHaoetf(navMap, quotes);
   await loadEastmoneyFundNav(navMap, selectEastmoneyNavCodes(quotes, navMap));
 
   return cache.set(NAV_KEY, navMap, cacheTtl.nav);
@@ -68,13 +70,15 @@ async function loadJisilu(navMap) {
     for (const row of snapshot.rows || []) {
       const code = normalizeCode(row.code);
       if (!code) continue;
+      const estimatedNav = firstNumber(row.realtimeEstValue, row.realtimeEst, row.referenceEstValue, row.referenceEst);
       navMap.set(code, {
         code,
-        lastNav: toNumber(row.officialEstValue ?? row.officialEst),
-        estimatedNav: toNumber(row.realtimeEstValue ?? row.realtimeEst ?? row.referenceEstValue ?? row.referenceEst),
+        lastNav: firstNumber(row.officialEstValue, row.officialEst),
+        estimatedNav,
         navDate: row.estDate || '',
         navQuoteTime: row.quoteDate && row.quoteTime ? `${row.quoteDate} ${row.quoteTime}` : '',
         navSource: 'jisilu',
+        estimatedNavSource: estimatedNav !== null ? 'jisilu' : '',
         subscriptionStatus: row.purchaseLimit?.limitText || '',
       });
     }
@@ -92,21 +96,81 @@ async function loadLof(navMap) {
       const code = normalizeCode(row.code);
       if (!code) continue;
       const existing = navMap.get(code) || {};
-      navMap.set(code, {
-        ...existing,
-        code,
-        lastNav: existing.lastNav ?? toNumber(row.officialEstValue ?? row.officialEst),
-        estimatedNav: existing.estimatedNav ?? toNumber(row.realtimeEstValue ?? row.realtimeEst),
-        navDate: existing.navDate || row.estDate || '',
-        navQuoteTime: existing.navQuoteTime || (row.quoteDate && row.quoteTime ? `${row.quoteDate} ${row.quoteTime}` : ''),
-        navSource: existing.navSource || 'lof',
-        subscriptionStatus: existing.subscriptionStatus || row.purchaseLimit?.limitText || '',
-      });
+      navMap.set(code, mergeLofNavRow(existing, row));
     }
     recordSourceSuccess('lof', Date.now() - startedAt);
   } catch (error) {
     recordSourceFailure('lof', error, Date.now() - startedAt);
   }
+}
+
+export function mergeLofNavRow(existing = {}, row = {}) {
+  const code = normalizeCode(row.code);
+  const estimatedNav = firstNumber(
+    existing.estimatedNav,
+    row.realtimeEstValue,
+    row.realtimeEst,
+    row.referenceEstValue,
+    row.referenceEst,
+    row.officialEstValue,
+    row.officialEst,
+  );
+  return {
+    ...existing,
+    code,
+    lastNav: firstNumber(existing.lastNav, row.officialEstValue, row.officialEst),
+    estimatedNav,
+    navDate: existing.navDate || row.estDate || '',
+    navQuoteTime: existing.navQuoteTime || (row.quoteDate && row.quoteTime ? `${row.quoteDate} ${row.quoteTime}` : ''),
+    navSource: existing.navSource || 'lof',
+    estimatedNavSource: existing.estimatedNavSource || (estimatedNav !== null ? 'lof' : ''),
+    subscriptionStatus: existing.subscriptionStatus || row.purchaseLimit?.limitText || '',
+  };
+}
+
+async function loadHaoetf(navMap, quotes = []) {
+  const categories = [...new Set(quotes
+    .map((row) => String(row.category || '').toUpperCase())
+    .filter((category) => category === 'QDII' || category === 'ETF'))];
+  if (!categories.length) return;
+
+  const quoteCodes = new Set(quotes.map((row) => normalizeCode(row.code)).filter(Boolean));
+  const startedAt = Date.now();
+  let success = 0;
+  try {
+    const snapshots = await Promise.allSettled(categories.map((category) => fetchHaoetfQuotes(category)));
+    for (const snapshot of snapshots) {
+      if (snapshot.status !== 'fulfilled') continue;
+      for (const row of snapshot.value || []) {
+        const code = normalizeCode(row.code);
+        if (!code || !quoteCodes.has(code)) continue;
+        const existing = navMap.get(code) || {};
+        const merged = mergeHaoetfNavRow(existing, row);
+        navMap.set(code, merged);
+        if (merged.estimatedNav !== null || merged.lastNav !== null) success += 1;
+      }
+    }
+    if (!success) throw new Error('HaoETF 未返回匹配的估算净值');
+    recordSourceSuccess('haoetf', Date.now() - startedAt);
+  } catch (error) {
+    recordSourceFailure('haoetf', error, Date.now() - startedAt);
+  }
+}
+
+export function mergeHaoetfNavRow(existing = {}, row = {}) {
+  const code = normalizeCode(row.code);
+  const estimatedNav = firstNumber(existing.estimatedNav, row.estimatedNav);
+  const lastNav = firstNumber(existing.lastNav, row.lastNav);
+  return {
+    ...existing,
+    code,
+    lastNav,
+    estimatedNav,
+    navDate: existing.navDate || row.navDate || '',
+    navQuoteTime: existing.navQuoteTime || row.navQuoteTime || row.quoteTime || '',
+    navSource: existing.navSource || (lastNav !== null ? 'haoetf' : ''),
+    estimatedNavSource: existing.estimatedNavSource || (estimatedNav !== null ? 'haoetf' : ''),
+  };
 }
 
 async function loadTiantian(navMap, codes) {
@@ -127,6 +191,9 @@ async function loadTiantian(navMap, codes) {
           navDate: row.navDate || existing.navDate || '',
           navQuoteTime: row.navQuoteTime || existing.navQuoteTime || '',
           navSource: 'tiantian',
+          estimatedNavSource: row.estimatedNav !== null && row.estimatedNav !== undefined
+            ? 'tiantian'
+            : existing.estimatedNavSource || '',
         });
         success += 1;
       }
@@ -157,6 +224,7 @@ async function loadEastmoneyFundNav(navMap, codes) {
           navDate: row.navDate || existing.navDate || '',
           navQuoteTime: row.navQuoteTime || existing.navQuoteTime || '',
           navSource: 'eastmoney',
+          estimatedNavSource: existing.estimatedNavSource || (row.estimatedNav !== null && row.estimatedNav !== undefined ? 'eastmoney' : ''),
         });
         success += 1;
       }
@@ -197,4 +265,12 @@ function chunk(items, size) {
   const chunks = [];
   for (let index = 0; index < items.length; index += size) chunks.push(items.slice(index, index + size));
   return chunks;
+}
+
+function firstNumber(...values) {
+  for (const value of values) {
+    const number = toNumber(value);
+    if (number !== null) return number;
+  }
+  return null;
 }

@@ -35,8 +35,19 @@ describe('fundHistoryService', () => {
       if (href.includes('push2his.eastmoney.com')) {
         return response(JSON.stringify({ data: { klines: [] } }));
       }
+      if (href.includes('q.stock.sohu.com')) {
+        return response('', { ok: false, status: 500 });
+      }
       if (href.includes('CN_MarketData.getKLineData')) {
         return response(JSON.stringify([
+          {
+            day: '2026-06-01',
+            open: '6.300',
+            high: '6.500',
+            low: '6.250',
+            close: '6.471',
+            volume: '1000000',
+          },
           {
             day: '2026-06-02',
             open: '6.471',
@@ -61,7 +72,7 @@ describe('fundHistoryService', () => {
     expect(history.meta).toMatchObject({
       code: '168401',
       navCount: 1,
-      priceCount: 1,
+      priceCount: 2,
       priceSource: 'sina-kline',
       sourceProvider: 'eastmoney,sina',
     });
@@ -75,7 +86,79 @@ describe('fundHistoryService', () => {
       volume: 12698.96,
       priceSource: 'sina-kline',
     });
+    expect(history.rows[0].changeRate).toBeCloseTo(4.2343, 4);
     expect(history.rows[0].premiumRate).toBeCloseTo(-2.2209, 4);
+  });
+
+  it('falls back to Sohu historical kline with turnover when Eastmoney price history is empty', async () => {
+    let sohuAttempts = 0;
+    vi.mocked(fetch).mockImplementation(async (url) => {
+      const href = String(url);
+      if (href.includes('F10DataApi.aspx')) {
+        return response(`var apidata={content:${JSON.stringify(navHtml)}};`);
+      }
+      if (href.includes('push2his.eastmoney.com')) {
+        return response(JSON.stringify({ data: { klines: [] } }));
+      }
+      if (href.includes('q.stock.sohu.com')) {
+        sohuAttempts += 1;
+        if (sohuAttempts === 1) return response('', { ok: false, status: 503 });
+        return response('historySearchHandler([{"status":0,"hq":[["2026-06-02","6.471","6.745","0.274","4.23%","6.471","6.799","12698","856.59","1.02%"]],"code":"cn_168401"}])');
+      }
+      throw new Error(`unexpected fetch ${href}`);
+    });
+
+    const history = await getFundHistory('168401', { limit: 20, force: true });
+
+    expect(history.meta).toMatchObject({
+      priceCount: 1,
+      priceSource: 'sohu-kline',
+      sourceProvider: 'eastmoney,sohu',
+    });
+    expect(history.rows[0]).toMatchObject({
+      date: '2026-06-02',
+      closePrice: 6.745,
+      changeRate: 4.23,
+      volume: 12698,
+      turnover: 8_565_900,
+      priceSource: 'sohu-kline',
+    });
+    expect(sohuAttempts).toBe(2);
+  });
+
+  it('fills missing Eastmoney historical change rate and turnover from Sohu by date', async () => {
+    vi.mocked(fetch).mockImplementation(async (url) => {
+      const href = String(url);
+      if (href.includes('F10DataApi.aspx')) {
+        return response(`var apidata={content:${JSON.stringify(navHtml)}};`);
+      }
+      if (href.includes('push2his.eastmoney.com')) {
+        return response(JSON.stringify({
+          data: {
+            klines: ['2026-06-02,6.471,6.745,6.799,6.471,12698,,0,,'],
+          },
+        }));
+      }
+      if (href.includes('q.stock.sohu.com')) {
+        return response('historySearchHandler([{"status":0,"hq":[["2026-06-02","6.471","6.745","0.274","4.23%","6.471","6.799","12698","856.59","1.02%"]],"code":"cn_168401"}])');
+      }
+      throw new Error(`unexpected fetch ${href}`);
+    });
+
+    const history = await getFundHistory('168401', { limit: 20, force: true });
+
+    expect(history.meta).toMatchObject({
+      priceCount: 1,
+      priceSource: 'eastmoney-kline',
+      sourceProvider: 'eastmoney,sohu',
+    });
+    expect(history.rows[0]).toMatchObject({
+      date: '2026-06-02',
+      closePrice: 6.745,
+      changeRate: 4.23,
+      turnover: 8_565_900,
+      priceSource: 'eastmoney-kline',
+    });
   });
 
   it('does not calculate historical premium when price and nav scales are incompatible', () => {

@@ -42,7 +42,7 @@ export async function getFundHistory(code, { limit = 60, force = false } = {}) {
     };
   });
 
-  const sourceProvider = priceSnapshot.source === 'sina-kline' ? 'eastmoney,sina' : 'eastmoney';
+  const sourceProvider = priceSnapshot.sourceProvider || historySourceProvider(priceSnapshot.source);
   const payload = {
     meta: {
       code: normalizedCode,
@@ -56,6 +56,12 @@ export async function getFundHistory(code, { limit = 60, force = false } = {}) {
     rows,
   };
   return cache.set(cacheKey, payload, cacheTtl.history);
+}
+
+function historySourceProvider(priceSource) {
+  if (priceSource === 'sohu-kline') return 'eastmoney,sohu';
+  if (priceSource === 'sina-kline') return 'eastmoney,sina';
+  return 'eastmoney';
 }
 
 export function calculateHistoricalPremium({ close, unitNav }) {
@@ -112,12 +118,47 @@ async function fetchNavHistory(code, { limit }) {
 
 async function fetchPriceHistory(code, { limit }) {
   const eastmoneyRows = await fetchEastmoneyPriceHistory(code, { limit });
-  if (eastmoneyRows.length) return { source: 'eastmoney-kline', rows: eastmoneyRows };
+  if (eastmoneyRows.length) {
+    const sohuRows = needsPriceFieldSupplement(eastmoneyRows) ? await fetchSohuPriceHistory(code, { limit }) : [];
+    if (sohuRows.length) {
+      return {
+        source: 'eastmoney-kline',
+        sourceProvider: 'eastmoney,sohu',
+        rows: mergePriceHistoryRows(eastmoneyRows, sohuRows),
+      };
+    }
+    return { source: 'eastmoney-kline', rows: eastmoneyRows };
+  }
+
+  const sohuRows = await fetchSohuPriceHistory(code, { limit });
+  if (sohuRows.length) return { source: 'sohu-kline', sourceProvider: 'eastmoney,sohu', rows: sohuRows };
 
   const sinaRows = await fetchSinaPriceHistory(code, { limit });
-  if (sinaRows.length) return { source: 'sina-kline', rows: sinaRows };
+  if (sinaRows.length) return { source: 'sina-kline', sourceProvider: 'eastmoney,sina', rows: sinaRows };
 
   return { source: '', rows: [] };
+}
+
+function needsPriceFieldSupplement(rows) {
+  return rows.some((row) => row.changeRate === null || row.changeRate === undefined || row.turnover === null || row.turnover === undefined);
+}
+
+function mergePriceHistoryRows(primaryRows, supplementRows) {
+  const supplementByDate = new Map(supplementRows.map((row) => [row.date, row]));
+  return primaryRows.map((row) => {
+    const supplement = supplementByDate.get(row.date);
+    if (!supplement) return row;
+    return {
+      ...row,
+      changeRate: row.changeRate ?? supplement.changeRate ?? null,
+      turnover: row.turnover ?? supplement.turnover ?? null,
+      volume: row.volume ?? supplement.volume ?? null,
+      open: row.open ?? supplement.open ?? null,
+      close: row.close ?? supplement.close ?? null,
+      high: row.high ?? supplement.high ?? null,
+      low: row.low ?? supplement.low ?? null,
+    };
+  });
 }
 
 async function fetchEastmoneyPriceHistory(code, { limit }) {
@@ -192,6 +233,7 @@ async function fetchSinaPriceHistory(code, { limit }) {
       turnover: null,
       changeRate: null,
     })).filter((row) => row.date);
+    attachCloseChangeRates(rows);
     if (!rows.length) throw new Error('新浪历史价格为空或字段变更');
     recordSourceSuccess('sina-history-price', Date.now() - startedAt);
     return rows;
@@ -199,6 +241,89 @@ async function fetchSinaPriceHistory(code, { limit }) {
     recordSourceFailure('sina-history-price', error, Date.now() - startedAt);
     return [];
   }
+}
+
+async function fetchSohuPriceHistory(code, { limit }) {
+  const startedAt = Date.now();
+  try {
+    const url = new URL('https://q.stock.sohu.com/hisHq');
+    url.searchParams.set('code', `cn_${normalizeCode(code)}`);
+    url.searchParams.set('start', '19900101');
+    url.searchParams.set('end', '20500101');
+    url.searchParams.set('stat', '1');
+    url.searchParams.set('order', 'D');
+    url.searchParams.set('period', 'd');
+    url.searchParams.set('callback', 'historySearchHandler');
+    url.searchParams.set('rt', 'jsonp');
+    const response = await fetchWithRetry(url, {
+      signal: AbortSignal.timeout(12_000),
+      headers: {
+        accept: 'application/javascript,text/javascript,*/*',
+        referer: 'https://q.stock.sohu.com/',
+        'user-agent': 'Mozilla/5.0 LOF-Premium-Radar/0.1',
+      },
+    }, 4);
+    if (!response.ok) throw new Error(`搜狐历史价格返回 ${response.status}`);
+    const rows = parseSohuHistoryResponse(await response.text())
+      .slice(0, Math.min(Math.max(limit, 20), 120));
+    if (!rows.length) throw new Error('搜狐历史价格为空或字段变更');
+    recordSourceSuccess('sohu-history-price', Date.now() - startedAt);
+    return rows;
+  } catch (error) {
+    recordSourceFailure('sohu-history-price', error, Date.now() - startedAt);
+    return [];
+  }
+}
+
+export function parseSohuHistoryResponse(text) {
+  const match = String(text || '').match(/historySearchHandler\(([\s\S]*)\)\s*;?$/);
+  if (!match) return [];
+  const payload = JSON.parse(match[1]);
+  const item = Array.isArray(payload) ? payload[0] : null;
+  return (item?.hq || [])
+    .map((cells) => ({
+      date: clean(cells[0]),
+      open: toNumber(cells[1]),
+      close: toNumber(cells[2]),
+      high: toNumber(cells[6]),
+      low: toNumber(cells[5]),
+      volume: toNumber(cells[7]),
+      turnover: toNumber(cells[8]) !== null ? toNumber(cells[8]) * 10_000 : null,
+      changeRate: toNumber(cells[4]),
+    }))
+    .filter((row) => row.date)
+    .sort((left, right) => String(right.date).localeCompare(String(left.date)));
+}
+
+function attachCloseChangeRates(rows) {
+  rows.sort((left, right) => String(left.date).localeCompare(String(right.date)));
+  for (let index = 1; index < rows.length; index += 1) {
+    const previousClose = rows[index - 1].close;
+    const close = rows[index].close;
+    if (!Number.isFinite(previousClose) || previousClose <= 0 || !Number.isFinite(close)) continue;
+    rows[index].changeRate = ((close / previousClose) - 1) * 100;
+  }
+}
+
+async function fetchWithRetry(url, options, attempts) {
+  let lastResponse = null;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    const response = await fetch(url, options);
+    if (response.ok || !isRetryableStatus(response.status) || attempt === attempts) return response;
+    lastResponse = response;
+    await delay(150 * attempt);
+  }
+  return lastResponse;
+}
+
+function isRetryableStatus(status) {
+  return status === 429 || status === 500 || status === 502 || status === 503 || status === 504;
+}
+
+function delay(ms) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
 }
 
 function secid(code) {

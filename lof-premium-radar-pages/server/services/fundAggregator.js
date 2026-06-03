@@ -147,7 +147,7 @@ export function toUnifiedFund({ quote, nav, updateTime, marketQuote, subscriptio
     estimatedNavSource: quote.navSource || quote.source,
     estimatedNavTime: quote.navQuoteTime || quote.quoteTime || '',
     supplementalEstimatedNav: nav?.estimatedNav,
-    supplementalNavSource: nav?.navSource || '',
+    supplementalNavSource: nav?.estimatedNavSource || nav?.navSource || '',
     supplementalNavTime: nav?.navQuoteTime || '',
     lastNav: quote.lastNav ?? nav?.lastNav,
   });
