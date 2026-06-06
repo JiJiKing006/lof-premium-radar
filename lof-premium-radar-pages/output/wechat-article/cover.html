@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; width: 900px; height: 1200px; font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif; color: #fff; overflow: hidden; }
+    .poster { position: relative; width: 900px; height: 1200px; padding: 70px 62px; background: #081321 url("assets/fintech-radar-cover-bg.png") center/cover no-repeat; }
+    .poster::before { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(4,13,24,.12), rgba(4,13,24,.78) 64%, rgba(4,13,24,.95)); }
+    .content { position: relative; z-index: 1; height: 100%; display: flex; flex-direction: column; justify-content: space-between; }
+    .eyebrow { display: inline-flex; width: fit-content; padding: 10px 16px; border: 1px solid rgba(149, 239, 255, .55); border-radius: 999px; color: #8ff2ff; font-size: 24px; font-weight: 900; letter-spacing: .08em; background: rgba(6, 22, 38, .52); }
+    h1 { margin: 34px 0 0; font-size: 82px; line-height: 1.04; letter-spacing: -1px; font-weight: 1000; }
+    .lead { margin: 26px 0 0; max-width: 720px; color: rgba(255,255,255,.84); font-size: 31px; line-height: 1.52; font-weight: 700; }
+    .chips { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 42px; }
+    .chip { padding: 12px 16px; border-radius: 8px; background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.18); font-size: 24px; font-weight: 900; }
+    .url { display: grid; gap: 12px; padding: 24px; border-radius: 14px; background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.18); box-shadow: 0 28px 60px rgba(0,0,0,.28); }
+    .url span { color: rgba(255,255,255,.72); font-size: 22px; font-weight: 800; }
+    .url strong { color: #9ff7ff; font-size: 34px; letter-spacing: .01em; }
+  </style>
+</head>
+<body>
+  <section class="poster">
+    <div class="content">
+      <div>
+        <div class="eyebrow">LOF / ETF / QDII PREMIUM RADAR</div>
+        <h1>我做了一个<br>场内基金<br>溢价雷达</h1>
+        <p class="lead">实时看估值、溢价率、申购状态、历史成交额和数据来源。手机打开，一张表扫完重点。</p>
+        <div class="chips">
+          <span class="chip">估算净值</span>
+          <span class="chip">实时溢价率</span>
+          <span class="chip">申购状态</span>
+          <span class="chip">历史溢价</span>
+        </div>
+      </div>
+      <div class="url">
+        <span>免费访问地址</span>
+        <strong>http://121.40.152.89</strong>
+      </div>
+    </div>
+  </section>
+</body>
+</html>

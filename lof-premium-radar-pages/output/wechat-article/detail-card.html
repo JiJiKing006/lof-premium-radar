@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; width: 900px; padding: 44px; font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif; background: #f4f8fb; color: #102033; }
+    .card { overflow: hidden; border-radius: 18px; background: #fff; border: 1px solid #d9e7f0; box-shadow: 0 24px 70px rgba(24,45,68,.12); }
+    header { padding: 34px 38px; background: linear-gradient(135deg, #082744, #0a66d9); color: #fff; }
+    .kicker { margin: 0 0 10px; color: #9ff7ff; font-size: 20px; font-weight: 1000; letter-spacing: .08em; }
+    h1 { margin: 0; font-size: 42px; }
+    .body { padding: 30px; }
+    .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 24px; }
+    .stat { padding: 18px; border-radius: 12px; background: #f7fafc; border: 1px solid #dbe7ef; }
+    .stat span { display: block; color: #6b7d8f; font-size: 17px; font-weight: 900; }
+    .stat b { display: block; margin-top: 8px; color: #0b3d73; font-size: 32px; }
+    table { width: 100%; border-collapse: collapse; font-size: 22px; }
+    th, td { padding: 16px 10px; border-bottom: 1px solid #e1ebf2; text-align: right; white-space: nowrap; }
+    th:first-child, td:first-child { text-align: left; }
+    th { color: #607387; font-size: 18px; }
+    .up { color: #d93838; font-weight: 1000; }
+    .down { color: #159a55; font-weight: 1000; }
+    .note { margin: 22px 0 0; padding: 18px; border-radius: 12px; background: #eef7ff; color: #476174; font-size: 20px; line-height: 1.55; font-weight: 800; }
+  </style>
+</head>
+<body>
+  <section class="card">
+    <header>
+      <p class="kicker">DETAIL EXAMPLE</p>
+      <h1>详情页会把历史涨幅和成交额补齐</h1>
+    </header>
+    <div class="body">
+      <div class="stats">
+        <div class="stat"><span>样例基金</span><b>501225</b></div>
+        <div class="stat"><span>估算净值</span><b>3.396</b></div>
+        <div class="stat"><span>估值来源</span><b>LOF</b></div>
+      </div>
+      <table>
+        <thead>
+          <tr><th>日期</th><th>历史溢价</th><th>场内涨幅</th><th>成交额</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>2026-06-02</td><td class="up">29.90%</td><td class="down">-4.59%</td><td>5249.25万</td></tr>
+          <tr><td>2026-06-01</td><td class="up">41.67%</td><td class="down">-2.15%</td><td>5296.09万</td></tr>
+          <tr><td>2026-05-29</td><td class="up">43.70%</td><td class="up">+2.15%</td><td>5707.53万</td></tr>
+        </tbody>
+      </table>
+      <p class="note">历史溢价率用同日场内收盘价和单位净值计算；场内涨幅、成交额来自真实 K 线数据源，不手填。</p>
+    </div>
+  </section>
+</body>
+</html>

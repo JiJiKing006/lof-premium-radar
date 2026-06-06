@@ -4716,6 +4716,10 @@ body,
   font-size: 13px;
 }
 
+.visitor-detail-table {
+  min-width: 1120px;
+}
+
 .visitor-table th,
 .visitor-table td {
   padding: 10px 8px;
@@ -4727,6 +4731,19 @@ body,
 .visitor-table th {
   color: var(--muted);
   font-size: 12px;
+}
+
+.device-id-cell {
+  font-family: "SFMono-Regular", Consolas, monospace;
+  color: var(--navy);
+  font-weight: 900;
+}
+
+.user-agent-cell {
+  max-width: 260px;
+  overflow: hidden;
+  color: var(--muted);
+  text-overflow: ellipsis;
 }
 
 .admin-empty {

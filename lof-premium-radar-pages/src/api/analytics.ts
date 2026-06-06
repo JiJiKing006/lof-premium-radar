@@ -10,14 +10,23 @@ export interface VisitorStats {
     date: string;
     count: number;
   }>;
-  recentVisitors: Array<{
+  dailyNewVisitorDetails: Array<{
+    date: string;
+    count: number;
+    visitors: VisitorRecord[];
+  }>;
+  recentVisitors: VisitorRecord[];
+}
+
+export interface VisitorRecord {
     deviceId: string;
     firstSeenAt: string;
     lastSeenAt: string;
     firstPath: string;
     lastPath: string;
     visits: number;
-  }>;
+    userAgent: string;
+    ip: string;
 }
 
 export async function recordVisitor(deviceId: string, path = window.location.pathname + window.location.search) {

@@ -8,6 +8,7 @@ const DEFAULT_FILE = path.join(root, 'data', 'visitor-analytics.json');
 const DEFAULT_ADMIN_PASSWORD = '53123';
 const MAX_RECENT_VISITORS = 20;
 const MAX_DAILY_DAYS = 14;
+const MAX_DAILY_DETAIL_VISITORS = 80;
 
 export const visitorAnalytics = createVisitorAnalytics({
   filePath: process.env.VISITOR_ANALYTICS_FILE || DEFAULT_FILE,
@@ -84,8 +85,9 @@ async function writeStore(filePath, store) {
 
 function summarizeStore(store, { now }) {
   const today = formatShanghaiDate(now);
-  const visitors = Object.values(store.visitors);
+  const visitors = Object.values(store.visitors).filter((visitor) => !isInternalVisitor(visitor));
   const dailyCounts = new Map();
+  const dailyVisitors = new Map();
   let totalVisits = 0;
 
   visitors.forEach((visitor) => {
@@ -93,6 +95,8 @@ function summarizeStore(store, { now }) {
     const date = visitor.firstSeenDate || String(visitor.firstSeenAt || '').slice(0, 10);
     if (!date) return;
     dailyCounts.set(date, (dailyCounts.get(date) || 0) + 1);
+    if (!dailyVisitors.has(date)) dailyVisitors.set(date, []);
+    dailyVisitors.get(date).push(toVisitorSummary(visitor));
   });
 
   const dailyNewVisitors = [...dailyCounts.entries()]
@@ -100,17 +104,18 @@ function summarizeStore(store, { now }) {
     .slice(0, MAX_DAILY_DAYS)
     .map(([date, count]) => ({ date, count }));
 
+  const dailyNewVisitorDetails = dailyNewVisitors.map(({ date, count }) => ({
+    date,
+    count,
+    visitors: (dailyVisitors.get(date) || [])
+      .sort((left, right) => String(right.firstSeenAt || '').localeCompare(String(left.firstSeenAt || '')))
+      .slice(0, MAX_DAILY_DETAIL_VISITORS),
+  }));
+
   const recentVisitors = visitors
     .sort((left, right) => String(right.lastSeenAt || '').localeCompare(String(left.lastSeenAt || '')))
     .slice(0, MAX_RECENT_VISITORS)
-    .map((visitor) => ({
-      deviceId: visitor.deviceId,
-      firstSeenAt: visitor.firstSeenAt,
-      lastSeenAt: visitor.lastSeenAt,
-      firstPath: visitor.firstPath || '/',
-      lastPath: visitor.lastPath || '/',
-      visits: Number(visitor.visits || 0),
-    }));
+    .map(toVisitorSummary);
 
   return {
     meta: {
@@ -121,8 +126,29 @@ function summarizeStore(store, { now }) {
     totalVisits,
     todayNewVisitors: dailyCounts.get(today) || 0,
     dailyNewVisitors,
+    dailyNewVisitorDetails,
     recentVisitors,
   };
+}
+
+function toVisitorSummary(visitor) {
+  return {
+    deviceId: visitor.deviceId,
+    firstSeenAt: visitor.firstSeenAt,
+    lastSeenAt: visitor.lastSeenAt,
+    firstPath: visitor.firstPath || '/',
+    lastPath: visitor.lastPath || '/',
+    visits: Number(visitor.visits || 0),
+    userAgent: visitor.userAgent || '',
+    ip: visitor.ip || '',
+  };
+}
+
+function isInternalVisitor(visitor) {
+  const deviceId = String(visitor?.deviceId || '');
+  const firstPath = String(visitor?.firstPath || '');
+  const lastPath = String(visitor?.lastPath || '');
+  return deviceId === 'deploy-smoke' || firstPath === '/deploy-smoke' || lastPath === '/deploy-smoke';
 }
 
 function normalizeDeviceId(value) {

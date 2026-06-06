@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
-import { fetchVisitorStats, loginAdmin, type VisitorStats } from '../api/analytics';
+import { fetchVisitorStats, loginAdmin, type VisitorRecord, type VisitorStats } from '../api/analytics';
 
 const ADMIN_PASSWORD_KEY = 'lof-admin-password';
 const password = ref(loadPassword());
@@ -9,6 +9,8 @@ const loading = ref(false);
 const error = ref('');
 const isAuthed = ref(Boolean(password.value));
 const maxDailyCount = computed(() => Math.max(1, ...((stats.value?.dailyNewVisitors || []).map((item) => item.count))));
+const dailyDetailRows = computed(() => (stats.value?.dailyNewVisitorDetails || [])
+  .flatMap((day) => day.visitors.map((visitor) => ({ ...visitor, date: day.date }))));
 
 onMounted(() => {
   if (isAuthed.value) {
@@ -59,6 +61,23 @@ function loadPassword() {
     return '';
   }
 }
+
+function shortDeviceId(value: string) {
+  if (!value) return '暂无数据';
+  return value.length > 18 ? `${value.slice(0, 10)}...${value.slice(-6)}` : value;
+}
+
+function deviceTitle(value: string) {
+  return value || '暂无数据';
+}
+
+function visitorUserAgent(visitor: VisitorRecord) {
+  return visitor.userAgent || '暂无数据';
+}
+
+function visitorIp(visitor: VisitorRecord) {
+  return visitor.ip || '暂无数据';
+}
 </script>
 
 <template>
@@ -91,7 +110,7 @@ function loadPassword() {
         <div>
           <p>VISITOR OPS</p>
           <h1>访问统计</h1>
-          <span>更新时间：{{ stats?.meta.updateTime || '暂无数据' }}</span>
+          <span>按设备 ID 去重；一个设备只计一个用户。更新时间：{{ stats?.meta.updateTime || '暂无数据' }}</span>
         </div>
         <div class="admin-actions">
           <button type="button" @click="refreshStats" :disabled="loading">{{ loading ? '刷新中' : '刷新' }}</button>
@@ -107,7 +126,7 @@ function loadPassword() {
           <strong>{{ stats?.todayNewVisitors ?? 0 }}</strong>
         </article>
         <article>
-          <span>累计用户</span>
+          <span>累计用户（唯一设备）</span>
           <strong>{{ stats?.totalVisitors ?? 0 }}</strong>
         </article>
         <article>
@@ -135,6 +154,44 @@ function loadPassword() {
 
       <section class="admin-panel">
         <div class="admin-panel-title">
+          <h2>每日新增用户明细</h2>
+          <span>每行是一个首次出现的设备 ID</span>
+        </div>
+        <div class="visitor-table-wrap">
+          <table class="visitor-table visitor-detail-table">
+            <thead>
+              <tr>
+                <th>新增日期</th>
+                <th>设备 ID</th>
+                <th>首次登录时间</th>
+                <th>最近访问</th>
+                <th>次数</th>
+                <th>首次路径</th>
+                <th>最近路径</th>
+                <th>IP</th>
+                <th>设备信息</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="visitor in dailyDetailRows" :key="`${visitor.date}-${visitor.deviceId}`">
+                <td>{{ visitor.date }}</td>
+                <td :title="deviceTitle(visitor.deviceId)" class="device-id-cell">{{ shortDeviceId(visitor.deviceId) }}</td>
+                <td>{{ visitor.firstSeenAt }}</td>
+                <td>{{ visitor.lastSeenAt }}</td>
+                <td>{{ visitor.visits }}</td>
+                <td>{{ visitor.firstPath }}</td>
+                <td>{{ visitor.lastPath }}</td>
+                <td>{{ visitorIp(visitor) }}</td>
+                <td :title="visitorUserAgent(visitor)" class="user-agent-cell">{{ visitorUserAgent(visitor) }}</td>
+              </tr>
+            </tbody>
+          </table>
+          <p v-if="!dailyDetailRows.length" class="admin-empty">暂无新增用户明细</p>
+        </div>
+      </section>
+
+      <section class="admin-panel">
+        <div class="admin-panel-title">
           <h2>最近访问设备</h2>
           <span>同一设备重复访问只计为一个用户</span>
         </div>
@@ -151,7 +208,7 @@ function loadPassword() {
             </thead>
             <tbody>
               <tr v-for="visitor in stats?.recentVisitors || []" :key="visitor.deviceId">
-                <td>{{ visitor.deviceId.slice(0, 18) }}</td>
+                <td :title="deviceTitle(visitor.deviceId)" class="device-id-cell">{{ shortDeviceId(visitor.deviceId) }}</td>
                 <td>{{ visitor.firstSeenAt }}</td>
                 <td>{{ visitor.lastSeenAt }}</td>
                 <td>{{ visitor.visits }}</td>

@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; width: 900px; padding: 44px; font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif; background: #071a2e; color: #fff; }
+    .panel { padding: 42px; border-radius: 18px; background: linear-gradient(180deg, rgba(255,255,255,.12), rgba(255,255,255,.06)); border: 1px solid rgba(255,255,255,.18); box-shadow: 0 30px 80px rgba(0,0,0,.28); }
+    h1 { margin: 0 0 16px; font-size: 50px; }
+    .sub { margin: 0 0 34px; color: rgba(255,255,255,.7); font-size: 24px; line-height: 1.55; font-weight: 800; }
+    .formula { display: grid; gap: 18px; }
+    .row { padding: 26px; border-radius: 14px; background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.14); }
+    .row b { display: block; color: #8ff2ff; font-size: 26px; margin-bottom: 12px; }
+    .row strong { display: block; padding: 18px; border-radius: 10px; background: rgba(0,0,0,.24); font-size: 29px; line-height: 1.35; }
+    .row p { margin: 14px 0 0; color: rgba(255,255,255,.72); font-size: 20px; line-height: 1.5; font-weight: 700; }
+    .note { margin-top: 26px; padding: 22px; border-left: 6px solid #ffc857; background: rgba(255,200,87,.12); color: rgba(255,255,255,.88); font-size: 22px; line-height: 1.55; font-weight: 800; }
+  </style>
+</head>
+<body>
+  <section class="panel">
+    <h1>几个核心指标怎么算？</h1>
+    <p class="sub">公式并不复杂，关键是数据口径要分清：官方净值、估算净值、场内价格不能混用。</p>
+    <div class="formula">
+      <article class="row">
+        <b>实时溢价率</b>
+        <strong>(场内现价 - 估算净值) ÷ 估算净值 × 100%</strong>
+        <p>适合观察盘中价格相对估值的偏离程度。</p>
+      </article>
+      <article class="row">
+        <b>基于官方净值的溢价率</b>
+        <strong>(场内现价 - 官方净值) ÷ 官方净值 × 100%</strong>
+        <p>官方净值可能滞后，因此会标明这是基于已公布净值。</p>
+      </article>
+      <article class="row">
+        <b>历史溢价率</b>
+        <strong>(同日场内收盘价 - 当日单位净值) ÷ 当日单位净值 × 100%</strong>
+        <p>适合复盘长期高溢价、折价修复和成交额变化。</p>
+      </article>
+    </div>
+    <div class="note">拿不到真实估算值时，页面显示“暂无数据”，不会为了好看用错误口径补字段。</div>
+  </section>
+</body>
+</html>

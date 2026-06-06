@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; width: 900px; padding: 44px; font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif; background: #f4f8fb; color: #102033; }
+    .card { padding: 38px; border-radius: 18px; background: #fff; border: 1px solid #d9e7f0; box-shadow: 0 24px 70px rgba(24,45,68,.12); }
+    h1 { margin: 0 0 8px; color: #082744; font-size: 46px; }
+    .lead { margin: 0 0 30px; color: #5a6d80; font-size: 23px; line-height: 1.55; font-weight: 800; }
+    .flow { display: grid; gap: 14px; }
+    .step { display: grid; grid-template-columns: 76px 1fr; gap: 18px; align-items: start; padding: 22px; border-radius: 14px; background: #f7fafc; border: 1px solid #dbe7ef; }
+    .num { display: grid; place-items: center; width: 58px; height: 58px; border-radius: 14px; background: #075dd8; color: #fff; font-size: 28px; font-weight: 1000; }
+    .step b { display: block; margin-bottom: 8px; color: #0b3d73; font-size: 26px; }
+    .step p { margin: 0; color: #55687c; font-size: 20px; line-height: 1.52; font-weight: 750; }
+    .guard { margin-top: 24px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+    .guard span { padding: 18px; border-radius: 12px; background: #071a2e; color: #9ff7ff; font-size: 21px; font-weight: 1000; text-align: center; }
+  </style>
+</head>
+<body>
+  <section class="card">
+    <h1>数据口径：宁可空，也不乱填</h1>
+    <p class="lead">金融工具最怕“看起来完整但口径错”。这个项目优先保证真实、可追溯、可解释。</p>
+    <div class="flow">
+      <div class="step"><div class="num">1</div><div><b>多源抓取</b><p>行情、净值、估值、申购状态、历史 K 线分别接入不同公开数据源。</p></div></div>
+      <div class="step"><div class="num">2</div><div><b>自动降级</b><p>主源失败、超时或字段缺失时，自动切换备用源，比如历史成交额用搜狐 K 线补充。</p></div></div>
+      <div class="step"><div class="num">3</div><div><b>字段审计</b><p>首页和详情页都会检查现价、净值、估值、溢价率、场内涨幅和成交额。</p></div></div>
+      <div class="step"><div class="num">4</div><div><b>来源回显</b><p>每个关键数字尽量带上来源和时间，方便你判断数据新鲜度。</p></div></div>
+    </div>
+    <div class="guard">
+      <span>不造数据</span>
+      <span>不混口径</span>
+      <span>不冒充实时</span>
+    </div>
+  </section>
+</body>
+</html>
