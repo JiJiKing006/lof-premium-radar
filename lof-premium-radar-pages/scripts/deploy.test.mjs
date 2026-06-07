@@ -80,4 +80,19 @@ describe('deployment nginx configuration', () => {
     expect(deployScript).toContain("ADMIN_PASSWORD='$DEPLOY_ADMIN_PASSWORD'");
     expect(deployScript).toContain('Environment=ADMIN_PASSWORD=${ADMIN_PASSWORD}');
   });
+
+  it('keeps sibling static projects outside the LOF release directory', () => {
+    expect(deployScript).toContain('DEPLOY_STATIC_ROOT="${DEPLOY_STATIC_ROOT:-/srv/www}"');
+    expect(deployScript).toContain('DEPLOY_STATIC_PROJECTS="${DEPLOY_STATIC_PROJECTS:-person-website}"');
+    expect(deployScript).toContain("DEPLOY_STATIC_ROOT='$DEPLOY_STATIC_ROOT'");
+    expect(deployScript).toContain("DEPLOY_STATIC_PROJECTS='$DEPLOY_STATIC_PROJECTS'");
+    expect(deployScript).toContain('mkdir -p "$STATIC_ROOT/$project"');
+    expect(deployScript).toContain('location ^~ /${project}/');
+    expect(deployScript).toContain('alias ${STATIC_ROOT}/${project}/;');
+    expect(deployScript).toContain('try_files \\$uri \\$uri/ /${project}/index.html;');
+
+    expect(nginxDefault).toContain('location ^~ /person-website/');
+    expect(nginxDefault).toContain('alias /srv/www/person-website/;');
+    expect(nginxDefault).toContain('try_files $uri $uri/ /person-website/index.html;');
+  });
 });

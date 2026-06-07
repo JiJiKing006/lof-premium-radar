@@ -20,6 +20,8 @@ DEPLOY_SKIP_TESTS="${DEPLOY_SKIP_TESTS:-0}"
 APP_PORT="${APP_PORT:-4173}"
 DEPLOY_SMOKE_URL="${DEPLOY_SMOKE_URL:-}"
 DEPLOY_ADMIN_PASSWORD="${DEPLOY_ADMIN_PASSWORD:-53123}"
+DEPLOY_STATIC_ROOT="${DEPLOY_STATIC_ROOT:-/srv/www}"
+DEPLOY_STATIC_PROJECTS="${DEPLOY_STATIC_PROJECTS:-person-website}"
 
 if [[ -z "$DEPLOY_HOST" ]]; then
   cat <<EOF >&2
@@ -30,6 +32,8 @@ Create $ENV_FILE first, for example:
   DEPLOY_USER=root
   DEPLOY_PATH=/srv/lof
   DEPLOY_DOMAIN=_
+  DEPLOY_STATIC_ROOT=/srv/www
+  DEPLOY_STATIC_PROJECTS="person-website"
 EOF
   exit 1
 fi
@@ -124,7 +128,7 @@ tar \
   dist server data public package.json package-lock.json nginx-default.conf .nojekyll .spa
 
 echo "==> Uploading to $REMOTE:$DEPLOY_PATH"
-ssh "${SSH_OPTS[@]}" "$REMOTE" "mkdir -p '$DEPLOY_PATH/releases' '$DEPLOY_PATH/shared'"
+ssh "${SSH_OPTS[@]}" "$REMOTE" "mkdir -p '$DEPLOY_PATH/releases' '$DEPLOY_PATH/shared' '$DEPLOY_STATIC_ROOT'"
 scp "${SCP_OPTS[@]}" "$ARCHIVE" "$REMOTE:$REMOTE_ARCHIVE"
 
 echo "==> Installing release on server"
@@ -134,11 +138,15 @@ ssh "${SSH_OPTS[@]}" "$REMOTE" \
    DEPLOY_DOMAIN='$DEPLOY_DOMAIN' \
    APP_PORT='$APP_PORT' \
    ADMIN_PASSWORD='$DEPLOY_ADMIN_PASSWORD' \
+   DEPLOY_STATIC_ROOT='$DEPLOY_STATIC_ROOT' \
+   DEPLOY_STATIC_PROJECTS='$DEPLOY_STATIC_PROJECTS' \
    REMOTE_ARCHIVE='$REMOTE_ARCHIVE' \
    bash -s" <<'REMOTE_SCRIPT'
 set -Eeuo pipefail
 
 release_dir="$DEPLOY_PATH/releases/$(date +%Y%m%d%H%M%S)"
+STATIC_ROOT="${DEPLOY_STATIC_ROOT:-/srv/www}"
+STATIC_PROJECTS="${DEPLOY_STATIC_PROJECTS:-person-website}"
 
 install_server_dependencies() {
   local need_apt_update=0
@@ -182,7 +190,38 @@ wait_for_remote_app() {
   return 1
 }
 
+build_static_project_locations() {
+  local locations=""
+  local project
+
+  for project in $STATIC_PROJECTS; do
+    if [[ -z "$project" ]]; then
+      continue
+    fi
+
+    case "$project" in
+      api|assets|admin|*[!a-zA-Z0-9._-]*)
+        echo "Invalid DEPLOY_STATIC_PROJECTS entry: $project" >&2
+        return 1
+        ;;
+    esac
+
+    mkdir -p "$STATIC_ROOT/$project"
+    locations="${locations}
+    location ^~ /${project}/ {
+        alias ${STATIC_ROOT}/${project}/;
+        index index.html;
+        try_files \$uri \$uri/ /${project}/index.html;
+        add_header Cache-Control \"no-store, no-cache, must-revalidate\";
+    }
+"
+  done
+
+  printf '%s' "$locations"
+}
+
 install_server_dependencies
+STATIC_PROJECT_LOCATIONS="$(build_static_project_locations)"
 
 mkdir -p "$release_dir"
 tar -xzf "$REMOTE_ARCHIVE" -C "$release_dir"
@@ -231,6 +270,8 @@ server {
         proxy_set_header X-Forwarded-Proto \$scheme;
         add_header Cache-Control "no-store";
     }
+
+${STATIC_PROJECT_LOCATIONS}
 
     location = /index.html {
         add_header Cache-Control "no-store, no-cache, must-revalidate";

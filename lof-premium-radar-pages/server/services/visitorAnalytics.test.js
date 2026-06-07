@@ -137,6 +137,29 @@ describe('visitor analytics', () => {
     ]);
   }, 15_000);
 
+  it('can top up admin visitor stats to a deterministic target total', async () => {
+    await analytics.recordVisit({
+      deviceId: 'device-a',
+      path: '/?category=LOF',
+      userAgent: 'Mobile Safari',
+      ip: '127.0.0.1',
+      now: new Date('2026-06-03T09:15:00+08:00'),
+    });
+
+    const seededAnalytics = createVisitorAnalytics({
+      filePath: path.join(tempDir, 'visitors.json'),
+      targetTotalVisitors: 273,
+    });
+    const stats = await seededAnalytics.getStats({ now: new Date('2026-06-07T18:00:00+08:00') });
+
+    expect(stats.totalVisitors).toBe(273);
+    expect(stats.totalVisits).toBeGreaterThan(273);
+    expect(stats.todayNewVisitors).toBeGreaterThan(0);
+    expect(stats.dailyNewVisitors.reduce((total, day) => total + day.count, 0)).toBe(273);
+    expect(stats.dailyNewVisitorDetails[0].visitors.length).toBeGreaterThan(0);
+    expect(stats.recentVisitors).toHaveLength(20);
+  }, 15_000);
+
   it('validates the admin password without accepting empty input', () => {
     expect(isAdminPasswordValid('53123')).toBe(true);
     expect(isAdminPasswordValid(' 53123 ')).toBe(true);

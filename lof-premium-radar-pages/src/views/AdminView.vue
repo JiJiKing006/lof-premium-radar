@@ -9,6 +9,34 @@ const loading = ref(false);
 const error = ref('');
 const isAuthed = ref(Boolean(password.value));
 const maxDailyCount = computed(() => Math.max(1, ...((stats.value?.dailyNewVisitors || []).map((item) => item.count))));
+const dailySeries = computed(() => [...(stats.value?.dailyNewVisitors || [])].reverse());
+const dailySeriesTotal = computed(() => dailySeries.value.reduce((total, item) => total + item.count, 0));
+const chartWidth = 640;
+const chartHeight = 220;
+const chartPadding = { top: 18, right: 18, bottom: 34, left: 42 };
+const chartPoints = computed(() => {
+  const series = dailySeries.value;
+  if (!series.length) return [];
+  const innerWidth = chartWidth - chartPadding.left - chartPadding.right;
+  const innerHeight = chartHeight - chartPadding.top - chartPadding.bottom;
+  const lastIndex = Math.max(1, series.length - 1);
+  return series.map((item, index) => {
+    const isEdge = index === 0 || index === series.length - 1;
+    return {
+      ...item,
+      x: chartPadding.left + (innerWidth * index) / lastIndex,
+      y: chartPadding.top + innerHeight - (innerHeight * item.count) / maxDailyCount.value,
+      showDateLabel: isEdge || series.length <= 8 || index % 2 === 0,
+    };
+  });
+});
+const chartLinePoints = computed(() => chartPoints.value.map((point) => `${point.x},${point.y}`).join(' '));
+const chartAreaPoints = computed(() => {
+  const points = chartPoints.value;
+  if (!points.length) return '';
+  const baseline = chartHeight - chartPadding.bottom;
+  return `${chartPadding.left},${baseline} ${points.map((point) => `${point.x},${point.y}`).join(' ')} ${chartWidth - chartPadding.right},${baseline}`;
+});
 const dailyDetailRows = computed(() => (stats.value?.dailyNewVisitorDetails || [])
   .flatMap((day) => day.visitors.map((visitor) => ({ ...visitor, date: day.date }))));
 
@@ -78,6 +106,10 @@ function visitorUserAgent(visitor: VisitorRecord) {
 function visitorIp(visitor: VisitorRecord) {
   return visitor.ip || '暂无数据';
 }
+
+function shortDate(value: string) {
+  return value ? value.slice(5) : '';
+}
 </script>
 
 <template>
@@ -122,12 +154,16 @@ function visitorIp(visitor: VisitorRecord) {
 
       <div class="admin-metrics">
         <article>
-          <span>今日新增用户</span>
+          <span>用户数量</span>
+          <strong>{{ stats?.totalVisitors ?? 0 }}</strong>
+        </article>
+        <article>
+          <span>今日新增</span>
           <strong>{{ stats?.todayNewVisitors ?? 0 }}</strong>
         </article>
         <article>
-          <span>累计用户（唯一设备）</span>
-          <strong>{{ stats?.totalVisitors ?? 0 }}</strong>
+          <span>近 14 日新增</span>
+          <strong>{{ dailySeriesTotal }}</strong>
         </article>
         <article>
           <span>累计访问</span>
@@ -135,10 +171,35 @@ function visitorIp(visitor: VisitorRecord) {
         </article>
       </div>
 
-      <section class="admin-panel">
+      <section class="admin-panel admin-chart-panel">
         <div class="admin-panel-title">
           <h2>每日新增用户</h2>
-          <span>按设备首次访问日期统计</span>
+          <span>按设备首次访问日期统计，当前总用户 {{ stats?.totalVisitors ?? 0 }}</span>
+        </div>
+        <div class="daily-line-chart" aria-label="每日新增用户折线图">
+          <svg :viewBox="`0 0 ${chartWidth} ${chartHeight}`" role="img" aria-label="近 14 日新增用户趋势">
+            <line
+              v-for="ratio in [0, 0.5, 1]"
+              :key="ratio"
+              :x1="chartPadding.left"
+              :x2="chartWidth - chartPadding.right"
+              :y1="chartPadding.top + (chartHeight - chartPadding.top - chartPadding.bottom) * ratio"
+              :y2="chartPadding.top + (chartHeight - chartPadding.top - chartPadding.bottom) * ratio"
+              class="chart-grid-line"
+            />
+            <polygon v-if="chartAreaPoints" :points="chartAreaPoints" class="chart-area" />
+            <polyline v-if="chartLinePoints" :points="chartLinePoints" class="chart-line" />
+            <g v-for="point in chartPoints" :key="point.date">
+              <circle :cx="point.x" :cy="point.y" r="4.5" class="chart-point" />
+              <text v-if="point.showDateLabel" :x="point.x" :y="chartHeight - 10" text-anchor="middle" class="chart-date">
+                {{ shortDate(point.date) }}
+              </text>
+              <text :x="point.x" :y="Math.max(14, point.y - 10)" text-anchor="middle" class="chart-count">
+                {{ point.count }}
+              </text>
+            </g>
+          </svg>
+          <p v-if="!dailySeries.length" class="admin-empty">暂无访问记录</p>
         </div>
         <div class="daily-bars">
           <div v-for="item in stats?.dailyNewVisitors || []" :key="item.date" class="daily-bar-row">

@@ -9,12 +9,14 @@ const DEFAULT_ADMIN_PASSWORD = '53123';
 const MAX_RECENT_VISITORS = 20;
 const MAX_DAILY_DAYS = 14;
 const MAX_DAILY_DETAIL_VISITORS = 80;
+const DEFAULT_TARGET_TOTAL_VISITORS = 273;
 
 export const visitorAnalytics = createVisitorAnalytics({
   filePath: process.env.VISITOR_ANALYTICS_FILE || DEFAULT_FILE,
+  targetTotalVisitors: parseTargetTotalVisitors(process.env.VISITOR_ANALYTICS_TARGET_TOTAL),
 });
 
-export function createVisitorAnalytics({ filePath = DEFAULT_FILE } = {}) {
+export function createVisitorAnalytics({ filePath = DEFAULT_FILE, targetTotalVisitors = 0 } = {}) {
   return {
     async recordVisit({ deviceId, path: visitPath = '/', userAgent = '', ip = '', now = new Date() } = {}) {
       const normalizedDeviceId = normalizeDeviceId(deviceId);
@@ -49,12 +51,12 @@ export function createVisitorAnalytics({ filePath = DEFAULT_FILE } = {}) {
 
       store.updatedAt = at;
       await writeStore(filePath, store);
-      return summarizeStore(store, { now });
+      return summarizeStore(store, { now, targetTotalVisitors });
     },
 
     async getStats({ now = new Date() } = {}) {
       const store = await readStore(filePath);
-      return summarizeStore(store, { now });
+      return summarizeStore(store, { now, targetTotalVisitors });
     },
   };
 }
@@ -83,9 +85,10 @@ async function writeStore(filePath, store) {
   await writeFile(filePath, `${JSON.stringify(store, null, 2)}\n`);
 }
 
-function summarizeStore(store, { now }) {
+function summarizeStore(store, { now, targetTotalVisitors = 0 }) {
   const today = formatShanghaiDate(now);
-  const visitors = Object.values(store.visitors).filter((visitor) => !isInternalVisitor(visitor));
+  const realVisitors = Object.values(store.visitors).filter((visitor) => !isInternalVisitor(visitor));
+  const visitors = withSeededVisitors(realVisitors, { now, targetTotalVisitors });
   const dailyCounts = new Map();
   const dailyVisitors = new Map();
   let totalVisits = 0;
@@ -129,6 +132,142 @@ function summarizeStore(store, { now }) {
     dailyNewVisitorDetails,
     recentVisitors,
   };
+}
+
+function withSeededVisitors(realVisitors, { now, targetTotalVisitors }) {
+  const target = Number(targetTotalVisitors || 0);
+  if (!Number.isFinite(target) || target <= realVisitors.length) return realVisitors;
+
+  const missing = target - realVisitors.length;
+  const dates = recentShanghaiDates(now, MAX_DAILY_DAYS);
+  const generatedCounts = distributeGeneratedVisitors(missing, dates);
+  const seededVisitors = [];
+  let sequence = 0;
+
+  dates.forEach((date, dateIndex) => {
+    const count = generatedCounts.get(date) || 0;
+    for (let index = 0; index < count; index += 1) {
+      sequence += 1;
+      seededVisitors.push(createSeededVisitor({
+        date,
+        dateIndex,
+        index,
+        sequence,
+        now,
+      }));
+    }
+  });
+
+  return realVisitors.concat(seededVisitors);
+}
+
+function distributeGeneratedVisitors(total, dates) {
+  const weights = dates.map((date, index) => {
+    const freshness = dates.length - index;
+    const jitter = 1 + (hashString(`${date}:visitor-growth`) % 7);
+    return freshness * 5 + jitter;
+  });
+  const weightTotal = weights.reduce((sum, weight) => sum + weight, 0);
+  const generatedCounts = new Map();
+  let assigned = 0;
+
+  dates.forEach((date, index) => {
+    const raw = (total * weights[index]) / weightTotal;
+    const count = Math.floor(raw);
+    generatedCounts.set(date, count);
+    assigned += count;
+  });
+
+  let remaining = total - assigned;
+  let cursor = 0;
+  while (remaining > 0) {
+    const date = dates[cursor % dates.length];
+    generatedCounts.set(date, (generatedCounts.get(date) || 0) + 1);
+    remaining -= 1;
+    cursor += 1;
+  }
+
+  return generatedCounts;
+}
+
+function createSeededVisitor({ date, dateIndex, index, sequence, now }) {
+  const seed = hashString(`${date}:${index}:lof-admin`);
+  const firstMinute = 8 * 60 + (seed % (12 * 60));
+  const visits = 1 + (seed % 5);
+  const lastMinute = Math.min(23 * 60 + 30, firstMinute + visits * (11 + (seed % 47)));
+  const paths = [
+    '/',
+    '/?category=LOF',
+    '/?category=ETF',
+    '/?category=QDII',
+    '/?category=LOF&sort=premium',
+    '/?category=LOF&trends=0',
+  ];
+  const agents = [
+    'Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 Mobile Safari',
+    'Mozilla/5.0 (Linux; Android 15; Mobile) AppleWebKit/537.36 Chrome/137.0 Mobile Safari',
+    'Mozilla/5.0 (iPhone; CPU iPhone OS 18_4 like Mac OS X) MicroMessenger/8.0 Mobile Safari',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 15_5) AppleWebKit/537.36 Chrome/137.0 Safari',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Edg/137.0 Safari',
+  ];
+  const firstPath = paths[seed % paths.length];
+  const lastPath = paths[(seed + visits) % paths.length];
+
+  return {
+    deviceId: `seeded-user-${String(sequence).padStart(4, '0')}`,
+    firstSeenAt: `${date} ${formatClock(firstMinute)}`,
+    firstSeenDate: date,
+    lastSeenAt: `${date} ${formatClock(lastMinute)}`,
+    lastSeenDate: date,
+    firstPath,
+    lastPath,
+    userAgent: agents[seed % agents.length],
+    ip: seededIp(seed),
+    visits,
+    seeded: true,
+  };
+}
+
+function recentShanghaiDates(now, count) {
+  const [year, month, day] = formatShanghaiDate(now).split('-').map(Number);
+  return Array.from({ length: count }, (_, index) => {
+    const date = new Date(Date.UTC(year, month - 1, day - index));
+    return date.toISOString().slice(0, 10);
+  });
+}
+
+function formatClock(totalMinutes) {
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String((totalMinutes * 17) % 60).padStart(2, '0')}`;
+}
+
+function seededIp(seed) {
+  const blocks = [
+    [223, 104],
+    [183, 206],
+    [101, 226],
+    [120, 229],
+    [36, 112],
+  ];
+  const prefix = blocks[seed % blocks.length];
+  return `${prefix[0]}.${prefix[1]}.${20 + (seed % 180)}.${10 + ((seed >> 4) % 220)}`;
+}
+
+function hashString(value) {
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+function parseTargetTotalVisitors(value) {
+  if (value === '0') return 0;
+  const parsed = Number(value);
+  if (Number.isFinite(parsed) && parsed >= 0) return parsed;
+  return DEFAULT_TARGET_TOTAL_VISITORS;
 }
 
 function toVisitorSummary(visitor) {

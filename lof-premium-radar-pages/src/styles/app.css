@@ -4489,15 +4489,17 @@ body,
 .admin-shell {
   min-height: 100vh;
   padding: max(18px, env(safe-area-inset-top)) 14px max(28px, env(safe-area-inset-bottom));
+  overflow-x: hidden;
   background:
-    linear-gradient(120deg, rgba(255, 255, 255, 0.84), rgba(224, 239, 245, 0.7)),
-    repeating-linear-gradient(90deg, rgba(23, 58, 94, 0.08) 0 1px, transparent 1px 22px);
+    linear-gradient(120deg, rgba(255, 255, 255, 0.92), rgba(232, 243, 239, 0.78)),
+    repeating-linear-gradient(90deg, rgba(23, 58, 94, 0.06) 0 1px, transparent 1px 22px);
 }
 
 .admin-login-panel,
 .admin-dashboard {
-  width: min(980px, 100%);
+  width: min(1120px, 100%);
   margin: 0 auto;
+  min-width: 0;
 }
 
 .admin-login-panel {
@@ -4604,7 +4606,8 @@ body,
 
 .admin-dashboard {
   display: grid;
-  gap: 12px;
+  gap: 14px;
+  max-width: 100%;
 }
 
 .admin-dashboard-head {
@@ -4613,6 +4616,7 @@ body,
   justify-content: space-between;
   gap: 16px;
   padding: 18px;
+  min-width: 0;
 }
 
 .admin-dashboard-head span,
@@ -4624,6 +4628,12 @@ body,
   display: inline-flex;
   flex-wrap: wrap;
   gap: 8px;
+  justify-content: flex-end;
+}
+
+.admin-actions button {
+  min-width: 76px;
+  padding: 0 14px;
 }
 
 .admin-actions button:last-child {
@@ -4634,12 +4644,13 @@ body,
 
 .admin-metrics {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
 }
 
 .admin-metrics article {
   padding: 16px;
+  min-width: 0;
 }
 
 .admin-metrics span {
@@ -4659,6 +4670,7 @@ body,
 
 .admin-panel {
   padding: 16px;
+  min-width: 0;
 }
 
 .admin-panel-title {
@@ -4673,6 +4685,63 @@ body,
   margin: 0;
   color: var(--navy);
   font-size: 18px;
+}
+
+.admin-chart-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.daily-line-chart {
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid rgba(23, 58, 94, 0.12);
+  border-radius: 6px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(244, 249, 247, 0.96)),
+    repeating-linear-gradient(0deg, rgba(23, 58, 94, 0.05) 0 1px, transparent 1px 32px);
+}
+
+.daily-line-chart svg {
+  display: block;
+  width: 100%;
+  min-height: 190px;
+}
+
+.chart-grid-line {
+  stroke: rgba(23, 58, 94, 0.1);
+  stroke-width: 1;
+}
+
+.chart-area {
+  fill: rgba(0, 151, 167, 0.14);
+}
+
+.chart-line {
+  fill: none;
+  stroke: #007c89;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 4;
+}
+
+.chart-point {
+  fill: #fff;
+  stroke: #c7332f;
+  stroke-width: 3;
+}
+
+.chart-date {
+  fill: var(--muted);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.chart-count {
+  fill: var(--navy);
+  font-size: 12px;
+  font-weight: 900;
 }
 
 .daily-bars {
@@ -4705,32 +4774,59 @@ body,
 }
 
 .visitor-table-wrap {
-  overflow-x: auto;
+  max-width: 100%;
+  max-height: clamp(360px, 58vh, 640px);
+  overflow: auto;
+  border: 1px solid rgba(23, 58, 94, 0.12);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.95);
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 .visitor-table {
   width: 100%;
-  min-width: 720px;
+  min-width: 760px;
   border-collapse: collapse;
+  table-layout: fixed;
   color: var(--ink);
   font-size: 13px;
 }
 
 .visitor-detail-table {
-  min-width: 1120px;
+  min-width: 1040px;
 }
 
 .visitor-table th,
 .visitor-table td {
-  padding: 10px 8px;
+  padding: 11px 10px;
   border-bottom: 1px solid rgba(23, 58, 94, 0.1);
   text-align: left;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .visitor-table th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: #f3f8f7;
   color: var(--muted);
   font-size: 12px;
+  box-shadow: inset 0 -1px 0 rgba(23, 58, 94, 0.12);
+}
+
+.visitor-table tbody tr {
+  background: rgba(255, 255, 255, 0.96);
+}
+
+.visitor-table tbody tr:nth-child(even) {
+  background: rgba(246, 250, 249, 0.96);
+}
+
+.visitor-table tbody tr:hover {
+  background: rgba(0, 151, 167, 0.08);
 }
 
 .device-id-cell {
@@ -4740,7 +4836,7 @@ body,
 }
 
 .user-agent-cell {
-  max-width: 260px;
+  max-width: 300px;
   overflow: hidden;
   color: var(--muted);
   text-overflow: ellipsis;
@@ -4753,6 +4849,11 @@ body,
 }
 
 @media (max-width: 720px) {
+  .admin-shell {
+    padding-right: 10px;
+    padding-left: 10px;
+  }
+
   .admin-login-panel {
     grid-template-columns: 1fr;
     align-content: center;
@@ -4768,7 +4869,63 @@ body,
     flex-direction: column;
   }
 
+  .admin-dashboard-head {
+    padding: 14px;
+  }
+
+  .admin-dashboard-head h1 {
+    font-size: 34px;
+  }
+
+  .admin-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+  }
+
   .admin-metrics {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .admin-metrics article,
+  .admin-panel {
+    padding: 12px;
+  }
+
+  .admin-metrics span {
+    min-height: 32px;
+    font-size: 12px;
+  }
+
+  .admin-metrics strong {
+    font-size: 32px;
+  }
+
+  .daily-line-chart svg {
+    min-height: 178px;
+  }
+
+  .daily-bar-row {
+    grid-template-columns: 82px minmax(0, 1fr) 34px;
+    gap: 8px;
+    font-size: 12px;
+  }
+
+  .visitor-table-wrap {
+    max-height: min(62vh, 520px);
+  }
+
+  .visitor-table {
+    min-width: 680px;
+    font-size: 12px;
+  }
+
+  .visitor-detail-table {
+    min-width: 920px;
+  }
+
+  .visitor-table th,
+  .visitor-table td {
+    padding: 9px 8px;
   }
 }
