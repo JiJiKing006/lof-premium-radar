@@ -6,6 +6,7 @@ import { sourceLabel, sourceReference } from '../utils/sourceLinks';
 
 const props = defineProps({
   rows: { type: Array, required: true },
+  totalRows: { type: Number, default: 0 },
   loading: { type: Boolean, default: false },
   sortKey: { type: String, required: true },
   sortDirection: { type: String, required: true },
@@ -126,6 +127,11 @@ onBeforeUnmount(() => {
 
 const tableStyle = computed(() => {
   return createColumnWidthVars(stableColumnWidths.value);
+});
+
+const displayedCountText = computed(() => {
+  const total = props.totalRows || props.rows.length;
+  return props.rows.length < total ? `${props.rows.length}/${total}` : String(props.rows.length);
 });
 
 function percentText(value, { sign = false } = {}) {
@@ -312,7 +318,7 @@ function columnWidthVar(column) {
         <strong>回显中</strong>
       </template>
       <template v-else>
-        <strong>{{ rows.length }}</strong>
+        <strong>{{ displayedCountText }}</strong>
         <span>条记录</span>
       </template>
       <small>{{ loading ? '数据加载期间展示骨架屏' : '横向滑动查看净值与估算字段' }}</small>

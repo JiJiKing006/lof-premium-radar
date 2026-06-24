@@ -112,6 +112,7 @@ export function scoreAnomaly(volumeRatio) {
 
 export function scoreFreshness(ageMs) {
   const age = Number(ageMs);
+  if (age === 0) return 100;
   if (!Number.isFinite(age) || age < 0) return 0;
   if (age <= 60_000) return 100;
   if (age <= 3 * 60_000) return 80;
@@ -183,10 +184,23 @@ function isSuspended(row) {
 }
 
 function quoteAgeMs(quoteTime, now) {
+  if (isValidSameDayCloseQuote(quoteTime, now)) return 0;
   const time = parseQuoteTime(quoteTime);
   const current = now instanceof Date ? now.getTime() : new Date(now).getTime();
   if (!Number.isFinite(time) || !Number.isFinite(current)) return Number.POSITIVE_INFINITY;
   return Math.max(0, current - time);
+}
+
+function isValidSameDayCloseQuote(quoteTime, now) {
+  const match = String(quoteTime || '').match(/^(\d{4}-\d{2}-\d{2}) (\d{2}):(\d{2})/);
+  if (!match) return false;
+  const [, quoteDate, hour, minute] = match;
+  const current = now instanceof Date ? now : new Date(now);
+  const shanghai = new Date(current.getTime() + 8 * 60 * 60_000);
+  const nowDate = shanghai.toISOString().slice(0, 10);
+  const nowMinutes = shanghai.getUTCHours() * 60 + shanghai.getUTCMinutes();
+  const quoteMinutes = Number(hour) * 60 + Number(minute);
+  return quoteDate === nowDate && nowMinutes >= 15 * 60 + 30 && quoteMinutes >= 14 * 60 + 55;
 }
 
 function parseQuoteTime(value) {

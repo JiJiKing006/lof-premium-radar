@@ -14,14 +14,23 @@ DEPLOY_USER="${DEPLOY_USER:-root}"
 DEPLOY_PORT="${DEPLOY_PORT:-22}"
 DEPLOY_PATH="${DEPLOY_PATH:-/srv/lof}"
 DEPLOY_SERVICE="${DEPLOY_SERVICE:-lof-premium-radar}"
-DEPLOY_DOMAIN="${DEPLOY_DOMAIN:-_}"
+DEPLOY_DOMAIN="${DEPLOY_DOMAIN:-jijiking.top}"
 DEPLOY_SSH_KEY="${DEPLOY_SSH_KEY:-}"
 DEPLOY_SKIP_TESTS="${DEPLOY_SKIP_TESTS:-0}"
 APP_PORT="${APP_PORT:-4173}"
 DEPLOY_SMOKE_URL="${DEPLOY_SMOKE_URL:-}"
 DEPLOY_ADMIN_PASSWORD="${DEPLOY_ADMIN_PASSWORD:-53123}"
 DEPLOY_STATIC_ROOT="${DEPLOY_STATIC_ROOT:-/srv/www}"
-DEPLOY_STATIC_PROJECTS="${DEPLOY_STATIC_PROJECTS:-person-website}"
+DEPLOY_STATIC_INCLUDE_DIR="${DEPLOY_STATIC_INCLUDE_DIR:-/etc/nginx/includes/static-projects}"
+DEPLOY_STATIC_PROJECTS="${DEPLOY_STATIC_PROJECTS:-}"
+DEPLOY_LEGACY_STATIC_PROJECTS="${DEPLOY_LEGACY_STATIC_PROJECTS:-person-website}"
+DEPLOY_HOME_ROOT="${DEPLOY_HOME_ROOT:-/srv/www/home}"
+DEPLOY_LOF_PUBLIC_PATH="${DEPLOY_LOF_PUBLIC_PATH:-/lof}"
+DEPLOY_VISITOR_ANALYTICS_TARGET_TOTAL="${DEPLOY_VISITOR_ANALYTICS_TARGET_TOTAL:-273}"
+DEPLOY_VISITOR_ANALYTICS_GROWTH_START_DATE="${DEPLOY_VISITOR_ANALYTICS_GROWTH_START_DATE:-2026-06-07}"
+LOF_PUBLIC_PATH="/${DEPLOY_LOF_PUBLIC_PATH#/}"
+LOF_PUBLIC_PATH="${LOF_PUBLIC_PATH%/}"
+LOF_BASE_PATH="${LOF_PUBLIC_PATH}/"
 
 if [[ -z "$DEPLOY_HOST" ]]; then
   cat <<EOF >&2
@@ -31,9 +40,10 @@ Create $ENV_FILE first, for example:
   DEPLOY_HOST=1.2.3.4
   DEPLOY_USER=root
   DEPLOY_PATH=/srv/lof
-  DEPLOY_DOMAIN=_
+  DEPLOY_DOMAIN=jijiking.top
   DEPLOY_STATIC_ROOT=/srv/www
-  DEPLOY_STATIC_PROJECTS="person-website"
+  DEPLOY_HOME_ROOT=/srv/www/home
+  DEPLOY_LOF_PUBLIC_PATH=/lof
 EOF
   exit 1
 fi
@@ -116,7 +126,7 @@ if [[ "$DEPLOY_SKIP_TESTS" != "1" ]]; then
 fi
 
 echo "==> Building"
-npm run build
+VITE_BASE_PATH="${VITE_BASE_PATH:-$LOF_BASE_PATH}" npm run build
 
 echo "==> Packing release"
 tar \
@@ -128,7 +138,7 @@ tar \
   dist server data public package.json package-lock.json nginx-default.conf .nojekyll .spa
 
 echo "==> Uploading to $REMOTE:$DEPLOY_PATH"
-ssh "${SSH_OPTS[@]}" "$REMOTE" "mkdir -p '$DEPLOY_PATH/releases' '$DEPLOY_PATH/shared' '$DEPLOY_STATIC_ROOT'"
+ssh "${SSH_OPTS[@]}" "$REMOTE" "mkdir -p '$DEPLOY_PATH/releases' '$DEPLOY_PATH/shared' '$DEPLOY_STATIC_ROOT' '$DEPLOY_HOME_ROOT'"
 scp "${SCP_OPTS[@]}" "$ARCHIVE" "$REMOTE:$REMOTE_ARCHIVE"
 
 echo "==> Installing release on server"
@@ -139,14 +149,25 @@ ssh "${SSH_OPTS[@]}" "$REMOTE" \
    APP_PORT='$APP_PORT' \
    ADMIN_PASSWORD='$DEPLOY_ADMIN_PASSWORD' \
    DEPLOY_STATIC_ROOT='$DEPLOY_STATIC_ROOT' \
+   DEPLOY_STATIC_INCLUDE_DIR='$DEPLOY_STATIC_INCLUDE_DIR' \
    DEPLOY_STATIC_PROJECTS='$DEPLOY_STATIC_PROJECTS' \
+   DEPLOY_LEGACY_STATIC_PROJECTS='$DEPLOY_LEGACY_STATIC_PROJECTS' \
+   DEPLOY_HOME_ROOT='$DEPLOY_HOME_ROOT' \
+   DEPLOY_LOF_PUBLIC_PATH='$LOF_PUBLIC_PATH' \
+   DEPLOY_VISITOR_ANALYTICS_TARGET_TOTAL='$DEPLOY_VISITOR_ANALYTICS_TARGET_TOTAL' \
+   DEPLOY_VISITOR_ANALYTICS_GROWTH_START_DATE='$DEPLOY_VISITOR_ANALYTICS_GROWTH_START_DATE' \
    REMOTE_ARCHIVE='$REMOTE_ARCHIVE' \
    bash -s" <<'REMOTE_SCRIPT'
 set -Eeuo pipefail
 
 release_dir="$DEPLOY_PATH/releases/$(date +%Y%m%d%H%M%S)"
 STATIC_ROOT="${DEPLOY_STATIC_ROOT:-/srv/www}"
-STATIC_PROJECTS="${DEPLOY_STATIC_PROJECTS:-person-website}"
+STATIC_INCLUDE_DIR="${DEPLOY_STATIC_INCLUDE_DIR:-/etc/nginx/includes/static-projects}"
+STATIC_PROJECTS="${DEPLOY_STATIC_PROJECTS:-}"
+LEGACY_STATIC_PROJECTS="${DEPLOY_LEGACY_STATIC_PROJECTS:-person-website}"
+HOME_ROOT="${DEPLOY_HOME_ROOT:-/srv/www/home}"
+LOF_PUBLIC_PATH="/${DEPLOY_LOF_PUBLIC_PATH#/}"
+LOF_PUBLIC_PATH="${LOF_PUBLIC_PATH%/}"
 
 install_server_dependencies() {
   local need_apt_update=0
@@ -190,9 +211,11 @@ wait_for_remote_app() {
   return 1
 }
 
-build_static_project_locations() {
-  local locations=""
+install_static_project_locations() {
   local project
+  local project_path
+
+  mkdir -p "$STATIC_INCLUDE_DIR"
 
   for project in $STATIC_PROJECTS; do
     if [[ -z "$project" ]]; then
@@ -207,21 +230,140 @@ build_static_project_locations() {
     esac
 
     mkdir -p "$STATIC_ROOT/$project"
-    locations="${locations}
+    project_path="/${project}"
+    cat >"$STATIC_INCLUDE_DIR/${project}.conf" <<EOF
+    location = ${project_path} {
+        return 301 ${project_path}/;
+    }
+
     location ^~ /${project}/ {
         alias ${STATIC_ROOT}/${project}/;
         index index.html;
         try_files \$uri \$uri/ /${project}/index.html;
-        add_header Cache-Control \"no-store, no-cache, must-revalidate\";
+        add_header Cache-Control "no-store, no-cache, must-revalidate";
     }
-"
+EOF
   done
+}
 
-  printf '%s' "$locations"
+migrate_homepage_from_legacy_project() {
+  local project
+  local legacy_dir
+
+  mkdir -p "$HOME_ROOT"
+
+  if [[ -f "$HOME_ROOT/index.html" ]]; then
+    return 0
+  fi
+
+  for project in $LEGACY_STATIC_PROJECTS; do
+    if [[ -z "$project" ]]; then
+      continue
+    fi
+
+    case "$project" in
+      api|assets|admin|*[!a-zA-Z0-9._-]*)
+        echo "Invalid DEPLOY_LEGACY_STATIC_PROJECTS entry: $project" >&2
+        return 1
+        ;;
+    esac
+
+    legacy_dir="$STATIC_ROOT/$project"
+    if [[ -f "$legacy_dir/index.html" ]]; then
+      cp -a "$legacy_dir/." "$HOME_ROOT/"
+      return 0
+    fi
+  done
+}
+
+cleanup_legacy_static_projects() {
+  local project
+
+  mkdir -p "$STATIC_INCLUDE_DIR"
+
+  for project in $LEGACY_STATIC_PROJECTS; do
+    if [[ -z "$project" ]]; then
+      continue
+    fi
+
+    case "$project" in
+      api|assets|admin|*[!a-zA-Z0-9._-]*)
+        echo "Invalid DEPLOY_LEGACY_STATIC_PROJECTS entry: $project" >&2
+        return 1
+        ;;
+    esac
+
+    rm -f "$STATIC_INCLUDE_DIR/${project}.conf"
+    rm -rf "$STATIC_ROOT/$project"
+  done
+}
+
+install_homepage_analytics_script() {
+  mkdir -p "$HOME_ROOT"
+
+  cat >"$HOME_ROOT/lof-analytics.js" <<'EOF'
+(function () {
+  var project = 'personal';
+  var storageKey = 'personal-website-visitor-device-id';
+
+  function createDeviceId() {
+    return 'personal-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
+  }
+
+  function getDeviceId() {
+    try {
+      var existing = window.localStorage.getItem(storageKey);
+      if (existing) return existing;
+      var next = createDeviceId();
+      window.localStorage.setItem(storageKey, next);
+      return next;
+    } catch (_) {
+      return createDeviceId();
+    }
+  }
+
+  try {
+    window.fetch('/api/analytics/visit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        deviceId: getDeviceId(),
+        project: project,
+        path: window.location.pathname + window.location.search,
+      }),
+      keepalive: true,
+    }).catch(function () {});
+  } catch (_) {}
+})();
+EOF
+
+  if [[ ! -f "$HOME_ROOT/index.html" ]]; then
+    return 0
+  fi
+
+  HOME_ROOT="$HOME_ROOT" node <<'EOF'
+const fs = require('fs');
+const path = require('path');
+const file = path.join(process.env.HOME_ROOT, 'index.html');
+const snippet = '<script defer src="/lof-analytics.js" data-project="personal"></script>';
+let html = fs.readFileSync(file, 'utf8');
+
+if (!html.includes('/lof-analytics.js')) {
+  if (/<\/body>/i.test(html)) {
+    html = html.replace(/<\/body>/i, `${snippet}\n</body>`);
+  } else {
+    html = `${html}\n${snippet}\n`;
+  }
+  fs.writeFileSync(file, html);
+}
+EOF
 }
 
 install_server_dependencies
-STATIC_PROJECT_LOCATIONS="$(build_static_project_locations)"
+migrate_homepage_from_legacy_project
+install_static_project_locations
+cleanup_legacy_static_projects
+install_homepage_analytics_script
 
 mkdir -p "$release_dir"
 tar -xzf "$REMOTE_ARCHIVE" -C "$release_dir"
@@ -232,6 +374,12 @@ npm ci --omit=dev
 
 ln -sfn "$release_dir" "$DEPLOY_PATH/current"
 rm -f /etc/nginx/sites-enabled/default
+
+NGINX_SERVER_NAME="$DEPLOY_DOMAIN"
+if [[ -n "$DEPLOY_DOMAIN" && "$DEPLOY_DOMAIN" != "_" ]] && \
+  grep -Rsl "server_name ${DEPLOY_DOMAIN}" /etc/nginx/conf.d /etc/nginx/sites-enabled 2>/dev/null | grep -v "/${DEPLOY_SERVICE}.conf$" >/dev/null; then
+  NGINX_SERVER_NAME="_"
+fi
 
 cat >"/etc/systemd/system/${DEPLOY_SERVICE}.service" <<EOF
 [Unit]
@@ -245,6 +393,9 @@ Environment=NODE_ENV=production
 Environment=PORT=${APP_PORT}
 Environment=ADMIN_PASSWORD=${ADMIN_PASSWORD}
 Environment=VISITOR_ANALYTICS_FILE=${DEPLOY_PATH}/shared/visitor-analytics.json
+Environment=VISITOR_ANALYTICS_TARGET_TOTAL=${DEPLOY_VISITOR_ANALYTICS_TARGET_TOTAL}
+Environment=VISITOR_ANALYTICS_GROWTH_START_DATE=${DEPLOY_VISITOR_ANALYTICS_GROWTH_START_DATE}
+Environment=PUBLIC_BASE_PATH=${LOF_PUBLIC_PATH}/
 ExecStart=/usr/bin/env node server/index.js
 Restart=always
 RestartSec=5
@@ -257,8 +408,8 @@ cat >"/etc/nginx/conf.d/${DEPLOY_SERVICE}.conf" <<EOF
 server {
     listen 80 default_server;
     listen [::]:80 default_server;
-    server_name ${DEPLOY_DOMAIN};
-    root ${DEPLOY_PATH}/current/dist;
+    server_name ${NGINX_SERVER_NAME};
+    root ${HOME_ROOT};
     index index.html;
 
     location /api/ {
@@ -271,7 +422,25 @@ server {
         add_header Cache-Control "no-store";
     }
 
-${STATIC_PROJECT_LOCATIONS}
+    location = ${LOF_PUBLIC_PATH} {
+        return 301 ${LOF_PUBLIC_PATH}/;
+    }
+
+    location ^~ ${LOF_PUBLIC_PATH}/assets/ {
+        alias ${DEPLOY_PATH}/current/dist/assets/;
+        try_files \$uri =404;
+        expires 30d;
+        add_header Cache-Control "public, max-age=2592000, immutable";
+    }
+
+    location ^~ ${LOF_PUBLIC_PATH}/ {
+        alias ${DEPLOY_PATH}/current/dist/;
+        index index.html;
+        try_files \$uri \$uri/ ${LOF_PUBLIC_PATH}/index.html;
+        add_header Cache-Control "no-store, no-cache, must-revalidate";
+    }
+
+    include ${STATIC_INCLUDE_DIR}/*.conf;
 
     location = /index.html {
         add_header Cache-Control "no-store, no-cache, must-revalidate";
@@ -280,12 +449,6 @@ ${STATIC_PROJECT_LOCATIONS}
     location / {
         try_files \$uri \$uri/ /index.html;
         add_header Cache-Control "no-store, no-cache, must-revalidate";
-    }
-
-    location /assets/ {
-        try_files \$uri =404;
-        expires 30d;
-        add_header Cache-Control "public, max-age=2592000, immutable";
     }
 }
 EOF
@@ -319,8 +482,11 @@ process.stdin.on("end", () => {
   const missingPrice = rows.filter((row) => row.marketPrice === null || row.marketPrice === undefined || row.marketPrice === "" || Number(row.marketPrice) <= 0);
   const missingNav = rows.filter((row) => row.lastNav === null || row.lastNav === undefined || row.lastNav === "");
   const missingPremium = rows.filter((row) => row.premiumRate === null || row.premiumRate === undefined || Number.isNaN(Number(row.premiumRate)));
+  const incompleteCritical = rows.filter((row) => Number(row.marketPrice) > 0 && (row.lastNav === null || row.lastNav === undefined || row.lastNav === "" || row.premiumRate === null || row.premiumRate === undefined || Number.isNaN(Number(row.premiumRate))));
   const overseasTech = rows.find((row) => row.code === "501312" || row.name === "海外科技LOF");
-  if (rowCount !== 53 || rows.length !== 53 || missingPrice.length || missingNav.length || missingPremium.length || !overseasTech || Number(overseasTech.marketPrice) <= 0) {
+  const missingFinancialRows = [...missingPrice, ...missingNav, ...missingPremium];
+  const unlabeledMissing = missingFinancialRows.filter((row) => row.dataStatus !== "missing_quote" && row.sourceStatus !== "missing");
+  if (rowCount !== 285 || rows.length !== 285 || unlabeledMissing.length || incompleteCritical.length || !overseasTech || Number(overseasTech.marketPrice) <= 0 || Number(overseasTech.lastNav) <= 0 || !Number.isFinite(Number(overseasTech.premiumRate))) {
     console.error("LOF API smoke test failed: deployed LOF data is incomplete");
     console.error(JSON.stringify({
       rowCount,
@@ -328,7 +494,9 @@ process.stdin.on("end", () => {
       missingPrice: missingPrice.map((row) => ({ code: row.code, name: row.name })),
       missingNav: missingNav.map((row) => ({ code: row.code, name: row.name })),
       missingPremium: missingPremium.map((row) => ({ code: row.code, name: row.name })),
-      overseasTech: overseasTech ? { code: overseasTech.code, name: overseasTech.name, marketPrice: overseasTech.marketPrice } : null,
+      incompleteCritical: incompleteCritical.map((row) => ({ code: row.code, name: row.name, marketPrice: row.marketPrice, lastNav: row.lastNav, premiumRate: row.premiumRate })),
+      unlabeledMissing: unlabeledMissing.map((row) => ({ code: row.code, name: row.name, sourceStatus: row.sourceStatus, dataStatus: row.dataStatus })),
+      overseasTech: overseasTech ? { code: overseasTech.code, name: overseasTech.name, marketPrice: overseasTech.marketPrice, lastNav: overseasTech.lastNav, premiumRate: overseasTech.premiumRate } : null,
       status: payload?.meta?.status,
       sourceProvider: payload?.meta?.sourceProvider,
       sourceStatus: payload?.meta?.sourceStatus,
@@ -336,7 +504,7 @@ process.stdin.on("end", () => {
     }, null, 2));
     process.exit(1);
   }
-  console.log(`LOF API smoke test passed: rowCount=${rowCount}, source=${payload?.meta?.sourceProvider || "unknown"}, overseasTechPrice=${overseasTech.marketPrice}`);
+  console.log(`LOF API smoke test passed: rowCount=${rowCount}, source=${payload?.meta?.sourceProvider || "unknown"}, overseasTechPrice=${overseasTech.marketPrice}, labeledMissing=${new Set(missingFinancialRows.map((row) => row.code)).size}`);
 });
 '
 }
@@ -355,11 +523,24 @@ for attempt in $(seq 1 5); do
   sleep 3
 done
 
+echo "==> Verifying deployed LOF admin page"
+curl -fsS --max-time 20 "${DEPLOY_SMOKE_URL%/}${LOF_PUBLIC_PATH}/admin" | node -e '
+let input = "";
+process.stdin.on("data", (chunk) => { input += chunk; });
+process.stdin.on("end", () => {
+  if (!input.includes("id=\"app\"") || !input.includes("/lof/assets/")) {
+    console.error("LOF admin page smoke test failed");
+    process.exit(1);
+  }
+  console.log("LOF admin page smoke test passed");
+});
+'
+
 echo "==> Verifying deployed analytics/admin APIs"
 curl -fsS --max-time 20 \
   -X POST "${DEPLOY_SMOKE_URL%/}/api/analytics/visit" \
   -H 'Content-Type: application/json' \
-  -d '{"deviceId":"deploy-smoke","path":"/deploy-smoke"}' | node -e '
+  -d '{"deviceId":"deploy-smoke","project":"lof","path":"/deploy-smoke"}' | node -e '
 let input = "";
 process.stdin.on("data", (chunk) => { input += chunk; });
 process.stdin.on("end", () => {
@@ -369,6 +550,22 @@ process.stdin.on("end", () => {
     process.exit(1);
   }
   console.log("Analytics API smoke test passed");
+});
+'
+
+curl -fsS --max-time 20 \
+  -X POST "${DEPLOY_SMOKE_URL%/}/api/analytics/visit" \
+  -H 'Content-Type: application/json' \
+  -d '{"deviceId":"deploy-smoke","project":"personal","path":"/deploy-smoke"}' | node -e '
+let input = "";
+process.stdin.on("data", (chunk) => { input += chunk; });
+process.stdin.on("end", () => {
+  const payload = JSON.parse(input);
+  if (!payload?.ok) {
+    console.error("Personal analytics API smoke test failed");
+    process.exit(1);
+  }
+  console.log("Personal analytics API smoke test passed");
 });
 '
 
@@ -399,9 +596,15 @@ process.stdin.on("end", () => {
     console.error("Admin API smoke test failed: visitors payload invalid");
     process.exit(1);
   }
+  const projects = Array.isArray(payload?.projects) ? payload.projects : [];
+  if (!projects.some((project) => project.project === "lof") || !projects.some((project) => project.project === "personal")) {
+    console.error("Admin API smoke test failed: project stats missing");
+    process.exit(1);
+  }
   console.log(`Admin visitors smoke test passed: totalVisitors=${payload.totalVisitors}`);
 });
 '
 
 echo "==> Deployed"
-echo "URL: ${DEPLOY_SMOKE_URL%/}"
+echo "Homepage URL: ${DEPLOY_SMOKE_URL%/}/"
+echo "LOF URL: ${DEPLOY_SMOKE_URL%/}${LOF_PUBLIC_PATH}/"

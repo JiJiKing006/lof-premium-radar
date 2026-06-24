@@ -13,6 +13,7 @@ import type { FundItem, FundSortKey } from '../types/fund';
 
 const AUTO_REFRESH_INTERVAL = 30_000;
 const VISITOR_DEVICE_KEY = 'lof-visitor-device-id';
+const DOMESTIC_FUND_UPDATE_NOTICE_KEY = 'lof-domestic-fund-update-notice-20260624';
 const section = ref('LOF');
 const selectedFund = ref<FundItem | null>(null);
 const excludePausedPurchase = ref(false);
@@ -23,6 +24,7 @@ const toastText = ref('');
 const pulseCode = ref('');
 const nowTick = ref(Date.now());
 const showBackTop = ref(false);
+const showUpdateNotice = ref(false);
 const shellRef = ref<HTMLElement | null>(null);
 let toastTimer: number | undefined;
 let pulseTimer: number | undefined;
@@ -172,6 +174,7 @@ watch(visibleFunds, () => {
 
 onMounted(() => {
   recordCurrentVisit();
+  showUpdateNotice.value = shouldShowDomesticFundUpdateNotice();
   countdownTimer = window.setInterval(() => {
     nowTick.value = Date.now();
   }, 1_000);
@@ -205,7 +208,7 @@ function storeFavoriteCodes(codes: Set<string>) {
 
 function recordCurrentVisit() {
   try {
-    recordVisitor(getOrCreateDeviceId()).catch(() => {});
+    recordVisitor(getOrCreateDeviceId(), window.location.pathname + window.location.search, 'lof').catch(() => {});
   } catch {
     // Analytics must never block the fund radar.
   }
@@ -224,6 +227,22 @@ function createDeviceId() {
   return `visitor-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
+function shouldShowDomesticFundUpdateNotice() {
+  try {
+    return window.localStorage.getItem(DOMESTIC_FUND_UPDATE_NOTICE_KEY) !== 'closed';
+  } catch {
+    return true;
+  }
+}
+
+function closeUpdateNotice() {
+  showUpdateNotice.value = false;
+  try {
+    window.localStorage.setItem(DOMESTIC_FUND_UPDATE_NOTICE_KEY, 'closed');
+  } catch {
+    // Ignore local storage errors.
+  }
+}
 </script>
 
 <template>
@@ -279,9 +298,27 @@ function createDeviceId() {
       />
     </template>
 
-    <footer class="author-mark" aria-label="作者标识">
-      <span>作者</span>
-      <strong>jijiking</strong>
+    <footer class="author-mark" aria-label="网站底部信息">
+      <a
+        class="author-line author-link"
+        href="https://jijiking.top/"
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label="打开作者 jijiking 的主页"
+      >
+        <span>作者</span>
+        <strong>jijiking</strong>
+      </a>
+      <a
+        class="icp-record"
+        href="https://beian.miit.gov.cn/"
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label="工信部备案 赣ICP备2026012689号-1"
+      >
+        <span class="icp-badge-icon" aria-hidden="true">备</span>
+        <span>赣ICP备2026012689号-1</span>
+      </a>
     </footer>
     <div class="bottom-safe-area" aria-hidden="true"></div>
 
@@ -300,6 +337,29 @@ function createDeviceId() {
         <b>↑</b>
         <span>顶部</span>
       </button>
+    </Transition>
+
+    <Transition name="update-notice">
+      <div
+        v-if="showUpdateNotice"
+        class="update-notice-mask"
+        role="presentation"
+        @click.self="closeUpdateNotice"
+      >
+        <section
+          class="update-notice-card"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="domestic-fund-update-title"
+        >
+          <p class="update-notice-kicker">Update</p>
+          <h2 id="domestic-fund-update-title">国内基金条目已更新</h2>
+          <p class="update-notice-copy">
+            本次补充股票、指数方向 LOF 条目，覆盖更完整。行情、净值、溢价仍按原逻辑计算。
+          </p>
+          <button type="button" class="update-notice-button" @click="closeUpdateNotice">知道了</button>
+        </section>
+      </div>
     </Transition>
   </main>
 </template>

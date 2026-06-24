@@ -61,6 +61,35 @@ describe('fundAggregator', () => {
     expect(row.premiumBasis).toBe('estimatedNav');
   });
 
+  it('does not display rejected outlier estimated NAV values', () => {
+    const row = toUnifiedFund({
+      quote: {
+        code: '159128',
+        name: '港科技TH',
+        category: 'ETF',
+        marketPrice: 0.711,
+        source: 'sina',
+        sourceStatus: 'fallback',
+        quoteTime: '2026-06-08 15:00:00',
+      },
+      nav: {
+        code: '159128',
+        lastNav: 0.7436,
+        estimatedNav: 2465.65,
+        navSource: 'jisilu',
+        estimatedNavSource: 'jisilu',
+        navQuoteTime: '2026-06-08 15:00:00',
+      },
+      updateTime: '2026-06-08 15:01:00',
+    });
+
+    expect(row.premiumBasis).toBe('lastNav');
+    expect(row.premiumRate).toBeCloseTo(-4.3841, 4);
+    expect(row.estimatedNav).toBeNull();
+    expect(row.estimateWarning).toContain('估算净值量级异常');
+  });
+
+
   it('carries verified exchange share amount and previous-day share change into unified rows', () => {
     const row = toUnifiedFund({
       quote: {
@@ -152,6 +181,27 @@ describe('fundAggregator', () => {
     expect(rows.map((row) => row.code)).toEqual(['160916', '162719', '161125']);
   });
 
+  it('removes QDII rows without a calculable premium rate from table output', () => {
+    const rows = filterRenderablePremiumRows([
+      { code: '513100', category: 'QDII', marketPrice: 1.543, premiumRate: null, source: 'sina' },
+      { code: '159941', category: 'ETF', marketPrice: 1.12, premiumRate: Number.NaN, source: 'sina' },
+      { code: '513500', category: 'QDII', marketPrice: null, premiumRate: null, source: 'quote-missing' },
+    ], 'QDII');
+
+    expect(rows.map((row) => row.code)).toEqual([]);
+  });
+
+  it('removes ETF rows without a calculable premium rate from table output', () => {
+    const rows = filterRenderablePremiumRows([
+      { code: '159509', name: '纳斯达克科技ETF', category: 'ETF', marketPrice: 1.23, premiumRate: null, market: '美股' },
+      { code: '588000', name: '科创50ETF', category: 'ETF', marketPrice: 1.01, premiumRate: null, market: 'A股' },
+      { code: '513100', name: '纳指ETF', category: 'QDII', marketPrice: 1.54, premiumRate: null, market: '美股' },
+    ], 'ETF');
+
+    expect(rows.map((row) => row.code)).toEqual([]);
+  });
+
+
   it('carries missing quote status through unified LOF rows', () => {
     const row = toUnifiedFund({
       quote: {
@@ -207,6 +257,38 @@ describe('fundAggregator', () => {
     expect(row.quoteSource).toBe('eastmoney');
     expect(row.dataStatus).toBe('missing_quote');
     expect(row.referenceSource).toBe('palmmicro');
+  });
+
+  it('does not turn missing supplemental market quotes into a displayed zero price', () => {
+    const row = toUnifiedFund({
+      quote: {
+        code: '161233',
+        name: '国投瑞银瑞泰多策略混合(LOF)A',
+        category: 'LOF',
+        marketPrice: null,
+        lastNav: null,
+        estimatedNav: null,
+        source: 'quote-missing',
+        sourceStatus: 'missing',
+        dataStatus: 'missing_quote',
+        referenceSource: 'xiaobeiyangji-get-arbitrage-list',
+      },
+      marketQuote: {
+        code: '161233',
+        marketPrice: 0,
+        source: 'eastmoney',
+      },
+      nav: {
+        code: '161233',
+        lastNav: 1.8396,
+        navSource: 'eastmoney',
+      },
+      updateTime: '2026-06-24 15:05:45',
+    });
+
+    expect(row.marketPrice).toBeNull();
+    expect(row.premiumRate).toBeNull();
+    expect(row.dataStatus).toBe('missing_quote');
   });
 
   it('uses fallback quote maps when the primary quote is missing or zero', () => {

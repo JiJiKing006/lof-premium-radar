@@ -1,8 +1,12 @@
-export interface VisitorStats {
+export interface VisitorStatsSnapshot {
   meta: {
     source: string;
     updateTime: string;
+    targetTotalVisitors?: number;
   };
+  project: string;
+  label: string;
+  seeded: boolean;
   totalVisitors: number;
   totalVisits: number;
   todayNewVisitors: number;
@@ -18,8 +22,13 @@ export interface VisitorStats {
   recentVisitors: VisitorRecord[];
 }
 
+export interface VisitorStats extends VisitorStatsSnapshot {
+  projects: VisitorStatsSnapshot[];
+}
+
 export interface VisitorRecord {
     deviceId: string;
+    project: string;
     firstSeenAt: string;
     lastSeenAt: string;
     firstPath: string;
@@ -29,11 +38,11 @@ export interface VisitorRecord {
     ip: string;
 }
 
-export async function recordVisitor(deviceId: string, path = window.location.pathname + window.location.search) {
+export async function recordVisitor(deviceId: string, path = window.location.pathname + window.location.search, project = 'lof') {
   const response = await fetch('/api/analytics/visit', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ deviceId, path }),
+    body: JSON.stringify({ deviceId, path, project }),
   });
   if (!response.ok) throw new Error('访问记录失败');
   return response.json() as Promise<{ ok: boolean; totalVisitors: number }>;

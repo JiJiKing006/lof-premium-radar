@@ -1,9 +1,9 @@
 {
   "sourceUrl": "https://palmmicro.com/woody/res/lofcn.php?sort=premium",
-  "sourceTitle": "LOF基金",
-  "sourceLine": "",
-  "scrapedAt": "2026-05-27T10:00:21.952Z",
-  "rowCount": 53,
+  "sourceTitle": "LOF基金参考清单",
+  "sourceLine": "新增条目参考小倍养基 get-arbitrage-list 的股票/指数 tab，仅使用基金代码和名称；行情、净值、溢价仍由现有数据源计算。",
+  "scrapedAt": "2026-06-23T16:52:38.353Z",
+  "rowCount": 285,
   "columns": [
     {
       "key": "code",
@@ -34254,6 +34254,1875 @@
           }
         ]
       }
+    },
+    {
+      "rank": 54,
+      "code": "SZ160105",
+      "name": "南方积极配置混合(LOF)",
+      "referenceName": "南方积极配置混合(LOF)",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 55,
+      "code": "SZ160106",
+      "name": "南方高增长混合(LOF)",
+      "referenceName": "南方高增长混合(LOF)",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 56,
+      "code": "SZ160127",
+      "name": "南方新兴消费增长股票(LOF)A",
+      "referenceName": "南方新兴消费增长股票(LOF)A",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 57,
+      "code": "SZ160133",
+      "name": "南方天元新产业股票(LOF)",
+      "referenceName": "南方天元新产业股票(LOF)",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 58,
+      "code": "SZ160135",
+      "name": "南方中证高铁产业指数(LOF)",
+      "referenceName": "南方中证高铁产业指数(LOF)",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 59,
+      "code": "SZ160142",
+      "name": "南方优势产业灵活配置混合(LOF)",
+      "referenceName": "南方优势产业灵活配置混合(LOF)",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 60,
+      "code": "SZ160211",
+      "name": "国泰中小盘成长混合(LOF)",
+      "referenceName": "国泰中小盘成长混合(LOF)",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 61,
+      "code": "SZ160212",
+      "name": "国泰估值优势混合(LOF)A",
+      "referenceName": "国泰估值优势混合(LOF)A",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 62,
+      "code": "SZ160215",
+      "name": "国泰价值经典灵活配置混合(LOF)",
+      "referenceName": "国泰价值经典灵活配置混合(LOF)",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 63,
+      "code": "SZ160218",
+      "name": "国泰国证房地产行业指数(LOF)A",
+      "referenceName": "国泰国证房地产行业指数(LOF)A",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 64,
+      "code": "SZ160219",
+      "name": "国泰国证医药卫生行业指数(LOF)A",
+      "referenceName": "国泰国证医药卫生行业指数(LOF)A",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 65,
+      "code": "SZ160220",
+      "name": "国泰民益灵活配置混合(LOF)A",
+      "referenceName": "国泰民益灵活配置混合(LOF)A",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 66,
+      "code": "SZ160221",
+      "name": "国泰国证有色金属行业指数(LOF)A",
+      "referenceName": "国泰国证有色金属行业指数(LOF)A",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 67,
+      "code": "SZ160222",
+      "name": "国泰国证食品饮料行业(LOF)A",
+      "referenceName": "国泰国证食品饮料行业(LOF)A",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 68,
+      "code": "SZ160223",
+      "name": "国泰创业板指数(LOF)A",
+      "referenceName": "国泰创业板指数(LOF)A",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 69,
+      "code": "SZ160311",
+      "name": "华夏蓝筹混合(LOF)A",
+      "referenceName": "华夏蓝筹混合(LOF)A",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 70,
+      "code": "SZ160314",
+      "name": "华夏行业混合(LOF)",
+      "referenceName": "华夏行业混合(LOF)",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 71,
+      "code": "SZ160323",
+      "name": "华夏磐泰混合(LOF)A",
+      "referenceName": "华夏磐泰混合(LOF)A",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 72,
+      "code": "SZ160324",
+      "name": "华夏磐晟混合(LOF)",
+      "referenceName": "华夏磐晟混合(LOF)",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 73,
+      "code": "SZ160421",
+      "name": "华安智增精选灵活配置混合",
+      "referenceName": "华安智增精选灵活配置混合",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 74,
+      "code": "SZ160505",
+      "name": "博时主题行业混合(LOF)",
+      "referenceName": "博时主题行业混合(LOF)",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 75,
+      "code": "SZ160512",
+      "name": "博时卓越品牌混合A",
+      "referenceName": "博时卓越品牌混合A",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 76,
+      "code": "SZ160518",
+      "name": "博时睿远事件驱动混合(LOF)",
+      "referenceName": "博时睿远事件驱动混合(LOF)",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 77,
+      "code": "SZ160526",
+      "name": "博时优势企业灵活配置混合A",
+      "referenceName": "博时优势企业灵活配置混合A",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 78,
+      "code": "SZ160527",
+      "name": "博时研究优选混合(LOF)A",
+      "referenceName": "博时研究优选混合(LOF)A",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 79,
+      "code": "SZ160607",
+      "name": "鹏华价值优势混合(LOF)",
+      "referenceName": "鹏华价值优势混合(LOF)",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 80,
+      "code": "SZ160610",
+      "name": "鹏华动力增长混合(LOF)",
+      "referenceName": "鹏华动力增长混合(LOF)",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 81,
+      "code": "SZ160611",
+      "name": "鹏华优质治理混合(LOF)A",
+      "referenceName": "鹏华优质治理混合(LOF)A",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 82,
+      "code": "SZ160613",
+      "name": "鹏华盛世创新混合(LOF)A",
+      "referenceName": "鹏华盛世创新混合(LOF)A",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 83,
+      "code": "SZ160615",
+      "name": "鹏华沪深300ETF联接(LOF)A",
+      "referenceName": "鹏华沪深300ETF联接(LOF)A",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 84,
+      "code": "SZ160616",
+      "name": "鹏华中证500指数(LOF)A",
+      "referenceName": "鹏华中证500指数(LOF)A",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 85,
+      "code": "SZ160620",
+      "name": "鹏华中证A股资源产业指数(LOF)A",
+      "referenceName": "鹏华中证A股资源产业指数(LOF)A",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 86,
+      "code": "SZ160625",
+      "name": "鹏华中证800证券保险指数(LOF)A",
+      "referenceName": "鹏华中证800证券保险指数(LOF)A",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 87,
+      "code": "SZ160626",
+      "name": "鹏华信息A",
+      "referenceName": "鹏华信息A",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 88,
+      "code": "SZ160628",
+      "name": "鹏华中证800地产指数(LOF)A",
+      "referenceName": "鹏华中证800地产指数(LOF)A",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 89,
+      "code": "SZ160629",
+      "name": "鹏华中证传媒指数(LOF)A",
+      "referenceName": "鹏华中证传媒指数(LOF)A",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 90,
+      "code": "SZ160630",
+      "name": "鹏华中证国防指数(LOF)A",
+      "referenceName": "鹏华中证国防指数(LOF)A",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 91,
+      "code": "SZ160631",
+      "name": "鹏华中证银行指数(LOF)A",
+      "referenceName": "鹏华中证银行指数(LOF)A",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 92,
+      "code": "SZ160633",
+      "name": "鹏华中证全指证券公司指数(LOF)A",
+      "referenceName": "鹏华中证全指证券公司指数(LOF)A",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 93,
+      "code": "SZ160635",
+      "name": "鹏华中证医药指数A(LOF)",
+      "referenceName": "鹏华中证医药指数A(LOF)",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 94,
+      "code": "SZ160637",
+      "name": "鹏华创业板指数(LOF)A",
+      "referenceName": "鹏华创业板指数(LOF)A",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 95,
+      "code": "SZ160638",
+      "name": "鹏华中证一带一路主题指数(LOF)A",
+      "referenceName": "鹏华中证一带一路主题指数(LOF)A",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 96,
+      "code": "SZ160642",
+      "name": "鹏华增瑞混合(LOF)A",
+      "referenceName": "鹏华增瑞混合(LOF)A",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 97,
+      "code": "SZ160643",
+      "name": "鹏华空天军工指数(LOF)A",
+      "referenceName": "鹏华空天军工指数(LOF)A",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 98,
+      "code": "SZ160716",
+      "name": "嘉实基本面50指数(LOF)A",
+      "referenceName": "嘉实基本面50指数(LOF)A",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 99,
+      "code": "SZ160722",
+      "name": "嘉实惠泽混合(LOF)",
+      "referenceName": "嘉实惠泽混合(LOF)",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 100,
+      "code": "SZ160805",
+      "name": "长盛同智优势混合(LOF)",
+      "referenceName": "长盛同智优势混合(LOF)",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 101,
+      "code": "SZ160806",
+      "name": "长盛同庆中证800指数(LOF)",
+      "referenceName": "长盛同庆中证800指数(LOF)",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 102,
+      "code": "SZ160807",
+      "name": "长盛沪深300指数(LOF)A",
+      "referenceName": "长盛沪深300指数(LOF)A",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 103,
+      "code": "SZ160812",
+      "name": "长盛同益成长回报混合(LOF)",
+      "referenceName": "长盛同益成长回报混合(LOF)",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 104,
+      "code": "SZ160813",
+      "name": "长盛同盛成长优选混合",
+      "referenceName": "长盛同盛成长优选混合",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 105,
+      "code": "SZ160910",
+      "name": "大成创新成长混合(LOF)A",
+      "referenceName": "大成创新成长混合(LOF)A",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 106,
+      "code": "SZ160916",
+      "name": "大成优选混合(LOF)A",
+      "referenceName": "大成优选混合(LOF)A",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 107,
+      "code": "SZ160918",
+      "name": "大成中小盘混合(LOF)A",
+      "referenceName": "大成中小盘混合(LOF)A",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 108,
+      "code": "SZ160919",
+      "name": "大成产业升级股票(LOF)A",
+      "referenceName": "大成产业升级股票(LOF)A",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 109,
+      "code": "SZ160921",
+      "name": "大成多策略混合(LOF)A",
+      "referenceName": "大成多策略混合(LOF)A",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 110,
+      "code": "SZ161024",
+      "name": "富国中证军工指数(LOF)A",
+      "referenceName": "富国中证军工指数(LOF)A",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 111,
+      "code": "SZ161025",
+      "name": "富国中证移动互联网指数A",
+      "referenceName": "富国中证移动互联网指数A",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 112,
+      "code": "SZ161026",
+      "name": "富国中证国有企业改革指数A",
+      "referenceName": "富国中证国有企业改革指数A",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 113,
+      "code": "SZ161027",
+      "name": "富国中证全指证券公司指数(LOF)A",
+      "referenceName": "富国中证全指证券公司指数(LOF)A",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 114,
+      "code": "SZ161028",
+      "name": "富国中证新能源汽车指数(LOF)A",
+      "referenceName": "富国中证新能源汽车指数(LOF)A",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 115,
+      "code": "SZ161029",
+      "name": "富国中证银行指数A",
+      "referenceName": "富国中证银行指数A",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 116,
+      "code": "SZ161030",
+      "name": "富国中证体育产业指数(LOF)A",
+      "referenceName": "富国中证体育产业指数(LOF)A",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 117,
+      "code": "SZ161031",
+      "name": "富国中证工业4.0指数A",
+      "referenceName": "富国中证工业4.0指数A",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 118,
+      "code": "SZ161033",
+      "name": "富国中证智能汽车指数(LOF)A",
+      "referenceName": "富国中证智能汽车指数(LOF)A",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 119,
+      "code": "SZ161035",
+      "name": "富国中证医药主题指数增强型(LOF)A",
+      "referenceName": "富国中证医药主题指数增强型(LOF)A",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 120,
+      "code": "SZ161036",
+      "name": "富国中证娱乐主题指数增强型(LOF)A",
+      "referenceName": "富国中证娱乐主题指数增强型(LOF)A",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 121,
+      "code": "SZ161037",
+      "name": "富国中证高端制造指数增强型(LOF)A",
+      "referenceName": "富国中证高端制造指数增强型(LOF)A",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 122,
+      "code": "SZ161038",
+      "name": "富国新兴成长量化精选混合(LOF)A",
+      "referenceName": "富国新兴成长量化精选混合(LOF)A",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 123,
+      "code": "SZ161039",
+      "name": "富国中证1000指数增强(LOF)A",
+      "referenceName": "富国中证1000指数增强(LOF)A",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 124,
+      "code": "SZ161118",
+      "name": "易方达中小企业100指数(LOF)A",
+      "referenceName": "易方达中小企业100指数(LOF)A",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 125,
+      "code": "SZ161121",
+      "name": "易方达中证银行ETF联接(LOF)A",
+      "referenceName": "易方达中证银行ETF联接(LOF)A",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 126,
+      "code": "SZ161122",
+      "name": "易方达中证万得生物科技指数(LOF)A",
+      "referenceName": "易方达中证万得生物科技指数(LOF)A",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 127,
+      "code": "SZ161123",
+      "name": "易方达中证万得并购重组指数(LOF)",
+      "referenceName": "易方达中证万得并购重组指数(LOF)",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 128,
+      "code": "SZ161131",
+      "name": "易方达科润混合(LOF)",
+      "referenceName": "易方达科润混合(LOF)",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 129,
+      "code": "SZ161217",
+      "name": "国投瑞银中证资源指数(LOF)A",
+      "referenceName": "国投瑞银中证资源指数(LOF)A",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 130,
+      "code": "SZ161219",
+      "name": "国投瑞银新兴产业混合(LOF)A",
+      "referenceName": "国投瑞银新兴产业混合(LOF)A",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 131,
+      "code": "SZ161222",
+      "name": "国投瑞银瑞利混合(LOF)A",
+      "referenceName": "国投瑞银瑞利混合(LOF)A",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 132,
+      "code": "SZ161224",
+      "name": "国投瑞银新丝路混合(LOF)",
+      "referenceName": "国投瑞银新丝路混合(LOF)",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 133,
+      "code": "SZ161225",
+      "name": "国投瑞银瑞盈混合(LOF)A",
+      "referenceName": "国投瑞银瑞盈混合(LOF)A",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 134,
+      "code": "SZ161232",
+      "name": "国投瑞银瑞盛混合(LOF)A",
+      "referenceName": "国投瑞银瑞盛混合(LOF)A",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 135,
+      "code": "SZ161233",
+      "name": "国投瑞银瑞泰多策略混合(LOF)A",
+      "referenceName": "国投瑞银瑞泰多策略混合(LOF)A",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 136,
+      "code": "SZ161607",
+      "name": "融通巨潮100指数A(LOF)",
+      "referenceName": "融通巨潮100指数A(LOF)",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 137,
+      "code": "SZ161610",
+      "name": "融通领先成长混合(LOF)A",
+      "referenceName": "融通领先成长混合(LOF)A",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 138,
+      "code": "SZ161631",
+      "name": "融通人工智能指数(LOF)A",
+      "referenceName": "融通人工智能指数(LOF)A",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 139,
+      "code": "SZ161706",
+      "name": "招商优质成长混合(LOF)",
+      "referenceName": "招商优质成长混合(LOF)",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 140,
+      "code": "SZ161715",
+      "name": "招商中证大宗商品股票指数(LOF)",
+      "referenceName": "招商中证大宗商品股票指数(LOF)",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 141,
+      "code": "SZ161720",
+      "name": "招商中证全指证券公司指数(LOF)A",
+      "referenceName": "招商中证全指证券公司指数(LOF)A",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 142,
+      "code": "SZ161724",
+      "name": "招商中证煤炭等权指数A",
+      "referenceName": "招商中证煤炭等权指数A",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 143,
+      "code": "SZ161728",
+      "name": "招商瑞智优选混合(LOF)",
+      "referenceName": "招商瑞智优选混合(LOF)",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 144,
+      "code": "SZ161729",
+      "name": "招商瑞利灵活配置混合(LOF)A",
+      "referenceName": "招商瑞利灵活配置混合(LOF)A",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 145,
+      "code": "SZ161810",
+      "name": "银华内需精选混合(LOF)",
+      "referenceName": "银华内需精选混合(LOF)",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 146,
+      "code": "SZ161811",
+      "name": "银华沪深300指数(LOF)",
+      "referenceName": "银华沪深300指数(LOF)",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 147,
+      "code": "SZ161816",
+      "name": "银华中证等权重90指数(LOF)",
+      "referenceName": "银华中证等权重90指数(LOF)",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 148,
+      "code": "SZ161834",
+      "name": "银华鑫锐灵活配置混合(LOF)A",
+      "referenceName": "银华鑫锐灵活配置混合(LOF)A",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 149,
+      "code": "SZ161903",
+      "name": "万家行业优选混合(LOF)",
+      "referenceName": "万家行业优选混合(LOF)",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 150,
+      "code": "SZ162006",
+      "name": "长城久富混合(LOF)A",
+      "referenceName": "长城久富混合(LOF)A",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 151,
+      "code": "SZ162207",
+      "name": "宏利效率优选混合(LOF)",
+      "referenceName": "宏利效率优选混合(LOF)",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 152,
+      "code": "SZ162216",
+      "name": "宏利500指数增强(LOF)",
+      "referenceName": "宏利500指数增强(LOF)",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 153,
+      "code": "SZ162307",
+      "name": "海富通中证A100指数(LOF)A",
+      "referenceName": "海富通中证A100指数(LOF)A",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 154,
+      "code": "SZ162414",
+      "name": "华宝新机遇混合",
+      "referenceName": "华宝新机遇混合",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 155,
+      "code": "SZ162509",
+      "name": "国联安中证A100指数(LOF)",
+      "referenceName": "国联安中证A100指数(LOF)",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 156,
+      "code": "SZ162605",
+      "name": "景顺长城鼎益混合(LOF)A",
+      "referenceName": "景顺长城鼎益混合(LOF)A",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 157,
+      "code": "SZ162607",
+      "name": "景顺长城资源垄断混合(LOF)A",
+      "referenceName": "景顺长城资源垄断混合(LOF)A",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 158,
+      "code": "SZ162703",
+      "name": "广发小盘成长混合(LOF)A",
+      "referenceName": "广发小盘成长混合(LOF)A",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 159,
+      "code": "SZ162711",
+      "name": "广发中证500ETF联接(LOF)A",
+      "referenceName": "广发中证500ETF联接(LOF)A",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 160,
+      "code": "SZ163001",
+      "name": "长信医疗保健混合(LOF)A",
+      "referenceName": "长信医疗保健混合(LOF)A",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 161,
+      "code": "SZ163110",
+      "name": "申万菱信量化小盘股票(LOF)A",
+      "referenceName": "申万菱信量化小盘股票(LOF)A",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 162,
+      "code": "SZ163111",
+      "name": "申万菱信中小企业100指数(LOF)A",
+      "referenceName": "申万菱信中小企业100指数(LOF)A",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 163,
+      "code": "SZ163114",
+      "name": "申万菱信中证环保产业指数(LOF)A",
+      "referenceName": "申万菱信中证环保产业指数(LOF)A",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 164,
+      "code": "SZ163115",
+      "name": "申万菱信中证军工指数(LOF)A",
+      "referenceName": "申万菱信中证军工指数(LOF)A",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 165,
+      "code": "SZ163116",
+      "name": "申万菱信中证申万电子行业投资指数(LOF)A",
+      "referenceName": "申万菱信中证申万电子行业投资指数(LOF)A",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 166,
+      "code": "SZ163118",
+      "name": "申万菱信中证申万医药生物指数(LOF)A",
+      "referenceName": "申万菱信中证申万医药生物指数(LOF)A",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 167,
+      "code": "SZ163302",
+      "name": "大摩资源优选混合(LOF)",
+      "referenceName": "大摩资源优选混合(LOF)",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 168,
+      "code": "SZ163402",
+      "name": "兴全趋势投资混合(LOF)",
+      "referenceName": "兴全趋势投资混合(LOF)",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 169,
+      "code": "SZ163406",
+      "name": "兴全合润混合A",
+      "referenceName": "兴全合润混合A",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 170,
+      "code": "SZ163409",
+      "name": "兴全绿色投资混合(LOF)",
+      "referenceName": "兴全绿色投资混合(LOF)",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 171,
+      "code": "SZ163412",
+      "name": "兴全轻资产混合(LOF)",
+      "referenceName": "兴全轻资产混合(LOF)",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 172,
+      "code": "SZ163415",
+      "name": "兴全商业模式混合(LOF)A",
+      "referenceName": "兴全商业模式混合(LOF)A",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 173,
+      "code": "SZ163417",
+      "name": "兴全合宜混合(LOF)A",
+      "referenceName": "兴全合宜混合(LOF)A",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 174,
+      "code": "SZ163418",
+      "name": "兴全合兴混合A",
+      "referenceName": "兴全合兴混合A",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 175,
+      "code": "SZ163503",
+      "name": "天治核心成长混合(LOF)",
+      "referenceName": "天治核心成长混合(LOF)",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 176,
+      "code": "SZ163801",
+      "name": "中银中国混合(LOF)A",
+      "referenceName": "中银中国混合(LOF)A",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 177,
+      "code": "SZ163821",
+      "name": "中银沪深300等权重指数(LOF)",
+      "referenceName": "中银沪深300等权重指数(LOF)",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 178,
+      "code": "SZ164403",
+      "name": "前海开源沪港深农业混合(LOF)A",
+      "referenceName": "前海开源沪港深农业混合(LOF)A",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 179,
+      "code": "SZ164508",
+      "name": "国富中证A100指数增强(LOF)",
+      "referenceName": "国富中证A100指数增强(LOF)",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 180,
+      "code": "SZ165309",
+      "name": "建信沪深300指数(LOF)",
+      "referenceName": "建信沪深300指数(LOF)",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 181,
+      "code": "SZ165313",
+      "name": "建信优势动力混合(LOF)",
+      "referenceName": "建信优势动力混合(LOF)",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 182,
+      "code": "SZ165508",
+      "name": "中信保诚深度价值混合(LOF)",
+      "referenceName": "中信保诚深度价值混合(LOF)",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 183,
+      "code": "SZ165511",
+      "name": "中信保诚中证500指数(LOF)A",
+      "referenceName": "中信保诚中证500指数(LOF)A",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 184,
+      "code": "SZ165512",
+      "name": "中信保诚新机遇混合(LOF)",
+      "referenceName": "中信保诚新机遇混合(LOF)",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 185,
+      "code": "SZ165515",
+      "name": "中信保诚沪深300指数(LOF)A",
+      "referenceName": "中信保诚沪深300指数(LOF)A",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 186,
+      "code": "SZ165516",
+      "name": "中信保诚周期轮动混合(LOF)A",
+      "referenceName": "中信保诚周期轮动混合(LOF)A",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 187,
+      "code": "SZ165519",
+      "name": "中信保诚中证800医药指数(LOF)A",
+      "referenceName": "中信保诚中证800医药指数(LOF)A",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 188,
+      "code": "SZ165520",
+      "name": "中信保诚中证800有色指数(LOF)A",
+      "referenceName": "中信保诚中证800有色指数(LOF)A",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 189,
+      "code": "SZ165521",
+      "name": "中信保诚中证800金融指数(LOF)A",
+      "referenceName": "中信保诚中证800金融指数(LOF)A",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 190,
+      "code": "SZ165522",
+      "name": "中信保诚中证TMT指数(LOF)A",
+      "referenceName": "中信保诚中证TMT指数(LOF)A",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 191,
+      "code": "SZ165525",
+      "name": "中信保诚中证基建工程指数(LOF)A",
+      "referenceName": "中信保诚中证基建工程指数(LOF)A",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 192,
+      "code": "SZ165528",
+      "name": "中信保诚鼎利混合(LOF)A",
+      "referenceName": "中信保诚鼎利混合(LOF)A",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 193,
+      "code": "SZ166001",
+      "name": "中欧新趋势混合(LOF)A",
+      "referenceName": "中欧新趋势混合(LOF)A",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 194,
+      "code": "SZ166006",
+      "name": "中欧行业成长混合(LOF)A",
+      "referenceName": "中欧行业成长混合(LOF)A",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 195,
+      "code": "SZ166009",
+      "name": "中欧新动力混合(LOF)A",
+      "referenceName": "中欧新动力混合(LOF)A",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 196,
+      "code": "SZ166011",
+      "name": "中欧盛世成长混合(LOF)A",
+      "referenceName": "中欧盛世成长混合(LOF)A",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 197,
+      "code": "SZ166023",
+      "name": "中欧瑞丰灵活配置混合(LOF)A",
+      "referenceName": "中欧瑞丰灵活配置混合(LOF)A",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 198,
+      "code": "SZ166107",
+      "name": "信澳量化多因子混合(LOF)A",
+      "referenceName": "信澳量化多因子混合(LOF)A",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 199,
+      "code": "SZ167001",
+      "name": "平安鼎泰混合(LOF)",
+      "referenceName": "平安鼎泰混合(LOF)",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 200,
+      "code": "SZ167002",
+      "name": "平安鼎越混合(LOF)",
+      "referenceName": "平安鼎越混合(LOF)",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 201,
+      "code": "SZ167003",
+      "name": "平安鼎弘混合(LOF)A",
+      "referenceName": "平安鼎弘混合(LOF)A",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 202,
+      "code": "SZ168101",
+      "name": "九泰锐智事件驱动混合(LOF)",
+      "referenceName": "九泰锐智事件驱动混合(LOF)",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 203,
+      "code": "SZ168102",
+      "name": "九泰锐富事件驱动混合(LOF)A",
+      "referenceName": "九泰锐富事件驱动混合(LOF)A",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 204,
+      "code": "SZ168103",
+      "name": "九泰锐益混合(LOF)A",
+      "referenceName": "九泰锐益混合(LOF)A",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 205,
+      "code": "SZ168104",
+      "name": "九泰锐丰混合A",
+      "referenceName": "九泰锐丰混合A",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 206,
+      "code": "SZ168105",
+      "name": "九泰泰富灵活配置混合(LOF)A",
+      "referenceName": "九泰泰富灵活配置混合(LOF)A",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 207,
+      "code": "SZ168203",
+      "name": "国联国证钢铁行业指数(LOF)A",
+      "referenceName": "国联国证钢铁行业指数(LOF)A",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 208,
+      "code": "SZ168301",
+      "name": "东海祥龙(LOF)A",
+      "referenceName": "东海祥龙(LOF)A",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 209,
+      "code": "SZ168701",
+      "name": "合煦智远金融科技指数(LOF)A",
+      "referenceName": "合煦智远金融科技指数(LOF)A",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 210,
+      "code": "SZ169101",
+      "name": "东方红睿丰混合(LOF)",
+      "referenceName": "东方红睿丰混合(LOF)",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 211,
+      "code": "SZ169104",
+      "name": "东方红睿满沪港深混合(LOF)A",
+      "referenceName": "东方红睿满沪港深混合(LOF)A",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 212,
+      "code": "SZ169105",
+      "name": "东方红睿华沪港深混合A",
+      "referenceName": "东方红睿华沪港深混合A",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 213,
+      "code": "SZ169201",
+      "name": "浙商鼎盈事件驱动混合(LOF)",
+      "referenceName": "浙商鼎盈事件驱动混合(LOF)",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 214,
+      "code": "SH501001",
+      "name": "财通多策略精选混合(LOF)",
+      "referenceName": "财通多策略精选混合(LOF)",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 215,
+      "code": "SH501005",
+      "name": "汇添富中证精准医疗指数(LOF)A",
+      "referenceName": "汇添富中证精准医疗指数(LOF)A",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 216,
+      "code": "SH501007",
+      "name": "汇添富中证互联网医疗指数(LOF)A",
+      "referenceName": "汇添富中证互联网医疗指数(LOF)A",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 217,
+      "code": "SH501008",
+      "name": "汇添富中证互联网医疗指数(LOF)C",
+      "referenceName": "汇添富中证互联网医疗指数(LOF)C",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 218,
+      "code": "SH501009",
+      "name": "汇添富中证生物科技指数(LOF)A",
+      "referenceName": "汇添富中证生物科技指数(LOF)A",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 219,
+      "code": "SH501010",
+      "name": "汇添富中证生物科技指数(LOF)C",
+      "referenceName": "汇添富中证生物科技指数(LOF)C",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 220,
+      "code": "SH501011",
+      "name": "汇添富中证中药ETF联接(LOF)A",
+      "referenceName": "汇添富中证中药ETF联接(LOF)A",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 221,
+      "code": "SH501012",
+      "name": "汇添富中证中药ETF联接(LOF)C",
+      "referenceName": "汇添富中证中药ETF联接(LOF)C",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 222,
+      "code": "SH501016",
+      "name": "国泰中证申万证券行业指数(LOF)A",
+      "referenceName": "国泰中证申万证券行业指数(LOF)A",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 223,
+      "code": "SH501017",
+      "name": "国泰融丰外延增长灵活配置混合(LOF)A",
+      "referenceName": "国泰融丰外延增长灵活配置混合(LOF)A",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 224,
+      "code": "SH501019",
+      "name": "国泰国证航天军工指数(LOF)A",
+      "referenceName": "国泰国证航天军工指数(LOF)A",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 225,
+      "code": "SH501022",
+      "name": "银华鑫盛灵活配置混合(LOF)A",
+      "referenceName": "银华鑫盛灵活配置混合(LOF)A",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 226,
+      "code": "SH501026",
+      "name": "财通多策略福享混合(LOF)",
+      "referenceName": "财通多策略福享混合(LOF)",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 227,
+      "code": "SH501029",
+      "name": "华宝标普中国A股红利机会ETF联接A(LOF)",
+      "referenceName": "华宝标普中国A股红利机会ETF联接A(LOF)",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 228,
+      "code": "SH501030",
+      "name": "汇添富中证环境治理指数(LOF)A",
+      "referenceName": "汇添富中证环境治理指数(LOF)A",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 229,
+      "code": "SH501031",
+      "name": "汇添富中证环境治理指数(LOF)C",
+      "referenceName": "汇添富中证环境治理指数(LOF)C",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 230,
+      "code": "SH501032",
+      "name": "财通福盛混合发起(LOF)A",
+      "referenceName": "财通福盛混合发起(LOF)A",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 231,
+      "code": "SH501036",
+      "name": "汇添富中证500指数(LOF)A",
+      "referenceName": "汇添富中证500指数(LOF)A",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 232,
+      "code": "SH501037",
+      "name": "汇添富中证500指数(LOF)C",
+      "referenceName": "汇添富中证500指数(LOF)C",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 233,
+      "code": "SH501045",
+      "name": "汇添富沪深300指数(LOF)C",
+      "referenceName": "汇添富沪深300指数(LOF)C",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 234,
+      "code": "SH501047",
+      "name": "汇添富中证全指证券公司ETF联接(LOF)A",
+      "referenceName": "汇添富中证全指证券公司ETF联接(LOF)A",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 235,
+      "code": "SH501048",
+      "name": "汇添富中证全指证券公司ETF联接(LOF)C",
+      "referenceName": "汇添富中证全指证券公司ETF联接(LOF)C",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 236,
+      "code": "SH501050",
+      "name": "华夏上证50AH优选指数(LOF)A",
+      "referenceName": "华夏上证50AH优选指数(LOF)A",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 237,
+      "code": "SH501051",
+      "name": "圆信永丰汇利混合(LOF)",
+      "referenceName": "圆信永丰汇利混合(LOF)",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 238,
+      "code": "SH501057",
+      "name": "汇添富中证新能源汽车产业指数(LOF)A",
+      "referenceName": "汇添富中证新能源汽车产业指数(LOF)A",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 239,
+      "code": "SH501058",
+      "name": "汇添富中证新能源汽车产业指数(LOF)C",
+      "referenceName": "汇添富中证新能源汽车产业指数(LOF)C",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 240,
+      "code": "SH501059",
+      "name": "西部利得国企红利指数增强A",
+      "referenceName": "西部利得国企红利指数增强A",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 241,
+      "code": "SH501064",
+      "name": "国泰价值优选灵活配置混合(LOF)A",
+      "referenceName": "国泰价值优选灵活配置混合(LOF)A",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 242,
+      "code": "SH501071",
+      "name": "泓德丰泽混合(LOF)A",
+      "referenceName": "泓德丰泽混合(LOF)A",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 243,
+      "code": "SH501073",
+      "name": "华安智联混合(LOF)A",
+      "referenceName": "华安智联混合(LOF)A",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 244,
+      "code": "SH501075",
+      "name": "万家科创主题灵活配置混合(LOF)A",
+      "referenceName": "万家科创主题灵活配置混合(LOF)A",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 245,
+      "code": "SH501076",
+      "name": "鹏华创新动力混合(LOF)",
+      "referenceName": "鹏华创新动力混合(LOF)",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 246,
+      "code": "SH501077",
+      "name": "富国创新企业灵活配置混合(LOF)A",
+      "referenceName": "富国创新企业灵活配置混合(LOF)A",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 247,
+      "code": "SH501078",
+      "name": "广发科创主题灵活配置混合(LOF)",
+      "referenceName": "广发科创主题灵活配置混合(LOF)",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 248,
+      "code": "SH501079",
+      "name": "大成科创主题混合(LOF)A",
+      "referenceName": "大成科创主题混合(LOF)A",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 249,
+      "code": "SH501080",
+      "name": "中金科创主题灵活配置混合(LOF)",
+      "referenceName": "中金科创主题灵活配置混合(LOF)",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 250,
+      "code": "SH501081",
+      "name": "中欧科创主题混合(LOF)A",
+      "referenceName": "中欧科创主题混合(LOF)A",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 251,
+      "code": "SH501082",
+      "name": "博时科创主题灵活配置混合A",
+      "referenceName": "博时科创主题灵活配置混合A",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 252,
+      "code": "SH501083",
+      "name": "银华科创主题灵活配置混合(LOF)",
+      "referenceName": "银华科创主题灵活配置混合(LOF)",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 253,
+      "code": "SH501085",
+      "name": "财通科创主题灵活配置混合(LOF)",
+      "referenceName": "财通科创主题灵活配置混合(LOF)",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 254,
+      "code": "SH501087",
+      "name": "交银瑞丰混合(LOF)",
+      "referenceName": "交银瑞丰混合(LOF)",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 255,
+      "code": "SH501089",
+      "name": "方正富邦消费红利指数增强(LOF)",
+      "referenceName": "方正富邦消费红利指数增强(LOF)",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 256,
+      "code": "SH501090",
+      "name": "华宝中证消费龙头指数(LOF)A",
+      "referenceName": "华宝中证消费龙头指数(LOF)A",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 257,
+      "code": "SH501091",
+      "name": "嘉实欣荣混合(LOF)A",
+      "referenceName": "嘉实欣荣混合(LOF)A",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 258,
+      "code": "SH501092",
+      "name": "交银瑞思混合(LOF)",
+      "referenceName": "交银瑞思混合(LOF)",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 259,
+      "code": "SH501095",
+      "name": "中银证券科技创新混合(LOF)",
+      "referenceName": "中银证券科技创新混合(LOF)",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 260,
+      "code": "SH501096",
+      "name": "国联安科创混合(LOF)",
+      "referenceName": "国联安科创混合(LOF)",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 261,
+      "code": "SH501097",
+      "name": "国寿安保科技创新混合(LOF)",
+      "referenceName": "国寿安保科技创新混合(LOF)",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 262,
+      "code": "SH501098",
+      "name": "建信优享科技创新混合(LOF)",
+      "referenceName": "建信优享科技创新混合(LOF)",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 263,
+      "code": "SH501099",
+      "name": "平安新兴产业混合(LOF)",
+      "referenceName": "平安新兴产业混合(LOF)",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 264,
+      "code": "SH501186",
+      "name": "华夏兴融混合(LOF)A",
+      "referenceName": "华夏兴融混合(LOF)A",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 265,
+      "code": "SH501188",
+      "name": "汇添富核心精选混合(LOF)",
+      "referenceName": "汇添富核心精选混合(LOF)",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 266,
+      "code": "SH501189",
+      "name": "嘉实产业优选混合(LOF)A",
+      "referenceName": "嘉实产业优选混合(LOF)A",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 267,
+      "code": "SH501200",
+      "name": "民生加银科技创新混合(LOF)",
+      "referenceName": "民生加银科技创新混合(LOF)",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 268,
+      "code": "SH501201",
+      "name": "红土创新科技创新股票(LOF)",
+      "referenceName": "红土创新科技创新股票(LOF)",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 269,
+      "code": "SH501202",
+      "name": "华泰紫金创新先锋混合(LOF)C",
+      "referenceName": "华泰紫金创新先锋混合(LOF)C",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 270,
+      "code": "SH501203",
+      "name": "易方达创新未来混合(LOF)",
+      "referenceName": "易方达创新未来混合(LOF)",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 271,
+      "code": "SH501205",
+      "name": "鹏华创新未来混合(LOF)",
+      "referenceName": "鹏华创新未来混合(LOF)",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 272,
+      "code": "SH501206",
+      "name": "汇添富创新未来混合(LOF)",
+      "referenceName": "汇添富创新未来混合(LOF)",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 273,
+      "code": "SH501207",
+      "name": "华夏创新未来混合(LOF)",
+      "referenceName": "华夏创新未来混合(LOF)",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 274,
+      "code": "SH501208",
+      "name": "中欧创新未来混合(LOF)",
+      "referenceName": "中欧创新未来混合(LOF)",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 275,
+      "code": "SH501209",
+      "name": "银华富久食品饮料精选混合(LOF)A",
+      "referenceName": "银华富久食品饮料精选混合(LOF)A",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 276,
+      "code": "SH501219",
+      "name": "华夏智胜先锋股票(LOF)A",
+      "referenceName": "华夏智胜先锋股票(LOF)A",
+      "lofType": "stock",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 277,
+      "code": "SH501311",
+      "name": "嘉实恒生港股通新经济指数(LOF)A",
+      "referenceName": "嘉实恒生港股通新经济指数(LOF)A",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 278,
+      "code": "SH502003",
+      "name": "易方达中证军工指数(LOF)A",
+      "referenceName": "易方达中证军工指数(LOF)A",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 279,
+      "code": "SH502006",
+      "name": "易方达中证国有企业改革指数(LOF)A",
+      "referenceName": "易方达中证国有企业改革指数(LOF)A",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 280,
+      "code": "SH502010",
+      "name": "易方达中证全指证券公司指数(LOF)A",
+      "referenceName": "易方达中证全指证券公司指数(LOF)A",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 281,
+      "code": "SH502013",
+      "name": "长盛中证申万一带一路指数(LOF)",
+      "referenceName": "长盛中证申万一带一路指数(LOF)",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 282,
+      "code": "SH502023",
+      "name": "鹏华国证钢铁行业指数(LOF)A",
+      "referenceName": "鹏华国证钢铁行业指数(LOF)A",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 283,
+      "code": "SH502048",
+      "name": "易方达上证50指数(LOF)A",
+      "referenceName": "易方达上证50指数(LOF)A",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 284,
+      "code": "SH502053",
+      "name": "长盛中证证券公司指数(LOF)A",
+      "referenceName": "长盛中证证券公司指数(LOF)A",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    },
+    {
+      "rank": 285,
+      "code": "SH502056",
+      "name": "广发中证医疗ETF联接(LOF)A",
+      "referenceName": "广发中证医疗ETF联接(LOF)A",
+      "lofType": "index",
+      "referenceSource": "xiaobeiyangji-get-arbitrage-list"
+    }
+  ],
+  "referenceSources": [
+    {
+      "title": "Palmmicro LOF snapshot",
+      "url": "https://palmmicro.com/woody/res/lofcn.php?sort=premium",
+      "usage": "保留原有条目，运行时只读取代码和名称作为 LOF 参考清单。"
+    },
+    {
+      "title": "小倍养基 LOF套利列表",
+      "url": "https://api.xiaobeiyangji.com/yangji-api/api/get-arbitrage-list",
+      "filter": "lofType in [stock, index]",
+      "usage": "仅新增股票 tab/指数 tab 的基金代码和名称，不使用返回的价格、净值或溢价字段。"
     }
   ]
 }

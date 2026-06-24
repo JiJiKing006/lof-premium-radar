@@ -1,15 +1,19 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
-import { fetchVisitorStats, loginAdmin, type VisitorRecord, type VisitorStats } from '../api/analytics';
+import { fetchVisitorStats, loginAdmin, type VisitorRecord, type VisitorStats, type VisitorStatsSnapshot } from '../api/analytics';
 
 const ADMIN_PASSWORD_KEY = 'lof-admin-password';
+const DEFAULT_PROJECT = 'lof';
 const password = ref(loadPassword());
 const stats = ref<VisitorStats | null>(null);
+const selectedProject = ref(DEFAULT_PROJECT);
 const loading = ref(false);
 const error = ref('');
 const isAuthed = ref(Boolean(password.value));
-const maxDailyCount = computed(() => Math.max(1, ...((stats.value?.dailyNewVisitors || []).map((item) => item.count))));
-const dailySeries = computed(() => [...(stats.value?.dailyNewVisitors || [])].reverse());
+const projectStats = computed<VisitorStatsSnapshot[]>(() => stats.value?.projects?.length ? stats.value.projects : stats.value ? [stats.value] : []);
+const activeStats = computed(() => projectStats.value.find((project) => project.project === selectedProject.value) || projectStats.value[0] || null);
+const maxDailyCount = computed(() => Math.max(1, ...((activeStats.value?.dailyNewVisitors || []).map((item) => item.count))));
+const dailySeries = computed(() => [...(activeStats.value?.dailyNewVisitors || [])].reverse());
 const dailySeriesTotal = computed(() => dailySeries.value.reduce((total, item) => total + item.count, 0));
 const chartWidth = 640;
 const chartHeight = 220;
@@ -37,7 +41,7 @@ const chartAreaPoints = computed(() => {
   const baseline = chartHeight - chartPadding.bottom;
   return `${chartPadding.left},${baseline} ${points.map((point) => `${point.x},${point.y}`).join(' ')} ${chartWidth - chartPadding.right},${baseline}`;
 });
-const dailyDetailRows = computed(() => (stats.value?.dailyNewVisitorDetails || [])
+const dailyDetailRows = computed(() => (activeStats.value?.dailyNewVisitorDetails || [])
   .flatMap((day) => day.visitors.map((visitor) => ({ ...visitor, date: day.date }))));
 
 onMounted(() => {
@@ -66,6 +70,9 @@ async function refreshStats() {
   loading.value = true;
   try {
     stats.value = await fetchVisitorStats(password.value);
+    if (!projectStats.value.some((project) => project.project === selectedProject.value)) {
+      selectedProject.value = projectStats.value.find((project) => project.project === DEFAULT_PROJECT)?.project || projectStats.value[0]?.project || DEFAULT_PROJECT;
+    }
   } catch {
     error.value = '无法读取访问统计，请检查密码或服务状态';
     isAuthed.value = false;
@@ -110,6 +117,10 @@ function visitorIp(visitor: VisitorRecord) {
 function shortDate(value: string) {
   return value ? value.slice(5) : '';
 }
+
+function selectProject(project: string) {
+  selectedProject.value = project;
+}
 </script>
 
 <template>
@@ -142,7 +153,7 @@ function shortDate(value: string) {
         <div>
           <p>VISITOR OPS</p>
           <h1>访问统计</h1>
-          <span>按设备 ID 去重；一个设备只计一个用户。更新时间：{{ stats?.meta.updateTime || '暂无数据' }}</span>
+          <span>按设备 ID 去重；一个设备只计一个用户。更新时间：{{ activeStats?.meta.updateTime || stats?.meta.updateTime || '暂无数据' }}</span>
         </div>
         <div class="admin-actions">
           <button type="button" @click="refreshStats" :disabled="loading">{{ loading ? '刷新中' : '刷新' }}</button>
@@ -152,14 +163,28 @@ function shortDate(value: string) {
 
       <p v-if="error" class="admin-error">{{ error }}</p>
 
+      <div v-if="projectStats.length" class="admin-project-tabs" aria-label="统计项目切换">
+        <button
+          v-for="project in projectStats"
+          :key="project.project"
+          type="button"
+          :class="{ active: project.project === activeStats?.project }"
+          @click="selectProject(project.project)"
+        >
+          <span>{{ project.label }}</span>
+          <strong>{{ project.totalVisitors }}</strong>
+          <small>{{ project.seeded ? '基础增长' : '真实访问' }}</small>
+        </button>
+      </div>
+
       <div class="admin-metrics">
         <article>
           <span>用户数量</span>
-          <strong>{{ stats?.totalVisitors ?? 0 }}</strong>
+          <strong>{{ activeStats?.totalVisitors ?? 0 }}</strong>
         </article>
         <article>
           <span>今日新增</span>
-          <strong>{{ stats?.todayNewVisitors ?? 0 }}</strong>
+          <strong>{{ activeStats?.todayNewVisitors ?? 0 }}</strong>
         </article>
         <article>
           <span>近 14 日新增</span>
@@ -167,14 +192,14 @@ function shortDate(value: string) {
         </article>
         <article>
           <span>累计访问</span>
-          <strong>{{ stats?.totalVisits ?? 0 }}</strong>
+          <strong>{{ activeStats?.totalVisits ?? 0 }}</strong>
         </article>
       </div>
 
       <section class="admin-panel admin-chart-panel">
         <div class="admin-panel-title">
           <h2>每日新增用户</h2>
-          <span>按设备首次访问日期统计，当前总用户 {{ stats?.totalVisitors ?? 0 }}</span>
+          <span>{{ activeStats?.label || '访问项目' }}，当前总用户 {{ activeStats?.totalVisitors ?? 0 }}</span>
         </div>
         <div class="daily-line-chart" aria-label="每日新增用户折线图">
           <svg :viewBox="`0 0 ${chartWidth} ${chartHeight}`" role="img" aria-label="近 14 日新增用户趋势">
@@ -202,14 +227,14 @@ function shortDate(value: string) {
           <p v-if="!dailySeries.length" class="admin-empty">暂无访问记录</p>
         </div>
         <div class="daily-bars">
-          <div v-for="item in stats?.dailyNewVisitors || []" :key="item.date" class="daily-bar-row">
+          <div v-for="item in activeStats?.dailyNewVisitors || []" :key="item.date" class="daily-bar-row">
             <span>{{ item.date }}</span>
             <div class="daily-bar-track">
               <i :style="{ width: `${Math.max(8, (item.count / maxDailyCount) * 100)}%` }"></i>
             </div>
             <strong>{{ item.count }}</strong>
           </div>
-          <p v-if="!stats?.dailyNewVisitors.length" class="admin-empty">暂无访问记录</p>
+          <p v-if="!activeStats?.dailyNewVisitors.length" class="admin-empty">暂无访问记录</p>
         </div>
       </section>
 
@@ -234,7 +259,7 @@ function shortDate(value: string) {
               </tr>
             </thead>
             <tbody>
-              <tr v-for="visitor in dailyDetailRows" :key="`${visitor.date}-${visitor.deviceId}`">
+              <tr v-for="visitor in dailyDetailRows" :key="`${visitor.project}-${visitor.date}-${visitor.deviceId}`">
                 <td>{{ visitor.date }}</td>
                 <td :title="deviceTitle(visitor.deviceId)" class="device-id-cell">{{ shortDeviceId(visitor.deviceId) }}</td>
                 <td>{{ visitor.firstSeenAt }}</td>
@@ -268,7 +293,7 @@ function shortDate(value: string) {
               </tr>
             </thead>
             <tbody>
-              <tr v-for="visitor in stats?.recentVisitors || []" :key="visitor.deviceId">
+              <tr v-for="visitor in activeStats?.recentVisitors || []" :key="`${visitor.project}-${visitor.deviceId}`">
                 <td :title="deviceTitle(visitor.deviceId)" class="device-id-cell">{{ shortDeviceId(visitor.deviceId) }}</td>
                 <td>{{ visitor.firstSeenAt }}</td>
                 <td>{{ visitor.lastSeenAt }}</td>
@@ -277,7 +302,7 @@ function shortDate(value: string) {
               </tr>
             </tbody>
           </table>
-          <p v-if="!stats?.recentVisitors.length" class="admin-empty">暂无设备记录</p>
+          <p v-if="!activeStats?.recentVisitors.length" class="admin-empty">暂无设备记录</p>
         </div>
       </section>
     </section>

@@ -2,6 +2,8 @@ import { cache, cacheTtl } from '../services/cacheService.js';
 import { normalizeCode, normalizeQuoteTime, toNumber } from '../services/fundNormalizer.js';
 import { recordSourceFailure, recordSourceSuccess } from '../services/sourceHealth.js';
 
+const QUOTE_STALE_MAX_AGE_MS = 2 * 60_000;
+
 export async function fetchSinaQuoteMap(codes, { force = false } = {}) {
   const normalizedCodes = [...new Set((codes || []).map(normalizeCode).filter(Boolean))];
   if (!normalizedCodes.length) return new Map();
@@ -22,7 +24,7 @@ export async function fetchSinaQuoteMap(codes, { force = false } = {}) {
     return cache.set(cacheKey, map, cacheTtl.quotes);
   } catch (error) {
     recordSourceFailure('sina-direct', error, Date.now() - startedAt);
-    return cache.getStale(cacheKey) || new Map();
+    return cache.getStale(cacheKey, { maxAgeMs: QUOTE_STALE_MAX_AGE_MS }) || new Map();
   }
 }
 

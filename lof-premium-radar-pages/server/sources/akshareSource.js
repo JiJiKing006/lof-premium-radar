@@ -1,9 +1,10 @@
-export async function fetchAkshareQuotes() {
+export async function fetchAkshareQuotes({ signal } = {}) {
   if (!process.env.AKSHARE_BASE_URL) {
     throw new Error('AKSHARE_BASE_URL 未配置');
   }
 
   const response = await fetch(`${process.env.AKSHARE_BASE_URL.replace(/\/$/, '')}/fund/quotes`, {
+    signal,
     headers: { accept: 'application/json' },
   });
   if (!response.ok) throw new Error(`AKShare 返回 ${response.status}`);

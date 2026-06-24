@@ -5,6 +5,7 @@ import { usePolling } from './usePolling';
 
 const AUTO_REFRESH_INTERVAL = 30_000;
 const PREFETCH_LEAD_MS = 5_000;
+const LOCAL_SNAPSHOT_MAX_AGE_MS = 2 * 60_000;
 
 interface PreparedSnapshot {
   requestId: number;
@@ -18,12 +19,15 @@ export function useFunds(section: Ref<string>) {
   const meta = ref<FundSnapshot['meta'] | null>(null);
   const initialLoading = ref(true);
   let requestId = 0;
+  let forceNextSnapshot = false;
 
   async function prepareSnapshot({ force = false } = {}): Promise<PreparedSnapshot> {
     const currentRequestId = ++requestId;
     const requestSection = section.value;
     const previous = new Map(funds.value.map((fund) => [fund.code, fund]));
-    const snapshot = await fetchSectionSnapshot({ force, section: requestSection, includeTrends: false });
+    const shouldForce = shouldForceSnapshotRequest({ force, forceNextSnapshot });
+    const snapshot = await fetchSectionSnapshot({ force: shouldForce, section: requestSection, includeTrends: false });
+    forceNextSnapshot = false;
     return { requestId: currentRequestId, section: requestSection, previous, snapshot };
   }
 
@@ -62,6 +66,7 @@ export function useFunds(section: Ref<string>) {
 
   watch(section, () => {
     initialLoading.value = true;
+    forceNextSnapshot = false;
     hydrateSectionSnapshot();
     polling.refreshNow();
   });
@@ -71,8 +76,21 @@ export function useFunds(section: Ref<string>) {
     meta,
     initialLoading,
     polling,
-    refreshNow: () => polling.refreshNow(),
+    refreshNow: () => {
+      forceNextSnapshot = true;
+      return polling.refreshNow();
+    },
   };
+}
+
+export function shouldForceSnapshotRequest({
+  force = false,
+  forceNextSnapshot = false,
+}: {
+  force?: boolean;
+  forceNextSnapshot?: boolean;
+} = {}): boolean {
+  return Boolean(force || forceNextSnapshot);
 }
 
 async function fetchSectionSnapshot({
@@ -126,17 +144,26 @@ function cacheKey(section: string): string {
   return `fund-snapshot:${section}`;
 }
 
-function hydrateSnapshot(section: string): FundSnapshot | null {
+export function hydrateSnapshotForSection(section: string): FundSnapshot | null {
   try {
-    const cached = window.localStorage.getItem(cacheKey(section));
+    const key = cacheKey(section);
+    const cached = window.localStorage.getItem(key);
     if (!cached) return null;
     const snapshot = JSON.parse(cached) as FundSnapshot;
     if (!Array.isArray(snapshot.rows) || !snapshot.rows.length) return null;
+    if (isExpiredLocalSnapshot(snapshot)) {
+      window.localStorage.removeItem(key);
+      return null;
+    }
     return snapshot;
   } catch {
     // Ignore invalid local cache.
     return null;
   }
+}
+
+function hydrateSnapshot(section: string): FundSnapshot | null {
+  return hydrateSnapshotForSection(section);
 }
 
 function storeSnapshot(section: string, snapshot: FundSnapshot) {
@@ -145,6 +172,37 @@ function storeSnapshot(section: string, snapshot: FundSnapshot) {
   } catch {
     // Local storage may be unavailable or full.
   }
+}
+
+function isExpiredLocalSnapshot(snapshot: FundSnapshot): boolean {
+  const timestamp = snapshotTimestamp(snapshot);
+  if (!timestamp) return true;
+  return Date.now() - timestamp > LOCAL_SNAPSHOT_MAX_AGE_MS;
+}
+
+function snapshotTimestamp(snapshot: FundSnapshot): number | null {
+  const candidates = [
+    snapshot.meta?.latestQuoteTime,
+    snapshot.meta?.updateTime,
+    snapshot.meta?.fetchedAt,
+    snapshot.meta?.scrapedAt,
+    ...snapshot.rows.map((row) => row.updateTime || row.quoteTime || row.updatedAt),
+  ];
+  for (const value of candidates) {
+    const timestamp = parseShanghaiTime(value);
+    if (timestamp) return timestamp;
+  }
+  return null;
+}
+
+function parseShanghaiTime(value: unknown): number | null {
+  const text = String(value || '').trim();
+  if (!text) return null;
+  const normalized = text.match(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}/)
+    ? `${text.replace(' ', 'T')}+08:00`
+    : text;
+  const timestamp = Date.parse(normalized);
+  return Number.isFinite(timestamp) ? timestamp : null;
 }
 
 function mergeRows(rows: FundItem[], previous: Map<string, FundItem>): FundItem[] {

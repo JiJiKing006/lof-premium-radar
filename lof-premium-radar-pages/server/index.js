@@ -15,6 +15,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, '..');
 const port = Number(process.env.PORT || 4173);
 const isProduction = process.env.NODE_ENV === 'production';
+const publicBasePath = normalizePublicBasePath(process.env.PUBLIC_BASE_PATH || process.env.VITE_BASE_PATH || '/');
 
 dns.setDefaultResultOrder('ipv4first');
 
@@ -130,6 +131,7 @@ app.post('/api/analytics/visit', async (request, response) => {
   try {
     const stats = await visitorAnalytics.recordVisit({
       deviceId: request.body?.deviceId,
+      project: request.body?.project,
       path: request.body?.path || request.path,
       userAgent: request.get('user-agent') || '',
       ip: clientIp(request),
@@ -161,9 +163,13 @@ app.get('/api/admin/visitors', async (request, response) => {
 });
 
 if (isProduction) {
-  app.use(express.static(path.join(root, 'dist')));
+  const distPath = path.join(root, 'dist');
+  app.use(express.static(distPath));
+  if (publicBasePath !== '/') {
+    app.use(publicBasePath, express.static(distPath));
+  }
   app.get('*', (_request, response) => {
-    response.sendFile(path.join(root, 'dist', 'index.html'));
+    response.sendFile(path.join(distPath, 'index.html'));
   });
 } else {
   const vite = await createViteServer(createDevServerOptions({ root, port }));
@@ -183,4 +189,9 @@ function clientIp(request) {
   return String(request.headers['x-forwarded-for'] || request.socket.remoteAddress || '')
     .split(',')[0]
     .trim();
+}
+
+function normalizePublicBasePath(value) {
+  const pathValue = `/${String(value || '/').replace(/^\/+/, '')}`.replace(/\/+$/, '');
+  return pathValue === '' ? '/' : pathValue;
 }

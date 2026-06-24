@@ -83,4 +83,26 @@ describe('hotArbitrageService scoring', () => {
       volumeRatio: 3,
     });
   });
+
+  it('keeps same-day close quotes after market close', () => {
+    const rows = calculateHotArbitrageRows([
+      {
+        code: '501018',
+        name: '南方原油LOF',
+        category: 'LOF',
+        marketPrice: 1.9,
+        lastNav: 1.8,
+        premiumRate: 5.2,
+        turnover: 12_000_000,
+        quoteTime: '2026-06-08 15:00:03',
+        source: 'sina',
+      },
+    ], {
+      now: new Date('2026-06-08T20:20:00+08:00'),
+      activityScores: new Map([['501018', 100]]),
+    });
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0].freshnessScore).toBeGreaterThan(0);
+  });
 });

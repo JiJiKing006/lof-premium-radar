@@ -1,4 +1,4 @@
-class MemoryCache {
+export class MemoryCache {
   constructor() {
     this.items = new Map();
     this.lastValid = new Map();
@@ -11,13 +11,17 @@ class MemoryCache {
     return item.value;
   }
 
-  getStale(key) {
-    return this.lastValid.get(key) || null;
+  getStale(key, { maxAgeMs } = {}) {
+    const item = this.lastValid.get(key);
+    if (!item) return null;
+    if (Number.isFinite(maxAgeMs) && Date.now() - item.storedAt > maxAgeMs) return null;
+    return item.value;
   }
 
   set(key, value, ttlMs) {
-    this.items.set(key, { value, expiresAt: Date.now() + ttlMs });
-    this.lastValid.set(key, value);
+    const now = Date.now();
+    this.items.set(key, { value, expiresAt: now + ttlMs });
+    this.lastValid.set(key, { value, storedAt: now });
     return value;
   }
 }

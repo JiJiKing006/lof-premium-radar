@@ -6,6 +6,7 @@ import { toNumber } from '../services/fundNormalizer.js';
 dns.setDefaultResultOrder('ipv4first');
 
 const INDEX_FIELDS = ['f12', 'f13', 'f14', 'f2', 'f3', 'f4', 'f124'];
+const INDEX_STALE_MAX_AGE_MS = 30_000;
 const INDEXES = [
   { key: 'sh000001', secid: '1.000001', label: '上证指数' },
   { key: 'sz399001', secid: '0.399001', label: '深证成指' },
@@ -42,7 +43,7 @@ export async function fetchMarketIndices({ force = false } = {}) {
     return cache.set(cacheKey, payload, cacheTtl.indices);
   } catch (error) {
     recordSourceFailure('eastmoney-index', error, Date.now() - startedAt);
-    const stale = cache.getStale(cacheKey);
+    const stale = cache.getStale(cacheKey, { maxAgeMs: INDEX_STALE_MAX_AGE_MS });
     if (stale) {
       return {
         ...stale,
@@ -55,7 +56,18 @@ export async function fetchMarketIndices({ force = false } = {}) {
         },
       };
     }
-    throw error;
+    return cache.set(cacheKey, {
+      meta: {
+        source: 'eastmoney',
+        sourceStatus: 'error',
+        updateTime: formatShanghaiTime(),
+        latestQuoteTime: '',
+        rowCount: 0,
+        stale: true,
+        error: error.message || String(error),
+      },
+      rows: [],
+    }, cacheTtl.indices);
   }
 }
 

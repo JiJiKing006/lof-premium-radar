@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-06-07 03:23:27",
+  "updatedAt": "2026-06-24 15:43:25",
   "visitors": {
     "41ff7b9b-630e-427b-a898-96ddca8855f9": {
       "deviceId": "41ff7b9b-630e-427b-a898-96ddca8855f9",
@@ -14,17 +14,44 @@
       "ip": "::ffff:127.0.0.1",
       "visits": 15
     },
-    "84b51a41-0292-4da7-a394-663f31a32767": {
+    "lof:84b51a41-0292-4da7-a394-663f31a32767": {
       "deviceId": "84b51a41-0292-4da7-a394-663f31a32767",
       "firstSeenAt": "2026-06-03 14:57:30",
       "firstSeenDate": "2026-06-03",
-      "lastSeenAt": "2026-06-07 03:23:27",
-      "lastSeenDate": "2026-06-07",
+      "lastSeenAt": "2026-06-24 15:43:25",
+      "lastSeenDate": "2026-06-24",
       "firstPath": "/",
       "lastPath": "/",
-      "userAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Mobile/15E148 Safari/604.1",
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36",
       "ip": "::ffff:127.0.0.1",
-      "visits": 37
+      "visits": 62,
+      "project": "lof"
+    },
+    "lof:30dbbbb4-7857-4b60-8869-3bf3dbd626ac": {
+      "deviceId": "30dbbbb4-7857-4b60-8869-3bf3dbd626ac",
+      "project": "lof",
+      "firstSeenAt": "2026-06-24 01:21:58",
+      "firstSeenDate": "2026-06-24",
+      "lastSeenAt": "2026-06-24 01:22:41",
+      "lastSeenDate": "2026-06-24",
+      "firstPath": "/",
+      "lastPath": "/",
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.0.0 Safari/537.36",
+      "ip": "::ffff:127.0.0.1",
+      "visits": 3
+    },
+    "lof:434af989-d5af-4d25-b7f5-11e4317b9e1a": {
+      "deviceId": "434af989-d5af-4d25-b7f5-11e4317b9e1a",
+      "firstSeenAt": "2026-06-09 22:54:35",
+      "firstSeenDate": "2026-06-09",
+      "lastSeenAt": "2026-06-24 15:20:07",
+      "lastSeenDate": "2026-06-24",
+      "firstPath": "/",
+      "lastPath": "/",
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Code/1.122.1 Chrome/142.0.7444.265 Electron/39.8.8 Safari/537.36",
+      "ip": "::ffff:127.0.0.1",
+      "visits": 2,
+      "project": "lof"
     }
   }
 }

@@ -15,9 +15,12 @@ defineEmits<{ back: [] }>();
 
 const detail = ref<FundItem>(props.row);
 const history = ref<FundHistoryRow[]>([]);
-const loading = ref(true);
+const detailLoading = ref(false);
+const historyLoading = ref(false);
 const error = ref('');
+const historyError = ref('');
 const historySkeletonRows = Array.from({ length: 8 }, (_, index) => index);
+let detailRequestId = 0;
 
 const current = computed(() => detail.value || props.row);
 const latestHistory = computed(() => history.value[0]);
@@ -55,21 +58,41 @@ onMounted(loadDetail);
 watch(() => props.row.code, loadDetail);
 
 async function loadDetail() {
-  loading.value = true;
+  const requestId = ++detailRequestId;
+  detailLoading.value = true;
+  historyLoading.value = true;
   error.value = '';
+  historyError.value = '';
   detail.value = props.row;
-  try {
-    const [fund, historySnapshot] = await Promise.all([
-      fetchFundDetail(props.row.code, { section: props.section, force: true }),
-      fetchFundHistory(props.row.code, { limit: 80, force: true }),
-    ]);
-    detail.value = fund;
-    history.value = historySnapshot.rows || [];
-  } catch (err) {
-    error.value = err instanceof Error ? err.message : '详情数据加载失败';
-  } finally {
-    loading.value = false;
-  }
+  history.value = [];
+
+  fetchFundDetail(props.row.code, { section: props.section, force: false })
+    .then((fund) => {
+      if (requestId !== detailRequestId) return;
+      detail.value = fund;
+    })
+    .catch((err) => {
+      if (requestId !== detailRequestId) return;
+      error.value = err instanceof Error ? err.message : '详情数据加载失败';
+    })
+    .finally(() => {
+      if (requestId !== detailRequestId) return;
+      detailLoading.value = false;
+    });
+
+  fetchFundHistory(props.row.code, { limit: 40, force: false })
+    .then((historySnapshot) => {
+      if (requestId !== detailRequestId) return;
+      history.value = historySnapshot.rows || [];
+    })
+    .catch((err) => {
+      if (requestId !== detailRequestId) return;
+      historyError.value = err instanceof Error ? err.message : '历史数据加载失败';
+    })
+    .finally(() => {
+      if (requestId !== detailRequestId) return;
+      historyLoading.value = false;
+    });
 }
 
 function formatNumber(value: unknown, digits = 3) {
@@ -184,13 +207,7 @@ function sourceClass(row: { source: string }) {
             <span>{{ current.updateTime || current.quoteTime || '暂无数据' }}</span>
           </p>
         </div>
-        <div v-if="loading" class="detail-quote-strip detail-quote-skeleton" aria-hidden="true">
-          <article v-for="row in 4" :key="`detail-quote-skeleton-${row}`">
-            <span class="skeleton-line skeleton-note"></span>
-            <strong><span class="skeleton-line skeleton-num"></span></strong>
-          </article>
-        </div>
-        <div v-else class="detail-quote-strip">
+        <div class="detail-quote-strip">
           <article>
             <span>现价</span>
             <strong :class="valueClass(current.changeRate ?? current.changePercent)">{{ formatNumber(current.marketPrice ?? current.price) }}</strong>
@@ -367,7 +384,7 @@ function sourceClass(row: { source: string }) {
           <strong>来源审计</strong>
           <span>来源与时间逐项回显</span>
         </header>
-        <div v-if="loading" class="source-audit-list" aria-hidden="true">
+        <div v-if="detailLoading" class="source-audit-list" aria-hidden="true">
           <div v-for="row in 4" :key="`source-audit-skeleton-${row}`" class="source-audit-row">
             <span class="skeleton-line skeleton-note"></span>
             <strong><span class="skeleton-line skeleton-num"></span></strong>
@@ -410,7 +427,7 @@ function sourceClass(row: { source: string }) {
               </tr>
             </thead>
             <tbody>
-              <template v-if="loading">
+              <template v-if="historyLoading">
                 <tr
                   v-for="row in historySkeletonRows"
                   :key="`history-skeleton-${row}`"
@@ -437,8 +454,8 @@ function sourceClass(row: { source: string }) {
                   </td>
                 </tr>
               </template>
-              <tr v-if="!history.length && !loading">
-                <td :colspan="HISTORY_COLUMNS.length" class="empty-state">暂无历史数据</td>
+              <tr v-if="!history.length && !historyLoading">
+                <td :colspan="HISTORY_COLUMNS.length" class="empty-state">{{ historyError || '暂无历史数据' }}</td>
               </tr>
             </tbody>
           </table>

@@ -6,6 +6,8 @@ import { formatShanghaiTime, recordSourceFailure, recordSourceSuccess } from '..
 const QUOTE_FIELDS = ['f12', 'f13', 'f14', 'f2', 'f3', 'f5', 'f6', 'f124', 'f297'];
 const TREND_FIELDS_1 = ['f1', 'f2', 'f3', 'f4', 'f5', 'f6', 'f7', 'f8', 'f9', 'f10', 'f11', 'f12', 'f13'];
 const TREND_FIELDS_2 = ['f51', 'f52', 'f53', 'f54', 'f55', 'f56', 'f57', 'f58'];
+const QUOTE_STALE_MAX_AGE_MS = 2 * 60_000;
+const TREND_STALE_MAX_AGE_MS = 60_000;
 
 dns.setDefaultResultOrder('ipv4first');
 
@@ -29,7 +31,7 @@ export async function fetchEastmoneyQuoteMap(codes, { force = false } = {}) {
     return cache.set(cacheKey, map, cacheTtl.quotes);
   } catch (error) {
     recordSourceFailure('eastmoney', error, Date.now() - startedAt);
-    return cache.getStale(cacheKey) || new Map();
+    return cache.getStale(cacheKey, { maxAgeMs: QUOTE_STALE_MAX_AGE_MS }) || new Map();
   }
 }
 
@@ -56,7 +58,7 @@ export async function fetchEastmoneyTrendMap(codes, { force = false } = {}) {
     return cache.set(cacheKey, map, cacheTtl.trends);
   } catch (error) {
     recordSourceFailure('eastmoney-trend', error, Date.now() - startedAt);
-    return cache.getStale(cacheKey) || new Map();
+    return cache.getStale(cacheKey, { maxAgeMs: TREND_STALE_MAX_AGE_MS }) || new Map();
   }
 }
 

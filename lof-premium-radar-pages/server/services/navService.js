@@ -9,7 +9,7 @@ import { fetchHaoetfQuotes } from '../sources/haoetfSource.js';
 
 const NAV_KEY = 'nav:map';
 const TIANTIAN_LIMIT = 100;
-let navInFlight = null;
+const navInFlight = new Map();
 
 export async function getNavMap(quotes, { force = false } = {}) {
   if (!force) {
@@ -17,13 +17,15 @@ export async function getNavMap(quotes, { force = false } = {}) {
     if (cached) return cached;
   }
 
-  if (navInFlight) return navInFlight;
+  const inFlightKey = navRequestKey(quotes);
+  if (navInFlight.has(inFlightKey)) return navInFlight.get(inFlightKey);
 
-  navInFlight = fetchFreshNavMap(quotes).finally(() => {
-    navInFlight = null;
+  const promise = fetchFreshNavMap(quotes).finally(() => {
+    navInFlight.delete(inFlightKey);
   });
+  navInFlight.set(inFlightKey, promise);
 
-  return navInFlight;
+  return promise;
 }
 
 export async function getSingleNav(code) {
@@ -273,4 +275,9 @@ function firstNumber(...values) {
     if (number !== null) return number;
   }
   return null;
+}
+
+function navRequestKey(quotes = []) {
+  const codes = [...new Set((quotes || []).map((row) => normalizeCode(row.code)).filter(Boolean))].sort();
+  return codes.join(',');
 }

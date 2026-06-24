@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { completeLofReferenceRows, filterRowsForCategory, sourcePlan } from './quoteService.js';
+import {
+  completeLofReferenceRows,
+  fetchSourceRows,
+  filterRowsForCategory,
+  mergeLofReferenceRows,
+  normalizeLocalLofReferenceRows,
+  sourcePlan,
+} from './quoteService.js';
 
 describe('quoteService', () => {
   it('keeps complete category feeds before broad quote fallbacks', () => {
@@ -149,5 +156,73 @@ describe('quoteService', () => {
     ];
 
     expect(filterRowsForCategory(rows, 'QDII').map((row) => row.code)).toEqual(['513100']);
+  });
+
+  it('aborts a slow source fetcher so fallback sources can run quickly', async () => {
+    const source = {
+      name: 'slow-source',
+      fetcher: ({ signal }) => new Promise((resolve, reject) => {
+        signal.addEventListener('abort', () => reject(new Error('source timeout')));
+        setTimeout(() => resolve([{ code: '501300' }]), 50);
+      }),
+    };
+
+    await expect(fetchSourceRows(source, 5)).rejects.toThrow('source timeout');
+  });
+
+  it('uses local LOF reference fallback without copying stale financial values', () => {
+    const rows = normalizeLocalLofReferenceRows({
+      rows: [
+        {
+          code: 'SH501300',
+          name: '美元债LOF',
+          priceValue: 0.942,
+          officialEstValue: 0.94,
+          realtimePremiumValue: 1.23,
+        },
+      ],
+    });
+
+    expect(rows).toEqual([
+      {
+        code: '501300',
+        name: '美元债LOF',
+        category: 'LOF',
+        market: '债券',
+        source: 'palmmicro-reference-local',
+        sourceStatus: 'reference',
+      },
+    ]);
+  });
+
+  it('supplements Palmmicro LOF references with local stock/index entries without overriding primary rows', () => {
+    const primaryRows = [
+      { code: '160632', name: '鹏华酒LOF', category: 'LOF', source: 'palmmicro' },
+      { code: '161725', name: '招商白酒LOF', category: 'LOF', source: 'palmmicro' },
+    ];
+    const supplementalRows = normalizeLocalLofReferenceRows({
+      rows: [
+        { code: 'SZ160632', name: '小倍酒指数', priceValue: 9.99 },
+        {
+          code: 'SZ160105',
+          name: '南方积极配置混合(LOF)',
+          priceValue: 1.23,
+          referenceSource: 'xiaobeiyangji-get-arbitrage-list',
+        },
+      ],
+    });
+
+    expect(mergeLofReferenceRows(primaryRows, supplementalRows)).toEqual([
+      { code: '160632', name: '鹏华酒LOF', category: 'LOF', source: 'palmmicro' },
+      { code: '161725', name: '招商白酒LOF', category: 'LOF', source: 'palmmicro' },
+      {
+        code: '160105',
+        name: '南方积极配置混合(LOF)',
+        category: 'LOF',
+        market: '其他',
+        source: 'xiaobeiyangji-get-arbitrage-list',
+        sourceStatus: 'reference',
+      },
+    ]);
   });
 });

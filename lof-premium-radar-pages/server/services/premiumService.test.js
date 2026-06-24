@@ -84,4 +84,19 @@ describe('premiumService', () => {
     expect(result.estimatedNav).toBe(1.18);
     expect(result.selectedNavSource).toBe('eastmoney');
   });
+
+  it('rejects estimated NAV values with an impossible scale and falls back to official NAV', () => {
+    const result = calculatePremium({
+      marketPrice: 0.936,
+      estimatedNav: null,
+      supplementalEstimatedNav: 98.17,
+      supplementalNavSource: 'jisilu',
+      lastNav: 0.9409,
+    });
+
+    expect(result.premiumRate).toBeCloseTo(-0.5208, 4);
+    expect(result.basis).toBe('lastNav');
+    expect(result.estimatedNav).toBeNull();
+    expect(result.estimateWarning).toContain('估算净值量级异常');
+  });
 });

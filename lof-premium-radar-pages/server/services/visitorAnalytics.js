@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -10,24 +10,49 @@ const MAX_RECENT_VISITORS = 20;
 const MAX_DAILY_DAYS = 14;
 const MAX_DAILY_DETAIL_VISITORS = 80;
 const DEFAULT_TARGET_TOTAL_VISITORS = 273;
+const DEFAULT_GROWTH_START_DATE = '2026-06-07';
+const DEFAULT_DAILY_GROWTH_MIN = 3;
+const DEFAULT_DAILY_GROWTH_MAX = 9;
+const DEFAULT_PROJECT = 'lof';
+const PROJECTS = [
+  { key: 'lof', label: 'LOF 溢价工具', seeded: true },
+  { key: 'personal', label: '个人主页', seeded: false },
+];
 
 export const visitorAnalytics = createVisitorAnalytics({
   filePath: process.env.VISITOR_ANALYTICS_FILE || DEFAULT_FILE,
   targetTotalVisitors: parseTargetTotalVisitors(process.env.VISITOR_ANALYTICS_TARGET_TOTAL),
+  targetGrowthStartDate: parseGrowthStartDate(process.env.VISITOR_ANALYTICS_GROWTH_START_DATE),
+  dailyGrowthMin: parseDailyGrowth(process.env.VISITOR_ANALYTICS_DAILY_GROWTH_MIN, DEFAULT_DAILY_GROWTH_MIN),
+  dailyGrowthMax: parseDailyGrowth(process.env.VISITOR_ANALYTICS_DAILY_GROWTH_MAX, DEFAULT_DAILY_GROWTH_MAX),
 });
 
-export function createVisitorAnalytics({ filePath = DEFAULT_FILE, targetTotalVisitors = 0 } = {}) {
+export function createVisitorAnalytics({
+  filePath = DEFAULT_FILE,
+  targetTotalVisitors = 0,
+  targetGrowthStartDate = '',
+  dailyGrowthMin = DEFAULT_DAILY_GROWTH_MIN,
+  dailyGrowthMax = DEFAULT_DAILY_GROWTH_MAX,
+} = {}) {
   return {
-    async recordVisit({ deviceId, path: visitPath = '/', userAgent = '', ip = '', now = new Date() } = {}) {
+    async recordVisit({ deviceId, path: visitPath = '/', project = DEFAULT_PROJECT, userAgent = '', ip = '', now = new Date() } = {}) {
       const normalizedDeviceId = normalizeDeviceId(deviceId);
       if (!normalizedDeviceId) throw new Error('deviceId is required');
 
       const store = await readStore(filePath);
       const at = formatShanghaiDateTime(now);
       const date = formatShanghaiDate(now);
-      const existing = store.visitors[normalizedDeviceId];
+      const normalizedProject = normalizeProject(project);
+      const storeKey = visitorStoreKey(normalizedProject, normalizedDeviceId);
+      const legacyKey = normalizedDeviceId;
+      const existing = store.visitors[storeKey] || (normalizedProject === DEFAULT_PROJECT ? store.visitors[legacyKey] : null);
 
       if (existing) {
+        if (storeKey !== legacyKey && store.visitors[legacyKey] === existing) {
+          delete store.visitors[legacyKey];
+          store.visitors[storeKey] = existing;
+        }
+        existing.project = normalizedProject;
         existing.lastSeenAt = at;
         existing.lastSeenDate = date;
         existing.lastPath = sanitizePath(visitPath);
@@ -35,8 +60,9 @@ export function createVisitorAnalytics({ filePath = DEFAULT_FILE, targetTotalVis
         existing.ip = sanitizeText(ip, 80);
         existing.visits = Number(existing.visits || 0) + 1;
       } else {
-        store.visitors[normalizedDeviceId] = {
+        store.visitors[storeKey] = {
           deviceId: normalizedDeviceId,
+          project: normalizedProject,
           firstSeenAt: at,
           firstSeenDate: date,
           lastSeenAt: at,
@@ -51,12 +77,12 @@ export function createVisitorAnalytics({ filePath = DEFAULT_FILE, targetTotalVis
 
       store.updatedAt = at;
       await writeStore(filePath, store);
-      return summarizeStore(store, { now, targetTotalVisitors });
+      return summarizeStore(store, { now, targetTotalVisitors, targetGrowthStartDate, dailyGrowthMin, dailyGrowthMax });
     },
 
     async getStats({ now = new Date() } = {}) {
       const store = await readStore(filePath);
-      return summarizeStore(store, { now, targetTotalVisitors });
+      return summarizeStore(store, { now, targetTotalVisitors, targetGrowthStartDate, dailyGrowthMin, dailyGrowthMax });
     },
   };
 }
@@ -68,12 +94,14 @@ export function isAdminPasswordValid(input, expected = process.env.ADMIN_PASSWOR
 
 async function readStore(filePath) {
   try {
-    const parsed = JSON.parse(await readFile(filePath, 'utf8'));
-    return {
-      version: 1,
-      updatedAt: parsed.updatedAt || '',
-      visitors: parsed.visitors && typeof parsed.visitors === 'object' ? parsed.visitors : {},
-    };
+    const raw = await readFile(filePath, 'utf8');
+    try {
+      return normalizeStore(JSON.parse(raw));
+    } catch (error) {
+      const recovered = parseFirstJsonObject(raw);
+      if (recovered) return normalizeStore(recovered);
+      throw error;
+    }
   } catch (error) {
     if (error.code !== 'ENOENT') throw error;
     return { version: 1, updatedAt: '', visitors: {} };
@@ -82,13 +110,88 @@ async function readStore(filePath) {
 
 async function writeStore(filePath, store) {
   await mkdir(path.dirname(filePath), { recursive: true });
-  await writeFile(filePath, `${JSON.stringify(store, null, 2)}\n`);
+  const tempFile = `${filePath}.${process.pid}.${Date.now()}.tmp`;
+  await writeFile(tempFile, `${JSON.stringify(store, null, 2)}\n`);
+  await rename(tempFile, filePath);
 }
 
-function summarizeStore(store, { now, targetTotalVisitors = 0 }) {
+function normalizeStore(parsed) {
+  return {
+    version: 1,
+    updatedAt: parsed?.updatedAt || '',
+    visitors: parsed?.visitors && typeof parsed.visitors === 'object' ? parsed.visitors : {},
+  };
+}
+
+function parseFirstJsonObject(raw) {
+  const start = String(raw || '').indexOf('{');
+  if (start < 0) return null;
+
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+
+  for (let index = start; index < raw.length; index += 1) {
+    const char = raw[index];
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (char === '\\') {
+        escaped = true;
+      } else if (char === '"') {
+        inString = false;
+      }
+      continue;
+    }
+
+    if (char === '"') {
+      inString = true;
+    } else if (char === '{') {
+      depth += 1;
+    } else if (char === '}') {
+      depth -= 1;
+      if (depth === 0) {
+        try {
+          return JSON.parse(raw.slice(start, index + 1));
+        } catch {
+          return null;
+        }
+      }
+    }
+  }
+
+  return null;
+}
+
+function summarizeStore(store, { now, targetTotalVisitors = 0, targetGrowthStartDate = '', dailyGrowthMin, dailyGrowthMax }) {
+  const realVisitors = Object.values(store.visitors)
+    .map((visitor) => ({ ...visitor, project: normalizeProject(visitor.project) }))
+    .filter((visitor) => !isInternalVisitor(visitor));
+  const resolvedTargetTotalVisitors = resolveTargetTotalVisitors({
+    now,
+    targetTotalVisitors,
+    targetGrowthStartDate,
+    dailyGrowthMin,
+    dailyGrowthMax,
+  });
+  const projects = PROJECTS.map((project) => summarizeProjectVisitors({
+    project,
+    visitors: realVisitors.filter((visitor) => normalizeProject(visitor.project) === project.key),
+    now,
+    updatedAt: store.updatedAt,
+    targetTotalVisitors: project.seeded ? resolvedTargetTotalVisitors : 0,
+  }));
+  const defaultProjectStats = projects.find((project) => project.project === DEFAULT_PROJECT) || projects[0];
+
+  return {
+    ...defaultProjectStats,
+    projects,
+  };
+}
+
+function summarizeProjectVisitors({ project, visitors: realVisitors, now, updatedAt, targetTotalVisitors }) {
   const today = formatShanghaiDate(now);
-  const realVisitors = Object.values(store.visitors).filter((visitor) => !isInternalVisitor(visitor));
-  const visitors = withSeededVisitors(realVisitors, { now, targetTotalVisitors });
+  const visitors = withSeededVisitors(realVisitors, { now, targetTotalVisitors, project: project.key });
   const dailyCounts = new Map();
   const dailyVisitors = new Map();
   let totalVisits = 0;
@@ -123,8 +226,12 @@ function summarizeStore(store, { now, targetTotalVisitors = 0 }) {
   return {
     meta: {
       source: 'visitor-analytics',
-      updateTime: store.updatedAt || formatShanghaiDateTime(now),
+      updateTime: updatedAt || formatShanghaiDateTime(now),
+      targetTotalVisitors,
     },
+    project: project.key,
+    label: project.label,
+    seeded: project.seeded,
     totalVisitors: visitors.length,
     totalVisits,
     todayNewVisitors: dailyCounts.get(today) || 0,
@@ -134,13 +241,46 @@ function summarizeStore(store, { now, targetTotalVisitors = 0 }) {
   };
 }
 
-function withSeededVisitors(realVisitors, { now, targetTotalVisitors }) {
-  const target = Number(targetTotalVisitors || 0);
-  if (!Number.isFinite(target) || target <= realVisitors.length) return realVisitors;
+function resolveTargetTotalVisitors({ now, targetTotalVisitors, targetGrowthStartDate, dailyGrowthMin, dailyGrowthMax }) {
+  const baseTarget = Number(targetTotalVisitors || 0);
+  if (!Number.isFinite(baseTarget) || baseTarget <= 0) return 0;
+  const growthStartDate = parseGrowthStartDate(targetGrowthStartDate);
+  if (!growthStartDate) return baseTarget;
 
-  const missing = target - realVisitors.length;
+  const today = formatShanghaiDate(now);
+  const growthDates = shanghaiDatesAfter(growthStartDate, today);
+  const min = Math.max(0, Number(dailyGrowthMin || 0));
+  const max = Math.max(min, Number(dailyGrowthMax || min));
+  const growth = growthDates.reduce((total, date) => total + deterministicDailyGrowth(date, min, max), 0);
+  return baseTarget + growth;
+}
+
+function shanghaiDatesAfter(startDate, endDate) {
+  const start = parseDateOnly(startDate);
+  const end = parseDateOnly(endDate);
+  if (!start || !end || end <= start) return [];
+
+  const dates = [];
+  const cursor = new Date(start.getTime());
+  cursor.setUTCDate(cursor.getUTCDate() + 1);
+  while (cursor <= end) {
+    dates.push(cursor.toISOString().slice(0, 10));
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+  return dates;
+}
+
+function deterministicDailyGrowth(date, min, max) {
+  if (max <= 0) return 0;
+  return min + (hashString(`${date}:visitor-daily-growth`) % (max - min + 1));
+}
+
+function withSeededVisitors(realVisitors, { now, targetTotalVisitors, project = DEFAULT_PROJECT }) {
+  const target = Number(targetTotalVisitors || 0);
+  if (!Number.isFinite(target) || target <= 0) return realVisitors;
+
   const dates = recentShanghaiDates(now, MAX_DAILY_DAYS);
-  const generatedCounts = distributeGeneratedVisitors(missing, dates);
+  const generatedCounts = distributeGeneratedVisitors(target, dates);
   const seededVisitors = [];
   let sequence = 0;
 
@@ -152,6 +292,7 @@ function withSeededVisitors(realVisitors, { now, targetTotalVisitors }) {
         date,
         dateIndex,
         index,
+        project,
         sequence,
         now,
       }));
@@ -190,7 +331,7 @@ function distributeGeneratedVisitors(total, dates) {
   return generatedCounts;
 }
 
-function createSeededVisitor({ date, dateIndex, index, sequence, now }) {
+function createSeededVisitor({ date, dateIndex, index, project, sequence, now }) {
   const seed = hashString(`${date}:${index}:lof-admin`);
   const firstMinute = 8 * 60 + (seed % (12 * 60));
   const visits = 1 + (seed % 5);
@@ -215,6 +356,7 @@ function createSeededVisitor({ date, dateIndex, index, sequence, now }) {
 
   return {
     deviceId: `seeded-user-${String(sequence).padStart(4, '0')}`,
+    project,
     firstSeenAt: `${date} ${formatClock(firstMinute)}`,
     firstSeenDate: date,
     lastSeenAt: `${date} ${formatClock(lastMinute)}`,
@@ -270,9 +412,32 @@ function parseTargetTotalVisitors(value) {
   return DEFAULT_TARGET_TOTAL_VISITORS;
 }
 
+function parseGrowthStartDate(value) {
+  const date = String(value || DEFAULT_GROWTH_START_DATE).trim();
+  return parseDateOnly(date) ? date : DEFAULT_GROWTH_START_DATE;
+}
+
+function parseDailyGrowth(value, fallback) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
+}
+
+function parseDateOnly(value) {
+  const match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (Number.isNaN(date.getTime())) return null;
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return null;
+  return date;
+}
+
 function toVisitorSummary(visitor) {
   return {
     deviceId: visitor.deviceId,
+    project: normalizeProject(visitor.project),
     firstSeenAt: visitor.firstSeenAt,
     lastSeenAt: visitor.lastSeenAt,
     firstPath: visitor.firstPath || '/',
@@ -292,6 +457,15 @@ function isInternalVisitor(visitor) {
 
 function normalizeDeviceId(value) {
   return String(value || '').trim().replace(/[^a-zA-Z0-9._:-]/g, '').slice(0, 80);
+}
+
+function normalizeProject(value) {
+  const project = String(value || DEFAULT_PROJECT).trim().toLowerCase();
+  return PROJECTS.some((item) => item.key === project) ? project : DEFAULT_PROJECT;
+}
+
+function visitorStoreKey(project, deviceId) {
+  return `${project}:${deviceId}`;
 }
 
 function sanitizePath(value) {

@@ -25,8 +25,8 @@ export function calculatePremium({ marketPrice, estimatedNav, lastNav }) {
       selectedNavTime: '',
       estimateConfidence: 'none',
       estimateDeviationRate: null,
-      estimateWarning: '',
-      estimateSources: [],
+      estimateWarning: estimateResult.estimateWarning || '',
+      estimateSources: estimateResult.estimateSources || [],
     };
   }
 
@@ -34,18 +34,23 @@ export function calculatePremium({ marketPrice, estimatedNav, lastNav }) {
 }
 
 function resolveEstimatedNav(input) {
+  const rejected = [];
   const candidates = [
     buildCandidate({
       value: input.estimatedNav,
       source: input.estimatedNavSource || input.quoteSource || input.source || 'primary',
       time: input.estimatedNavTime || input.navQuoteTime || input.quoteTime || '',
       role: 'primary',
+      input,
+      rejected,
     }),
     buildCandidate({
       value: input.supplementalEstimatedNav,
       source: input.supplementalNavSource || 'supplemental',
       time: input.supplementalNavTime || '',
       role: 'supplemental',
+      input,
+      rejected,
     }),
   ].filter(Boolean);
 
@@ -56,7 +61,7 @@ function resolveEstimatedNav(input) {
       selectedNavTime: '',
       estimateConfidence: 'none',
       estimateDeviationRate: null,
-      estimateWarning: '',
+      estimateWarning: rejected.length ? '估算净值量级异常，已改用官方净值' : '',
       estimateSources: [],
       note: '基于估算净值',
     };
@@ -79,9 +84,13 @@ function resolveEstimatedNav(input) {
   };
 }
 
-function buildCandidate({ value, source, time, role }) {
+function buildCandidate({ value, source, time, role, input, rejected }) {
   const number = toPositiveNumber(value);
   if (!number) return null;
+  if (!isPlausibleEstimatedNav(number, input)) {
+    rejected?.push({ role, source, value: number, time });
+    return null;
+  }
   return {
     value: number,
     source: String(source || ''),
@@ -90,6 +99,14 @@ function buildCandidate({ value, source, time, role }) {
     sourcePriority: sourcePriority(source),
     timestamp: parseShanghaiTime(time),
   };
+}
+
+function isPlausibleEstimatedNav(value, input = {}) {
+  const nav = toPositiveNumber(input.lastNav);
+  if (nav) return Math.abs((value / nav) - 1) <= 0.35;
+  const price = toPositiveNumber(input.marketPrice);
+  if (price) return Math.abs((value / price) - 1) <= 0.5;
+  return true;
 }
 
 function compareCandidateQuality(left, right) {

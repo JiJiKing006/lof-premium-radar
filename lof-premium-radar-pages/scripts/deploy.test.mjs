@@ -3,15 +3,38 @@ import { describe, expect, it } from 'vitest';
 
 const deployScript = readFileSync(new URL('./deploy.sh', import.meta.url), 'utf8');
 const nginxDefault = readFileSync(new URL('../nginx-default.conf', import.meta.url), 'utf8');
+const viteConfig = readFileSync(new URL('../vite.config.js', import.meta.url), 'utf8');
+const serverIndex = readFileSync(new URL('../server/index.js', import.meta.url), 'utf8');
 
 describe('deployment nginx configuration', () => {
-  it('serves the active release when nginx falls back to the default server', () => {
+  it('serves the personal homepage at the root and the LOF app under /lof', () => {
     expect(deployScript).toContain('default_server');
     expect(deployScript).toContain('rm -f /etc/nginx/sites-enabled/default');
-    expect(deployScript).toContain('root ${DEPLOY_PATH}/current/dist;');
+    expect(deployScript).toContain('DEPLOY_DOMAIN="${DEPLOY_DOMAIN:-jijiking.top}"');
+    expect(deployScript).toContain('DEPLOY_LOF_PUBLIC_PATH="${DEPLOY_LOF_PUBLIC_PATH:-/lof}"');
+    expect(deployScript).toContain('DEPLOY_HOME_ROOT="${DEPLOY_HOME_ROOT:-/srv/www/home}"');
+    expect(deployScript).toContain('VITE_BASE_PATH="${VITE_BASE_PATH:-$LOF_BASE_PATH}" npm run build');
+    expect(deployScript).toContain('NGINX_SERVER_NAME="$DEPLOY_DOMAIN"');
+    expect(deployScript).toContain('grep -Rsl "server_name ${DEPLOY_DOMAIN}"');
+    expect(deployScript).toContain('NGINX_SERVER_NAME="_"');
+    expect(deployScript).toContain('server_name ${NGINX_SERVER_NAME};');
+    expect(deployScript).toContain('root ${HOME_ROOT};');
+    expect(deployScript).toContain('location = ${LOF_PUBLIC_PATH}');
+    expect(deployScript).toContain('location ^~ ${LOF_PUBLIC_PATH}/');
+    expect(deployScript).toContain('alias ${DEPLOY_PATH}/current/dist/;');
+    expect(deployScript).toContain('try_files \\$uri \\$uri/ ${LOF_PUBLIC_PATH}/index.html;');
+    expect(deployScript).toContain('Environment=PUBLIC_BASE_PATH=${LOF_PUBLIC_PATH}/');
 
     expect(nginxDefault).toContain('default_server');
-    expect(nginxDefault).toContain('root /srv/lof/current/dist;');
+    expect(nginxDefault).toContain('server_name jijiking.top');
+    expect(nginxDefault).toContain('root /srv/www/home;');
+    expect(nginxDefault).toContain('location = /lof');
+    expect(nginxDefault).toContain('location ^~ /lof/');
+    expect(nginxDefault).toContain('alias /srv/lof/current/dist/;');
+    expect(nginxDefault).toContain('try_files $uri $uri/ /lof/index.html;');
+
+    expect(viteConfig).toContain("base: process.env.VITE_BASE_PATH || '/'");
+    expect(serverIndex).toContain('app.use(publicBasePath, express.static(distPath));');
   });
 
   it('prevents stale index html from surviving after deploy while keeping hashed assets cacheable', () => {
@@ -41,10 +64,13 @@ describe('deployment nginx configuration', () => {
     expect(deployScript).toContain('DEPLOY_SMOKE_URL');
     expect(deployScript).toContain('/api/funds/quotes?category=LOF&trends=0&force=1');
     expect(deployScript).toContain('LOF API smoke test failed');
-    expect(deployScript).toContain('rowCount !== 53');
-    expect(deployScript).toContain('missingPrice.length');
-    expect(deployScript).toContain('missingNav.length');
-    expect(deployScript).toContain('missingPremium.length');
+    expect(deployScript).toContain('rowCount !== 285');
+    expect(deployScript).toContain('unlabeledMissing.length');
+    expect(deployScript).toContain('incompleteCritical.length');
+    expect(deployScript).toContain('Number(overseasTech.lastNav) <= 0');
+    expect(deployScript).toContain('!Number.isFinite(Number(overseasTech.premiumRate))');
+    expect(deployScript).toContain('dataStatus !== "missing_quote"');
+    expect(deployScript).toContain('sourceStatus !== "missing"');
     expect(deployScript).toContain('501312');
   });
 
@@ -69,11 +95,18 @@ describe('deployment nginx configuration', () => {
   });
 
   it('smoke tests deployed analytics and admin routes before reporting success', () => {
+    expect(deployScript).toContain('${LOF_PUBLIC_PATH}/admin');
+    expect(deployScript).toContain('LOF admin page smoke test failed');
     expect(deployScript).toContain('/api/analytics/visit');
+    expect(deployScript).toContain('"project":"lof"');
+    expect(deployScript).toContain('"project":"personal"');
+    expect(deployScript).toContain('Personal analytics API smoke test failed');
     expect(deployScript).toContain('/api/admin/login');
     expect(deployScript).toContain('/api/admin/visitors');
     expect(deployScript).toContain('Analytics API smoke test failed');
     expect(deployScript).toContain('Admin API smoke test failed');
+    expect(deployScript).toContain('project.project === "lof"');
+    expect(deployScript).toContain('project.project === "personal"');
   });
 
   it('propagates the configured admin password to the deployed service', () => {
@@ -81,18 +114,57 @@ describe('deployment nginx configuration', () => {
     expect(deployScript).toContain('Environment=ADMIN_PASSWORD=${ADMIN_PASSWORD}');
   });
 
-  it('keeps sibling static projects outside the LOF release directory', () => {
+  it('propagates the daily-growing visitor analytics baseline to the deployed service', () => {
+    expect(deployScript).toContain('DEPLOY_VISITOR_ANALYTICS_TARGET_TOTAL="${DEPLOY_VISITOR_ANALYTICS_TARGET_TOTAL:-273}"');
+    expect(deployScript).toContain('DEPLOY_VISITOR_ANALYTICS_GROWTH_START_DATE="${DEPLOY_VISITOR_ANALYTICS_GROWTH_START_DATE:-2026-06-07}"');
+    expect(deployScript).toContain("DEPLOY_VISITOR_ANALYTICS_TARGET_TOTAL='$DEPLOY_VISITOR_ANALYTICS_TARGET_TOTAL'");
+    expect(deployScript).toContain("DEPLOY_VISITOR_ANALYTICS_GROWTH_START_DATE='$DEPLOY_VISITOR_ANALYTICS_GROWTH_START_DATE'");
+    expect(deployScript).toContain('Environment=VISITOR_ANALYTICS_TARGET_TOTAL=${DEPLOY_VISITOR_ANALYTICS_TARGET_TOTAL}');
+    expect(deployScript).toContain('Environment=VISITOR_ANALYTICS_GROWTH_START_DATE=${DEPLOY_VISITOR_ANALYTICS_GROWTH_START_DATE}');
+  });
+
+  it('keeps optional sibling static projects outside the LOF release directory', () => {
     expect(deployScript).toContain('DEPLOY_STATIC_ROOT="${DEPLOY_STATIC_ROOT:-/srv/www}"');
-    expect(deployScript).toContain('DEPLOY_STATIC_PROJECTS="${DEPLOY_STATIC_PROJECTS:-person-website}"');
+    expect(deployScript).toContain('DEPLOY_STATIC_INCLUDE_DIR="${DEPLOY_STATIC_INCLUDE_DIR:-/etc/nginx/includes/static-projects}"');
+    expect(deployScript).toContain('DEPLOY_STATIC_PROJECTS="${DEPLOY_STATIC_PROJECTS:-}"');
     expect(deployScript).toContain("DEPLOY_STATIC_ROOT='$DEPLOY_STATIC_ROOT'");
+    expect(deployScript).toContain("DEPLOY_STATIC_INCLUDE_DIR='$DEPLOY_STATIC_INCLUDE_DIR'");
     expect(deployScript).toContain("DEPLOY_STATIC_PROJECTS='$DEPLOY_STATIC_PROJECTS'");
+    expect(deployScript).toContain('mkdir -p "$STATIC_INCLUDE_DIR"');
     expect(deployScript).toContain('mkdir -p "$STATIC_ROOT/$project"');
+    expect(deployScript).toContain('project_path="/${project}"');
+    expect(deployScript).toContain('location = ${project_path}');
+    expect(deployScript).toContain('return 301 ${project_path}/;');
+    expect(deployScript).toContain('cat >"$STATIC_INCLUDE_DIR/${project}.conf"');
     expect(deployScript).toContain('location ^~ /${project}/');
     expect(deployScript).toContain('alias ${STATIC_ROOT}/${project}/;');
     expect(deployScript).toContain('try_files \\$uri \\$uri/ /${project}/index.html;');
+    expect(deployScript).toContain('include ${STATIC_INCLUDE_DIR}/*.conf;');
+    expect(deployScript).not.toContain('add_header Cache-Control \\"no-store');
 
-    expect(nginxDefault).toContain('location ^~ /person-website/');
-    expect(nginxDefault).toContain('alias /srv/www/person-website/;');
-    expect(nginxDefault).toContain('try_files $uri $uri/ /person-website/index.html;');
+    expect(nginxDefault).toContain('include /etc/nginx/includes/static-projects/*.conf;');
+  });
+
+  it('migrates the old /person-website homepage to the root and removes the old route', () => {
+    expect(deployScript).toContain('DEPLOY_LEGACY_STATIC_PROJECTS="${DEPLOY_LEGACY_STATIC_PROJECTS:-person-website}"');
+    expect(deployScript).toContain("DEPLOY_HOME_ROOT='$DEPLOY_HOME_ROOT'");
+    expect(deployScript).toContain("DEPLOY_LEGACY_STATIC_PROJECTS='$DEPLOY_LEGACY_STATIC_PROJECTS'");
+    expect(deployScript).toContain('migrate_homepage_from_legacy_project');
+    expect(deployScript).toContain('cleanup_legacy_static_projects');
+    expect(deployScript).toContain('cp -a "$legacy_dir/." "$HOME_ROOT/"');
+    expect(deployScript).toContain('rm -f "$STATIC_INCLUDE_DIR/${project}.conf"');
+    expect(deployScript).toContain('rm -rf "$STATIC_ROOT/$project"');
+    expect(deployScript).not.toContain('DEPLOY_STATIC_PROJECTS="${DEPLOY_STATIC_PROJECTS:-person-website}"');
+  });
+
+  it('injects personal homepage analytics without requiring local homepage source', () => {
+    expect(deployScript).toContain('install_homepage_analytics_script');
+    expect(deployScript).toContain('cat >"$HOME_ROOT/lof-analytics.js"');
+    expect(deployScript).toContain("var project = 'personal';");
+    expect(deployScript).toContain("var storageKey = 'personal-website-visitor-device-id';");
+    expect(deployScript).toContain("window.fetch('/api/analytics/visit'");
+    expect(deployScript).toContain('project: project');
+    expect(deployScript).toContain('<script defer src="/lof-analytics.js" data-project="personal"></script>');
+    expect(deployScript).toContain("html.includes('/lof-analytics.js')");
   });
 });
