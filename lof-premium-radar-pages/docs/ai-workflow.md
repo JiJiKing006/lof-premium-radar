@@ -19,7 +19,7 @@ npm run workflow:next
 npm run workflow:prompt
 npm run workflow:check
 npm run workflow:complete -- --title "ETF类型添加纳斯达克科技数据"
-npm run workflow:changelog -- --title "ETF类型添加纳斯达克科技数据" --files "server/config/sources.js,src/components/FilterTabs.vue" --tests "npm run test,npm run build" --status "待上线"
+npm run workflow:changelog -- --title "ETF类型添加纳斯达克科技数据" --files "server/config/sources.js,components/filter-tabs/filter-tabs.js" --tests "npm run test,npm run check:server" --status "待上线"
 ```
 
 ## 和 Codex 协作的固定说法
@@ -61,15 +61,15 @@ npm run workflow:changelog -- --title "ETF类型添加纳斯达克科技数据" 
 
 - LOF/QDII/ETF 三类 `/api/funds/quotes` 返回合法 JSON。
 - 核心字段不丢：代码/名称、现价、官方净值、估算净值、溢价率、source、quoteTime/updateTime。
-- 新增基金必须复用 `server/sources/* -> quoteService -> fundAggregator -> src/api/funds.ts -> 组件` 的原有链路。
+- 新增基金必须复用 `server/sources/* -> quoteService -> fundAggregator -> utils/fund-api.js -> pages/components` 的原有链路。
 - 不允许为了新增数据改掉旧字段含义，例如 `marketPrice/price`、`lastNav/nav`、`estimatedNav/estimatedValue`、`turnover/amount`。
 - `/api/funds/quotes` 首页接口普通未缓存请求目标控制在 3 秒内；慢补充数据必须降级并标记，不阻塞首屏。
 
 完整检查清单：
 
 - `npm run test`
-- `npm run typecheck`
-- `npm run build`
+- `npm run check:server`
+- 微信开发者工具预览或真机预览
 - 真实接口冒烟：检查 `/api/funds/quotes`、`/api/funds/hot-arbitrage`、`/api/health/data-sources`
 - 页面验证：检查 LOF/QDII/ETF tab、搜索、排序、详情页、移动端横向滚动
 - 数据完整性：检查是否出现大面积 `暂无数据` 或 `净值未公布`

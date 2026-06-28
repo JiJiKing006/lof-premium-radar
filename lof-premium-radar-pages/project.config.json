@@ -1,0 +1,61 @@
+{
+  "appid": "wxd827a0e78b5ce07a",
+  "projectname": "lof-premium-radar-pages",
+  "miniprogramRoot": "./",
+  "compileType": "miniprogram",
+  "setting": {
+    "urlCheck": false,
+    "es6": true,
+    "enhance": true,
+    "postcss": true,
+    "minified": true,
+    "minifyWXSS": true,
+    "minifyWXML": true,
+    "coverView": true,
+    "showShadowRootInWxmlPanel": true,
+    "ignoreDevUnusedFiles": true,
+    "packNpmManually": false,
+    "packNpmRelationList": [],
+    "uploadWithSourceMap": true,
+    "compileWorklet": false,
+    "uglifyFileName": false,
+    "localPlugins": false,
+    "disableUseStrict": false,
+    "useCompilerPlugins": false,
+    "condition": false,
+    "swc": false,
+    "disableSWC": true,
+    "babelSetting": {
+      "ignore": [],
+      "disablePlugins": [],
+      "outputPath": ""
+    }
+  },
+  "libVersion": "3.8.8",
+  "condition": {},
+  "simulatorPluginLibVersion": {},
+  "packOptions": {
+    "ignore": [
+      { "type": "folder", "value": "server" },
+      { "type": "folder", "value": "node_modules" },
+      { "type": "folder", "value": ".git" },
+      { "type": "folder", "value": ".cache" },
+      { "type": "folder", "value": ".codex" },
+      { "type": "folder", "value": ".playwright-cli" },
+      { "type": "folder", "value": "docs" },
+      { "type": "folder", "value": "scripts" },
+      { "type": "folder", "value": "tmp" },
+      { "type": "folder", "value": "output" },
+      { "type": "folder", "value": "data" },
+      { "type": "folder", "value": "assets" },
+      { "type": "file", "value": "package.json" },
+      { "type": "file", "value": "package-lock.json" },
+      { "type": "file", "value": "nginx-default.conf" },
+      { "type": "file", "value": "README.md" },
+      { "type": "file", "value": ".env.deploy" },
+      { "type": "file", "value": "project.private.config.json" }
+    ],
+    "include": []
+  },
+  "editorSetting": {}
+}

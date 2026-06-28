@@ -1,0 +1,136 @@
+<view class="detail-panel market-detail">
+  <view class="detail-scroll">
+    <block wx:if="{{detailLoading && !current}}">
+      <view class="detail-hero detail-skeleton-hero" aria-label="详情数据加载中">
+        <view class="detail-skeleton-line kicker"></view>
+        <view class="detail-skeleton-line title"></view>
+        <view class="detail-skeleton-line meta"></view>
+        <view class="detail-quote-strip">
+          <view wx:for="{{detailHeroSkeletonCards}}" wx:key="*this" class="quote-card skeleton-card">
+            <view class="detail-skeleton-line label"></view>
+            <view class="detail-skeleton-line value"></view>
+            <view class="detail-skeleton-line note"></view>
+          </view>
+        </view>
+      </view>
+      <view class="detail-section detail-skeleton-section">
+        <view class="detail-section-header">
+          <view class="detail-skeleton-line section-name"></view>
+          <view class="detail-skeleton-line section-note"></view>
+        </view>
+        <view class="detail-field-grid">
+          <view wx:for="{{detailFieldSkeletonCards}}" wx:key="*this" class="field-card skeleton-card">
+            <view class="detail-skeleton-line label"></view>
+            <view class="detail-skeleton-line field"></view>
+          </view>
+        </view>
+      </view>
+    </block>
+
+    <view wx:if="{{current}}" class="detail-hero">
+      <view class="detail-title">
+        <text class="detail-kicker">Fund Detail</text>
+        <text class="detail-name">{{current.titleText}}</text>
+        <view class="detail-code-line">
+          <text class="detail-code">{{current.code}}</text>
+          <text class="detail-status-pill limit-{{current.purchaseState}}">{{current.purchaseText}}</text>
+          <text>{{current.updateTime || current.quoteTime || '暂无数据'}}</text>
+        </view>
+      </view>
+      <view class="detail-quote-strip">
+        <view wx:for="{{heroQuotes}}" wx:key="label" class="quote-card">
+          <text>{{item.label}}</text>
+          <text class="quote-value {{item.className}}">{{item.value}}</text>
+          <text wx:if="{{item.note}}" class="quote-note">{{item.note}}</text>
+        </view>
+      </view>
+    </view>
+
+    <view wx:if="{{error}}" class="detail-warning">{{error}}</view>
+
+    <view wx:if="{{current}}" class="detail-section">
+      <view class="detail-section-header">
+        <text class="section-title">实时行情</text>
+        <text>行情、净值、成交、份额</text>
+      </view>
+      <view class="detail-live-grid">
+        <view class="detail-field-grid">
+          <view wx:for="{{liveFields}}" wx:key="label" class="field-card {{item.wide ? 'wide' : ''}}">
+            <text class="field-label">{{item.label}}</text>
+            <view class="field-value {{item.className}}">
+              <text class="field-main {{item.pillClass}}">{{item.value}}</text>
+              <text wx:if="{{item.note}}" class="field-note">{{item.note}}</text>
+            </view>
+          </view>
+        </view>
+        <view class="detail-source-note">
+          数据参考：行情 {{current.quoteSourceText}}；净值 {{current.navSourceText}}；份额 {{current.shareSourceText}}。
+        </view>
+      </view>
+    </view>
+
+    <view wx:if="{{current}}" class="detail-section decision-section">
+      <view class="detail-section-header">
+        <text class="section-title">计算公式</text>
+        <text>官方净值缺失时不计算</text>
+      </view>
+      <view class="formula-card">
+        <text class="formula-title">溢价率 = (现价 - 官方净值) / 官方净值</text>
+        <text>仅使用官方公布净值；估算净值只作辅助观察，不替代官方净值。</text>
+      </view>
+    </view>
+
+    <view wx:if="{{current}}" class="detail-section">
+      <view class="detail-section-header">
+        <text class="section-title">来源审计</text>
+        <text>来源与时间逐项回显</text>
+      </view>
+      <view class="source-audit-list">
+        <view wx:for="{{auditRows}}" wx:key="label" class="source-audit-row {{item.source === '暂无数据' ? 'source-missing' : ''}}">
+          <text class="audit-label">{{item.label}}</text>
+          <view class="audit-content">
+            <text class="audit-source">{{item.source}}</text>
+            <text class="audit-time">{{item.time}}</text>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <view class="detail-section">
+      <view class="detail-section-header">
+        <text class="section-title">历史净值与溢价率</text>
+        <text>仅用同日官方净值与场内收盘价计算</text>
+      </view>
+      <scroll-view class="detail-table-wrap history-table-wrap" scroll-x enhanced>
+        <view class="history-grid">
+          <view class="history-row history-head">
+            <view wx:for="{{historyColumns}}" wx:key="key" class="history-cell">{{item.label}}</view>
+          </view>
+          <block wx:if="{{historyLoading}}">
+            <view wx:for="{{historySkeletonRows}}" wx:key="*this" class="history-row">
+              <view wx:for="{{historyColumns}}" wx:key="key" class="history-cell">
+                <view class="skeleton-line"></view>
+              </view>
+            </view>
+          </block>
+          <block wx:elif="{{historyRows.length}}">
+            <view wx:for="{{historyRows}}" wx:key="date" class="history-row">
+              <view wx:for="{{item.cells}}" wx:key="key" class="history-cell {{item.className}}">{{item.text}}</view>
+            </view>
+          </block>
+          <view wx:else class="empty-state">{{historyError || '暂无历史数据'}}</view>
+        </view>
+      </scroll-view>
+    </view>
+  </view>
+  <button
+    wx:if="{{showBackTop}}"
+    type="button"
+    class="detail-back-top-button"
+    aria-label="回到详情顶部"
+    bindtap="scrollToTop"
+  >
+    <text class="back-top-arrow">↑</text>
+    <text>顶部</text>
+  </button>
+</view>

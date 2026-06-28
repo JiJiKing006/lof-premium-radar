@@ -72,11 +72,11 @@ function parseUpdateTime($, html) {
 
 function normalizePurchaseLimit(value) {
   const text = clean(value);
-  if (!text || text === '-') return { state: 'unknown', label: '未知' };
+  if (!text || text === '-') return { state: 'unavailable', label: '暂无数据', limitText: '暂无数据' };
   if (/暂停/.test(text)) return { state: 'paused', label: text };
   if (/限|元|万/.test(text)) return { state: 'limited', label: text };
   if (/开放|0$/.test(text)) return { state: 'open', label: text };
-  return { state: 'unknown', label: text };
+  return { state: 'reported', label: text };
 }
 
 function inferMarket(name) {

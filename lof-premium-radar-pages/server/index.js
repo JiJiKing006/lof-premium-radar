@@ -1,29 +1,25 @@
 import express from 'express';
 import dns from 'node:dns';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { createServer as createViteServer } from 'vite';
 import { getDataSourceHealth } from './services/sourceHealth.js';
-import { createDevServerOptions } from './services/devServerOptions.js';
-import { getFundDetail, getFundList, getFundQuotes } from './services/fundAggregator.js';
+import { formatFundQuoteResponse, getFundDetail, getFundList, getFundQuotePage, getFundQuotes, hydratePersistentFundSnapshots } from './services/fundAggregator.js';
 import { getFundHistory } from './services/fundHistoryService.js';
 import { getHotArbitrageList } from './services/hotArbitrageService.js';
 import { fetchMarketIndices } from './sources/marketIndexSource.js';
 import { isAdminPasswordValid, visitorAnalytics } from './services/visitorAnalytics.js';
+import { warmQuoteCaches } from './services/quoteService.js';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const root = path.resolve(__dirname, '..');
 const port = Number(process.env.PORT || 4173);
-const isProduction = process.env.NODE_ENV === 'production';
-const publicBasePath = normalizePublicBasePath(process.env.PUBLIC_BASE_PATH || process.env.VITE_BASE_PATH || '/');
 
 dns.setDefaultResultOrder('ipv4first');
 
 const app = express();
+const apiRouter = express.Router();
+
+hydratePersistentFundSnapshots();
 
 app.use(express.json());
 
-app.get('/api/funds', async (request, response) => {
+apiRouter.get('/funds', async (request, response) => {
   try {
     const snapshot = await getFundList({
       category: String(request.query.category || ''),
@@ -39,7 +35,7 @@ app.get('/api/funds', async (request, response) => {
   }
 });
 
-app.get('/api/funds/quotes', async (request, response) => {
+apiRouter.get('/funds/quotes', async (request, response) => {
   try {
     const snapshot = await getFundQuotes({
       category: String(request.query.category || ''),
@@ -47,7 +43,16 @@ app.get('/api/funds/quotes', async (request, response) => {
       includeTrends: request.query.trends !== '0',
     });
     response.setHeader('Cache-Control', 'no-store');
-    response.json(snapshot);
+    response.json(formatFundQuoteResponse(snapshot, {
+      fields: request.query.fields,
+      page: request.query.page,
+      pageSize: request.query.pageSize,
+      query: request.query.query,
+      marketFilter: request.query.marketFilter,
+      excludePausedPurchase: request.query.excludePausedPurchase,
+      sortKey: request.query.sortKey,
+      sortDirection: request.query.sortDirection,
+    }));
   } catch (error) {
     response.status(503).json({
       meta: { status: error.message || '行情服务不可用', stale: true },
@@ -56,7 +61,41 @@ app.get('/api/funds/quotes', async (request, response) => {
   }
 });
 
-app.get('/api/funds/hot-arbitrage', async (request, response) => {
+apiRouter.get('/funds/quotes/refresh', async (request, response) => {
+  try {
+    const snapshot = await getFundQuotes({
+      category: String(request.query.category || ''),
+      force: true,
+      waitForFresh: false,
+      includeTrends: request.query.trends !== '0',
+    });
+    response.setHeader('Cache-Control', 'no-store');
+    response.json(formatFundQuoteResponse(snapshot, quoteResponseOptions(request)));
+  } catch (error) {
+    response.status(503).json({
+      meta: { status: error.message || '首页数据刷新失败', stale: true },
+      rows: [],
+    });
+  }
+});
+
+apiRouter.get('/funds/quotes/page', (request, response) => {
+  try {
+    const snapshot = getFundQuotePage({
+      category: String(request.query.category || ''),
+      includeTrends: request.query.trends !== '0',
+    });
+    response.setHeader('Cache-Control', 'no-store');
+    response.json(formatFundQuoteResponse(snapshot, quoteResponseOptions(request)));
+  } catch (error) {
+    response.status(error.code === 'PAGE_SNAPSHOT_NOT_READY' ? 409 : 503).json({
+      meta: { status: error.message || '分页数据不可用', stale: true },
+      rows: [],
+    });
+  }
+});
+
+apiRouter.get('/funds/hot-arbitrage', async (request, response) => {
   try {
     const snapshot = await getHotArbitrageList({
       category: String(request.query.category || 'ALL'),
@@ -73,7 +112,7 @@ app.get('/api/funds/hot-arbitrage', async (request, response) => {
   }
 });
 
-app.get('/api/funds/:code/history', async (request, response) => {
+apiRouter.get('/funds/:code/history', async (request, response) => {
   try {
     const history = await getFundHistory(request.params.code, {
       limit: Number(request.query.limit || 60),
@@ -89,7 +128,7 @@ app.get('/api/funds/:code/history', async (request, response) => {
   }
 });
 
-app.get('/api/funds/:code', async (request, response) => {
+apiRouter.get('/funds/:code', async (request, response) => {
   try {
     const fund = await getFundDetail(request.params.code, {
       category: String(request.query.category || ''),
@@ -106,7 +145,7 @@ app.get('/api/funds/:code', async (request, response) => {
   }
 });
 
-app.get('/api/market/indices', async (request, response) => {
+apiRouter.get('/market/indices', async (request, response) => {
   try {
     const snapshot = await fetchMarketIndices({ force: request.query.force === '1' });
     response.setHeader('Cache-Control', 'no-store');
@@ -119,20 +158,20 @@ app.get('/api/market/indices', async (request, response) => {
   }
 });
 
-app.get('/api/health/data-sources', (_request, response) => {
+apiRouter.get('/health/data-sources', (_request, response) => {
   response.json(getDataSourceHealth());
 });
 
-app.get('/api/health', (_request, response) => {
+apiRouter.get('/health', (_request, response) => {
   response.json({ ok: true, at: new Date().toISOString() });
 });
 
-app.post('/api/analytics/visit', async (request, response) => {
+apiRouter.post('/analytics/visit', async (request, response) => {
   try {
     const stats = await visitorAnalytics.recordVisit({
       deviceId: request.body?.deviceId,
       project: request.body?.project,
-      path: request.body?.path || request.path,
+      path: request.body?.path || request.originalUrl || request.path,
       userAgent: request.get('user-agent') || '',
       ip: clientIp(request),
     });
@@ -143,7 +182,7 @@ app.post('/api/analytics/visit', async (request, response) => {
   }
 });
 
-app.post('/api/admin/login', (request, response) => {
+apiRouter.post('/admin/login', (request, response) => {
   if (!isAdminPasswordValid(request.body?.password)) {
     response.status(401).json({ ok: false, error: '密码错误' });
     return;
@@ -152,7 +191,7 @@ app.post('/api/admin/login', (request, response) => {
   response.json({ ok: true });
 });
 
-app.get('/api/admin/visitors', async (request, response) => {
+apiRouter.get('/admin/visitors', async (request, response) => {
   if (!isAdminPasswordValid(request.get('x-admin-password'))) {
     response.status(401).json({ ok: false, error: '未授权' });
     return;
@@ -162,36 +201,32 @@ app.get('/api/admin/visitors', async (request, response) => {
   response.json(stats);
 });
 
-if (isProduction) {
-  const distPath = path.join(root, 'dist');
-  app.use(express.static(distPath));
-  if (publicBasePath !== '/') {
-    app.use(publicBasePath, express.static(distPath));
-  }
-  app.get('*', (_request, response) => {
-    response.sendFile(path.join(distPath, 'index.html'));
-  });
-} else {
-  const vite = await createViteServer(createDevServerOptions({ root, port }));
-  app.use(vite.middlewares);
-}
+app.use('/api', apiRouter);
 
 app.listen(port, () => {
-  console.log(`LOF radar running at http://127.0.0.1:${port}`);
+  console.log(`LOF radar API running at http://127.0.0.1:${port}`);
   setTimeout(() => {
-    for (const category of ['LOF', 'QDII', 'ETF']) {
-      getFundQuotes({ category, includeTrends: false }).catch(() => {});
-    }
+    warmQuoteCaches()
+      .then(() => getFundQuotes({ category: 'ALL', force: true, waitForFresh: true, includeTrends: false }))
+      .catch(() => {});
   }, 200);
 });
+
+function quoteResponseOptions(request) {
+  return {
+    fields: request.query.fields,
+    page: request.query.page,
+    pageSize: request.query.pageSize,
+    query: request.query.query,
+    marketFilter: request.query.marketFilter,
+    excludePausedPurchase: request.query.excludePausedPurchase,
+    sortKey: request.query.sortKey,
+    sortDirection: request.query.sortDirection,
+  };
+}
 
 function clientIp(request) {
   return String(request.headers['x-forwarded-for'] || request.socket.remoteAddress || '')
     .split(',')[0]
     .trim();
-}
-
-function normalizePublicBasePath(value) {
-  const pathValue = `/${String(value || '/').replace(/^\/+/, '')}`.replace(/\/+$/, '');
-  return pathValue === '' ? '/' : pathValue;
 }

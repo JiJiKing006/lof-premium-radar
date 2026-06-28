@@ -3,7 +3,9 @@ import { describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   fetchEastmoneyQuotes: vi.fn(),
   fetchSinaQuotes: vi.fn(),
+  fetchSinaQuoteMap: vi.fn(),
   fetchHaoetfQuotes: vi.fn(),
+  fetchJisiluQdiiSnapshot: vi.fn(),
   fetchAkshareQuotes: vi.fn(),
   fetchPalmmicroLofReferenceRows: vi.fn(),
 }));
@@ -16,8 +18,16 @@ vi.mock('../sources/sinaSource.js', () => ({
   fetchSinaQuotes: mocks.fetchSinaQuotes,
 }));
 
+vi.mock('../sources/sinaSupplementSource.js', () => ({
+  fetchSinaQuoteMap: mocks.fetchSinaQuoteMap,
+}));
+
 vi.mock('../sources/haoetfSource.js', () => ({
   fetchHaoetfQuotes: mocks.fetchHaoetfQuotes,
+}));
+
+vi.mock('../sources/jisiluQdiiProvider.js', () => ({
+  fetchJisiluQdiiSnapshot: mocks.fetchJisiluQdiiSnapshot,
 }));
 
 vi.mock('../sources/akshareSource.js', () => ({
@@ -33,6 +43,7 @@ const { getQuotes } = await import('./quoteService.js');
 describe('quoteService degraded availability', () => {
   it('returns an error snapshot instead of throwing when every QDII quote source is unavailable', async () => {
     mocks.fetchEastmoneyQuotes.mockRejectedValue(new Error('eastmoney down'));
+    mocks.fetchJisiluQdiiSnapshot.mockRejectedValue(new Error('jisilu down'));
     mocks.fetchSinaQuotes.mockRejectedValue(new Error('sina down'));
     mocks.fetchHaoetfQuotes.mockRejectedValue(new Error('haoetf down'));
     mocks.fetchAkshareQuotes.mockRejectedValue(new Error('akshare down'));
@@ -49,6 +60,7 @@ describe('quoteService degraded availability', () => {
   });
 
   it('keeps the LOF code universe as missing quote rows when quote sources are unavailable', async () => {
+    mocks.fetchSinaQuoteMap.mockResolvedValue(new Map());
     mocks.fetchPalmmicroLofReferenceRows.mockResolvedValue([
       { code: '501300', name: '美元债LOF', category: 'LOF', market: '债券' },
     ]);

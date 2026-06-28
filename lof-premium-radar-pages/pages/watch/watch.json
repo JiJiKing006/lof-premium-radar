@@ -1,0 +1,10 @@
+{
+  "navigationBarTitleText": "自选基金",
+  "enablePullDownRefresh": false,
+  "usingComponents": {
+    "data-status-bar": "/components/data-status-bar/data-status-bar",
+    "search-bar": "/components/search-bar/search-bar",
+    "sort-bar": "/components/sort-bar/sort-bar",
+    "radar-table": "/components/radar-table/radar-table"
+  }
+}

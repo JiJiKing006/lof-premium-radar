@@ -2,6 +2,7 @@ export class MemoryCache {
   constructor() {
     this.items = new Map();
     this.lastValid = new Map();
+    this.lastObserved = new Map();
   }
 
   get(key) {
@@ -18,10 +19,25 @@ export class MemoryCache {
     return item.value;
   }
 
+  getObserved(key, { maxAgeMs } = {}) {
+    const item = this.lastObserved.get(key);
+    if (!item) return null;
+    if (Number.isFinite(maxAgeMs) && Date.now() - item.storedAt > maxAgeMs) return null;
+    return item.value;
+  }
+
   set(key, value, ttlMs) {
     const now = Date.now();
     this.items.set(key, { value, expiresAt: now + ttlMs });
     this.lastValid.set(key, { value, storedAt: now });
+    this.lastObserved.set(key, { value, storedAt: now });
+    return value;
+  }
+
+  setTransient(key, value, ttlMs) {
+    const now = Date.now();
+    this.items.set(key, { value, expiresAt: now + ttlMs });
+    this.lastObserved.set(key, { value, storedAt: now });
     return value;
   }
 }

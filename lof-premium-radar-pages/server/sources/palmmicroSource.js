@@ -82,7 +82,7 @@ function parseEstRows($, quoteMap, html) {
       changeRate: quote.changeRate,
       volume: null,
       turnover: null,
-      purchaseLimit: { state: 'unknown', label: '未知' },
+      purchaseLimit: { state: 'unavailable', label: '暂无数据', limitText: '暂无数据' },
       source: 'palmmicro',
       sourceStatus: 'primary',
       quoteTime: quote.quoteTime || updateTime,

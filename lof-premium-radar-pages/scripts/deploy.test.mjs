@@ -3,48 +3,42 @@ import { describe, expect, it } from 'vitest';
 
 const deployScript = readFileSync(new URL('./deploy.sh', import.meta.url), 'utf8');
 const nginxDefault = readFileSync(new URL('../nginx-default.conf', import.meta.url), 'utf8');
-const viteConfig = readFileSync(new URL('../vite.config.js', import.meta.url), 'utf8');
 const serverIndex = readFileSync(new URL('../server/index.js', import.meta.url), 'utf8');
 
 describe('deployment nginx configuration', () => {
-  it('serves the personal homepage at the root and the LOF app under /lof', () => {
+  it('serves the personal homepage at the root and the LOF API under /api and /lof/api', () => {
     expect(deployScript).toContain('default_server');
     expect(deployScript).toContain('rm -f /etc/nginx/sites-enabled/default');
     expect(deployScript).toContain('DEPLOY_DOMAIN="${DEPLOY_DOMAIN:-jijiking.top}"');
     expect(deployScript).toContain('DEPLOY_LOF_PUBLIC_PATH="${DEPLOY_LOF_PUBLIC_PATH:-/lof}"');
     expect(deployScript).toContain('DEPLOY_HOME_ROOT="${DEPLOY_HOME_ROOT:-/srv/www/home}"');
-    expect(deployScript).toContain('VITE_BASE_PATH="${VITE_BASE_PATH:-$LOF_BASE_PATH}" npm run build');
+    expect(deployScript).toContain('npm run check:server');
     expect(deployScript).toContain('NGINX_SERVER_NAME="$DEPLOY_DOMAIN"');
     expect(deployScript).toContain('grep -Rsl "server_name ${DEPLOY_DOMAIN}"');
     expect(deployScript).toContain('NGINX_SERVER_NAME="_"');
     expect(deployScript).toContain('server_name ${NGINX_SERVER_NAME};');
     expect(deployScript).toContain('root ${HOME_ROOT};');
-    expect(deployScript).toContain('location = ${LOF_PUBLIC_PATH}');
-    expect(deployScript).toContain('location ^~ ${LOF_PUBLIC_PATH}/');
-    expect(deployScript).toContain('alias ${DEPLOY_PATH}/current/dist/;');
-    expect(deployScript).toContain('try_files \\$uri \\$uri/ ${LOF_PUBLIC_PATH}/index.html;');
-    expect(deployScript).toContain('Environment=PUBLIC_BASE_PATH=${LOF_PUBLIC_PATH}/');
+    expect(deployScript).toContain('location ^~ ${LOF_PUBLIC_PATH}/api/');
+    expect(deployScript).not.toContain('VITE_BASE_PATH');
+    expect(deployScript).not.toContain('current/dist');
 
     expect(nginxDefault).toContain('default_server');
     expect(nginxDefault).toContain('server_name jijiking.top');
     expect(nginxDefault).toContain('root /srv/www/home;');
-    expect(nginxDefault).toContain('location = /lof');
-    expect(nginxDefault).toContain('location ^~ /lof/');
-    expect(nginxDefault).toContain('alias /srv/lof/current/dist/;');
-    expect(nginxDefault).toContain('try_files $uri $uri/ /lof/index.html;');
+    expect(nginxDefault).toContain('location ^~ /lof/api/');
+    expect(nginxDefault).not.toContain('/srv/lof/current/dist');
 
-    expect(viteConfig).toContain("base: process.env.VITE_BASE_PATH || '/'");
-    expect(serverIndex).toContain('app.use(publicBasePath, express.static(distPath));');
+    expect(serverIndex).toContain("app.use('/api', apiRouter);");
+    expect(serverIndex).not.toContain('createViteServer');
+    expect(serverIndex).not.toContain('express.static');
   });
 
-  it('prevents stale index html from surviving after deploy while keeping hashed assets cacheable', () => {
+  it('keeps root homepage cache policy outside the LOF API service', () => {
     expect(deployScript).toContain('Cache-Control "no-store, no-cache, must-revalidate"');
-    expect(deployScript).toContain('expires 30d');
-    expect(deployScript).toContain('immutable');
+    expect(deployScript).not.toContain('dist/assets');
 
     expect(nginxDefault).toContain('Cache-Control "no-store, no-cache, must-revalidate"');
-    expect(nginxDefault).toContain('expires 30d');
-    expect(nginxDefault).toContain('immutable');
+    expect(nginxDefault).not.toContain('/lof/assets/');
   });
 
   it('stores visitor analytics outside release directories', () => {
@@ -52,7 +46,7 @@ describe('deployment nginx configuration', () => {
     expect(deployScript).toContain('Environment=VISITOR_ANALYTICS_FILE=${DEPLOY_PATH}/shared/visitor-analytics.json');
   });
 
-  it('checks SSH access before running build and upload work', () => {
+  it('checks SSH access before running checks and upload work', () => {
     expect(deployScript).toContain('check_ssh_connection');
     expect(deployScript).toContain('==> Checking SSH access');
     expect(deployScript).toContain('SSH preflight failed');
@@ -62,6 +56,11 @@ describe('deployment nginx configuration', () => {
 
   it('smoke tests the deployed LOF API before reporting success', () => {
     expect(deployScript).toContain('DEPLOY_SMOKE_URL');
+    expect(deployScript).toContain('verify_fund_list_api');
+    expect(deployScript).toContain('/api/funds?category=LOF&force=1');
+    expect(deployScript).toContain('${LOF_PUBLIC_PATH}/api/funds?category=LOF');
+    expect(deployScript).toContain('response is not JSON');
+    expect(deployScript).toContain('missingSource.length');
     expect(deployScript).toContain('/api/funds/quotes?category=LOF&trends=0&force=1');
     expect(deployScript).toContain('LOF API smoke test failed');
     expect(deployScript).toContain('rowCount !== 285');
@@ -95,8 +94,6 @@ describe('deployment nginx configuration', () => {
   });
 
   it('smoke tests deployed analytics and admin routes before reporting success', () => {
-    expect(deployScript).toContain('${LOF_PUBLIC_PATH}/admin');
-    expect(deployScript).toContain('LOF admin page smoke test failed');
     expect(deployScript).toContain('/api/analytics/visit');
     expect(deployScript).toContain('"project":"lof"');
     expect(deployScript).toContain('"project":"personal"');

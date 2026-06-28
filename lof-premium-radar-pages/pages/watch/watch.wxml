@@ -1,0 +1,46 @@
+<view class="mobile-shell">
+  <data-status-bar
+    meta="{{meta}}"
+    paused="{{false}}"
+    error="{{pollingError}}"
+    last-success-at="{{lastSuccessAt}}"
+    abnormal-count="{{abnormalCount}}"
+    next-refresh-in="{{null}}"
+  />
+
+  <view class="sticky-tools" aria-label="自选筛选工具">
+    <search-bar value="{{query}}" bind:change="handleSearchChange" />
+    <sort-bar
+      value="{{excludePausedPurchase}}"
+      market-value="{{marketFilter}}"
+      bind:change="handleExcludePausedChange"
+      bind:marketchange="handleMarketFilterChange"
+    />
+  </view>
+
+  <view class="home-table-frame">
+    <radar-table
+      rows="{{visibleFunds}}"
+      loading="{{initialLoading}}"
+      sort-key="{{sortKey}}"
+      sort-direction="{{sortDirection}}"
+      favorite-codes="{{favoriteCodes}}"
+      pulse-code="{{pulseCode}}"
+      data-version="{{dataVersion}}"
+      total-count="{{visibleTotalCount}}"
+      has-more="{{hasMoreFunds}}"
+      reset-token="{{tableResetToken}}"
+      show-back-top="{{showTableBackTop}}"
+      show-estimated-nav="{{showEstimatedNav}}"
+      bind:sort="handleTableSort"
+      bind:select="handleSelectFund"
+      bind:togglefavorite="toggleFavorite"
+      bind:loadmore="handleLoadMoreFunds"
+      bind:backtop="scrollPageToTop"
+    />
+  </view>
+
+  <view class="bottom-safe-area"></view>
+
+  <view wx:if="{{toastText}}" class="watch-toast" role="status">{{toastText}}</view>
+</view>

@@ -7,10 +7,7 @@ const FUND_KEYWORDS = /ETF|LOF|QDII|纳指|标普|恒生|日经|美股|港股|�
 
 export async function fetchSinaQuotes({ signal } = {}) {
   const directory = await fetchFundDirectory({ signal });
-  const rows = [];
-  for (const group of chunk(directory, 120)) {
-    rows.push(...(await fetchSinaBatch(group, signal)));
-  }
+  const rows = (await Promise.all(chunk(directory, 120).map((group) => fetchSinaBatch(group, signal)))).flat();
   if (!rows.length) throw new Error('新浪行情返回空数组');
   return rows;
 }

@@ -1,0 +1,8 @@
+<view class="data-status {{warning ? 'warning' : ''}} {{paused ? 'paused' : ''}}" aria-label="数据更新时间">
+  <view class="time-label">
+    <view class="status-dot"></view>
+    <text>数据更新时间</text>
+    <text class="time-fade">{{timeText}}</text>
+  </view>
+  <text class="refresh-countdown">{{refreshText}}</text>
+</view>

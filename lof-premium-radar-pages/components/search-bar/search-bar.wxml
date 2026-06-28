@@ -1,0 +1,13 @@
+<view class="mobile-search">
+  <view class="search-field">
+    <view class="search-icon"></view>
+    <input
+      class="search-input"
+      value="{{value}}"
+      type="text"
+      confirm-type="search"
+      placeholder="名称/代码"
+      bindinput="handleInput"
+    />
+  </view>
+</view>

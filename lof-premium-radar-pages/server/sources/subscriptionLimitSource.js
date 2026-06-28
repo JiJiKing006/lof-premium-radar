@@ -1,8 +1,9 @@
 import { cache, cacheTtl } from '../services/cacheService.js';
 import { normalizeCode, toNumber } from '../services/fundNormalizer.js';
-import { recordSourceFailure, recordSourceSuccess } from '../services/sourceHealth.js';
+import { formatShanghaiTime, recordSourceFailure, recordSourceSuccess } from '../services/sourceHealth.js';
 
 const SOURCE_URL = 'https://fund.eastmoney.com/Data/Fund_JJJZ_Data.aspx';
+let allLimitsInFlight = null;
 
 export async function fetchSubscriptionLimitMap(codes, { force = false } = {}) {
   const normalizedCodes = new Set((codes || []).map(normalizeCode).filter(Boolean));
@@ -18,7 +19,15 @@ async function fetchAllSubscriptionLimits({ force = false } = {}) {
     const cached = cache.get(cacheKey);
     if (cached) return cached;
   }
+  if (allLimitsInFlight) return allLimitsInFlight;
 
+  allLimitsInFlight = loadAllSubscriptionLimits(cacheKey).finally(() => {
+    allLimitsInFlight = null;
+  });
+  return allLimitsInFlight;
+}
+
+async function loadAllSubscriptionLimits(cacheKey) {
   const startedAt = Date.now();
   try {
     const url = new URL(SOURCE_URL);
@@ -39,7 +48,8 @@ async function fetchAllSubscriptionLimits({ force = false } = {}) {
     if (!response.ok) throw new Error(`天天基金申购状态返回 ${response.status}`);
     const text = await response.text();
     const data = parseReData(text);
-    const map = new Map((data.datas || []).map(normalizeLimit).filter(Boolean).map((item) => [item.code, item]));
+    const updateTime = formatShanghaiTime();
+    const map = new Map((data.datas || []).map((row) => normalizeLimit(row, updateTime)).filter(Boolean).map((item) => [item.code, item]));
     if (!map.size) throw new Error('天天基金申购状态返回空数组');
     recordSourceSuccess('tiantian-subscription', Date.now() - startedAt);
     return cache.set(cacheKey, map, cacheTtl.fundList);
@@ -53,7 +63,7 @@ function parseReData(text) {
   return Function(`${text}; return reData;`)();
 }
 
-function normalizeLimit(row) {
+function normalizeLimit(row, updateTime) {
   const code = normalizeCode(row[0]);
   if (!code) return null;
   const status = clean(row[5]);
@@ -67,13 +77,14 @@ function normalizeLimit(row) {
     state,
     label: limitText,
     limitText,
-    purchaseStatus: status || '未知',
-    redemptionStatus: redemptionStatus || '未知',
+    purchaseStatus: status || '暂无数据',
+    redemptionStatus: redemptionStatus || '暂无数据',
     minPurchase,
     dailyLimit,
     fee: clean(row[12]),
     navDate: normalizeShortDate(row[4]),
     source: 'tiantian',
+    updateTime,
   };
 }
 
@@ -81,14 +92,16 @@ function normalizeState(status) {
   if (/暂停|停止|封闭|终止|失败/.test(status)) return 'paused';
   if (/限|大额/.test(status)) return 'limited';
   if (/开放/.test(status)) return 'open';
-  return 'unknown';
+  if (/场内交易/.test(status)) return 'exchange';
+  return status ? 'reported' : 'unavailable';
 }
 
 function buildLimitText(status, dailyLimit) {
-  if (!status) return '未知';
+  if (!status) return '暂无数据';
   if (/场内交易/.test(status)) return '场内交易';
   if (/暂停|停止|封闭|终止|失败/.test(status)) return status;
-  if (/限|大额/.test(status)) return dailyLimit !== null ? `${status} ${moneyText(dailyLimit)}` : status;
+  if (dailyLimit !== null && Number(dailyLimit) >= 800_000_000) return '不限额';
+  if (/限|大额/.test(status)) return dailyLimit !== null ? `限${moneyText(dailyLimit)}` : compactLimitStatus(status);
   if (/开放/.test(status)) {
     const limitText = dailyLimit !== null ? moneyText(dailyLimit) : '';
     return /无限额|不限额/.test(limitText) ? '不限额' : status;
@@ -100,9 +113,15 @@ function moneyText(value) {
   const number = Number(value);
   if (!Number.isFinite(number) || number < 0) return '---';
   if (number >= 800_000_000) return '无限额';
-  if (number < 10_000) return `${trimNumber(number)}元`;
-  if (number < 100_000_000) return `${trimNumber(number / 10_000)}万`;
-  return `${trimNumber(number / 100_000_000)}亿`;
+  if (number <= 10_000) return `${trimNumber(number)}元`;
+  return `${trimNumber(number / 10_000)}万`;
+}
+
+function compactLimitStatus(status) {
+  const match = String(status || '').match(/(\d+(?:\.\d+)?)\s*(亿|万|元)/);
+  if (!match) return '限额';
+  const scale = match[2] === '亿' ? 100_000_000 : match[2] === '万' ? 10_000 : 1;
+  return `限${moneyText(Number(match[1]) * scale)}`;
 }
 
 function trimNumber(value) {

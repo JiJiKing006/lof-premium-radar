@@ -1,18 +1,41 @@
-const QDII_KEYWORDS = ['QDII', '纳指', '纳斯达克', '标普', '恒生科技', '恒生', '日经', '美股', '美国', '港股', '海外', '德国', '法国'];
+const QDII_KEYWORDS = [
+  'QDII',
+  '纳指',
+  '纳斯达克',
+  '标普',
+  '道琼斯',
+  '恒生科技',
+  '恒生',
+  'H股',
+  '日经',
+  '美股',
+  '美国',
+  '港股',
+  '港美',
+  '香港',
+  '海外',
+  '全球',
+  '国际',
+  '德国',
+  '法国',
+  '亚太',
+  '印度',
+  '越南',
+  '原油',
+  '石油',
+  '油气',
+  '白银',
+  '黄金',
+  '商品',
+];
 const ETF_KEYWORDS = ['ETF'];
 const LOF_KEYWORDS = ['LOF'];
-const CATEGORY_OVERRIDES_BY_CODE = new Map([
-  ['160644', 'LOF'],
-]);
 
 export function normalizeCategory(row = {}) {
-  const codeOverride = CATEGORY_OVERRIDES_BY_CODE.get(normalizeCode(row.code || row.fundCode || row.f12));
-  if (codeOverride) return codeOverride;
-
   const fieldText = upper(row.category, row.fundType, row.securityType, row.marketType);
   if (fieldText.includes('QDII')) return 'QDII';
-  if (fieldText.includes('LOF')) return 'LOF';
   if (fieldText.includes('ETF')) return 'ETF';
+  if (fieldText.includes('LOF')) return 'LOF';
 
   const nameText = upper(row.name, row.fundName, row.indexName);
   if (includesAny(nameText, QDII_KEYWORDS)) return 'QDII';

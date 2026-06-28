@@ -6,8 +6,10 @@ import { recordSourceFailure, recordSourceSuccess } from './sourceHealth.js';
 import { fetchAkshareQuotes } from '../sources/akshareSource.js';
 import { fetchEastmoneyQuotes } from '../sources/eastmoneySource.js';
 import { fetchHaoetfQuotes } from '../sources/haoetfSource.js';
+import { fetchJisiluQdiiSnapshot } from '../sources/jisiluQdiiProvider.js';
 import { fetchPalmmicroLofReferenceRows } from '../sources/palmmicroSource.js';
 import { fetchSinaQuotes } from '../sources/sinaSource.js';
+import { fetchSinaQuoteMap } from '../sources/sinaSupplementSource.js';
 import { normalizeCategory as normalizeFundCategory, normalizeCode, normalizeMarket } from './fundNormalizer.js';
 import { formatShanghaiTime } from './sourceHealth.js';
 
@@ -17,36 +19,68 @@ const LOCAL_LOF_REFERENCE_PATH = path.resolve(__dirname, '../../data/lof.json');
 const LOF_REFERENCE_CACHE_KEY = 'lof-reference-rows';
 const QDII_EXCLUDED_NAME_PATTERN = /黄金|贵金属|GOLD/i;
 const QUOTE_STALE_MAX_AGE_MS = 2 * 60_000;
-const QUOTE_FRESH_BUDGET_MS = 2_100;
-const SOURCE_TIMEOUT_MS = 1_200;
-const LOF_REFERENCE_TIMEOUT_MS = 700;
+const QUOTE_FRESH_BUDGET_MS = 800;
+const SOURCE_TIMEOUT_MS = 700;
+const FAST_LOF_TIMEOUT_MS = 680;
+const LOF_REFERENCE_TIMEOUT_MS = 900;
 
-export async function getQuotes({ category = 'LOF', force = false } = {}) {
+export async function getQuotes({ category = 'LOF', force = false, budgetMs = QUOTE_FRESH_BUDGET_MS } = {}) {
   const normalizedCategory = normalizeCategory(category);
   const cacheKey = `quotes:${normalizedCategory}`;
+  const inFlightKey = `${cacheKey}:${budgetMs > QUOTE_FRESH_BUDGET_MS ? 'warm' : 'fast'}`;
   if (!force) {
     const cached = cache.get(cacheKey);
     if (cached) return cached;
   }
 
-  if (inFlight.has(cacheKey)) return inFlight.get(cacheKey);
+  if (inFlight.has(inFlightKey)) return inFlight.get(inFlightKey);
 
-  const promise = fetchFreshQuotes(normalizedCategory, cacheKey).finally(() => {
-    inFlight.delete(cacheKey);
+  const promise = fetchFreshQuotes(normalizedCategory, cacheKey, budgetMs).finally(() => {
+    inFlight.delete(inFlightKey);
   });
-  inFlight.set(cacheKey, promise);
+  inFlight.set(inFlightKey, promise);
 
   return promise;
 }
 
-async function fetchFreshQuotes(category, cacheKey) {
+async function fetchFreshQuotes(category, cacheKey, budgetMs) {
   const sources = sourcePlan(category);
   const errors = [];
-  const deadline = Date.now() + QUOTE_FRESH_BUDGET_MS;
+  const deadline = Date.now() + budgetMs;
+  const sourceTimeoutMs = budgetMs > QUOTE_FRESH_BUDGET_MS ? 2_800 : SOURCE_TIMEOUT_MS;
   const referenceRows = category === 'LOF' ? await loadLofReferenceRows(errors, { deadline }) : [];
   const referenceCodes = referenceRows.length
     ? new Set(referenceRows.map((row) => normalizeCode(row.code)).filter(Boolean))
     : null;
+
+  if (category === 'LOF' && referenceRows.length) {
+    try {
+      const fastLofTimeoutMs = budgetMs > QUOTE_FRESH_BUDGET_MS ? 5_000 : FAST_LOF_TIMEOUT_MS;
+      const fastRows = await fetchSourceRows({
+        name: 'sina-direct',
+        fetcher: ({ signal }) => fetchSinaQuoteMap([...referenceCodes], { force: true, signal })
+          .then((map) => [...map.values()]),
+      }, Math.min(fastLofTimeoutMs, remainingBudget(deadline)));
+      const categoryRows = filterRowsForCategory(fastRows, category, { referenceCodes });
+      if (categoryRows.length) {
+        const payload = {
+          rows: completeLofReferenceRows(categoryRows, referenceRows).map((row) => ({
+            ...row,
+            category,
+            sourceStatus: row.sourceStatus || 'fallback',
+          })),
+          source: 'sina-direct',
+          sourceStatus: 'fallback',
+          hasNav: false,
+          errors,
+        };
+        return cache.set(cacheKey, payload, cacheTtl.quotes);
+      }
+      errors.push('sina-direct: LOF 直接行情返回空数组');
+    } catch (error) {
+      errors.push(`sina-direct: ${error.message || error}`);
+    }
+  }
 
   for (const source of sources) {
     const remainingMs = remainingBudget(deadline);
@@ -56,7 +90,7 @@ async function fetchFreshQuotes(category, cacheKey) {
     }
     const startedAt = Date.now();
     try {
-      const rows = await fetchSourceRows(source, Math.min(SOURCE_TIMEOUT_MS, remainingMs));
+      const rows = await fetchSourceRows(source, Math.min(sourceTimeoutMs, remainingMs));
       const categoryRows = filterRowsForCategory(rows, category, { referenceCodes });
       if (!Array.isArray(categoryRows) || !categoryRows.length) throw new Error(`${source.name} ${category} 返回空数组`);
       const completedRows = category === 'LOF' ? completeLofReferenceRows(categoryRows, referenceRows) : categoryRows;
@@ -92,6 +126,14 @@ async function fetchFreshQuotes(category, cacheKey) {
   return cache.set(cacheKey, buildUnavailableQuotePayload(category, referenceRows, errors), cacheTtl.indices);
 }
 
+export async function warmQuoteCaches() {
+  return Promise.allSettled(['LOF', 'QDII', 'ETF'].map((category) => getQuotes({
+    category,
+    force: true,
+    budgetMs: 6_000,
+  })));
+}
+
 export function filterRowsForCategory(rows, category, options = {}) {
   if (!Array.isArray(rows)) return [];
   if (category === 'ALL') return rows;
@@ -106,17 +148,28 @@ export function filterRowsForCategory(rows, category, options = {}) {
 export function sourcePlan(category) {
   if (category === 'LOF') {
     return [
-      { name: 'eastmoney', status: 'primary', hasNav: false, fetcher: fetchEastmoneyQuotes },
-      { name: 'sina', status: 'fallback', hasNav: false, fetcher: fetchSinaQuotes },
+      { name: 'sina', status: 'primary', hasNav: false, fetcher: fetchSinaQuotes },
+      { name: 'eastmoney', status: 'fallback', hasNav: false, fetcher: fetchEastmoneyQuotes },
       { name: 'akshare', status: 'fallback', hasNav: false, fetcher: fetchAkshareQuotes },
     ];
   }
   if (category === 'QDII' || category === 'ETF') {
-    return [
-      { name: 'eastmoney', status: 'primary', hasNav: false, fetcher: fetchEastmoneyQuotes },
+    const sharedFallbacks = [
       { name: 'sina', status: 'fallback', hasNav: false, fetcher: fetchSinaQuotes },
-      { name: 'haoetf', status: 'fallback', hasNav: true, fetcher: (options) => fetchHaoetfQuotes(category, options) },
       { name: 'akshare', status: 'fallback', hasNav: false, fetcher: fetchAkshareQuotes },
+    ];
+    if (category === 'QDII') {
+      return [
+        { name: 'jisilu', status: 'primary', hasNav: true, fetcher: (options) => fetchJisiluQdiiSnapshot({ section: 'qdii', ...options }).then((snapshot) => snapshot.rows || []) },
+        { name: 'haoetf', status: 'fallback', hasNav: true, fetcher: (options) => fetchHaoetfQuotes(category, options) },
+        { name: 'eastmoney', status: 'fallback', hasNav: false, fetcher: fetchEastmoneyQuotes },
+        ...sharedFallbacks,
+      ];
+    }
+    return [
+      { name: 'haoetf', status: 'primary', hasNav: true, fetcher: (options) => fetchHaoetfQuotes(category, options) },
+      { name: 'eastmoney', status: 'fallback', hasNav: false, fetcher: fetchEastmoneyQuotes },
+      ...sharedFallbacks,
     ];
   }
   return [
@@ -137,6 +190,15 @@ async function loadLofReferenceRows(errors, { deadline = Date.now() + LOF_REFERE
   if (cached) return cached;
 
   const localRows = loadLocalLofReferenceRows();
+  if (localRows.length) {
+    const immediate = cache.set(LOF_REFERENCE_CACHE_KEY, localRows, cacheTtl.fundList);
+    refreshRemoteLofReferenceRows(localRows).catch(() => {});
+    return immediate;
+  }
+  return refreshRemoteLofReferenceRows([], errors, deadline);
+}
+
+async function refreshRemoteLofReferenceRows(localRows, errors = null, deadline = Date.now() + LOF_REFERENCE_TIMEOUT_MS) {
   const startedAt = Date.now();
   try {
     const rows = await fetchWithTimeout(
@@ -148,7 +210,7 @@ async function loadLofReferenceRows(errors, { deadline = Date.now() + LOF_REFERE
     recordSourceSuccess('palmmicro', Date.now() - startedAt);
     return cache.set(LOF_REFERENCE_CACHE_KEY, mergeLofReferenceRows(referenceRows, localRows), cacheTtl.fundList);
   } catch (error) {
-    errors.push(`palmmicro-reference: ${error.message || error}`);
+    if (errors) errors.push(`palmmicro-reference: ${error.message || error}`);
     recordSourceFailure('palmmicro', error, Date.now() - startedAt);
     if (localRows.length) return cache.set(LOF_REFERENCE_CACHE_KEY, localRows, cacheTtl.fundList);
     return [];
@@ -274,7 +336,7 @@ function buildMissingLofQuoteRow(reference, updateTime) {
     changeRate: null,
     volume: null,
     turnover: null,
-    purchaseLimit: { state: 'unknown', label: '未知' },
+    purchaseLimit: { state: 'unavailable', label: '暂无数据', limitText: '暂无数据' },
     source: 'quote-missing',
     sourceStatus: 'missing',
     dataStatus: 'missing_quote',

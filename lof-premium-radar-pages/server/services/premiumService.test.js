@@ -2,12 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { calculatePremium } from './premiumService.js';
 
 describe('premiumService', () => {
-  it('uses estimated nav before official nav when calculating premium', () => {
+  it('uses only official nav when calculating premium', () => {
     const result = calculatePremium({ marketPrice: 1.25, estimatedNav: 1.2, lastNav: 1.1 });
 
-    expect(result.premiumRate).toBeCloseTo(4.1667, 4);
-    expect(result.basis).toBe('estimatedNav');
-    expect(result.note).toBe('基于估算净值');
+    expect(result.premiumRate).toBeCloseTo(13.6364, 4);
+    expect(result.basis).toBe('lastNav');
+    expect(result.note).toBe('基于已公布官方净值');
   });
 
   it('falls back to official nav and marks the result as non realtime estimate', () => {
@@ -15,10 +15,10 @@ describe('premiumService', () => {
 
     expect(result.premiumRate).toBeCloseTo(4.1667, 4);
     expect(result.basis).toBe('lastNav');
-    expect(result.note).toBe('基于已公布净值，非实时估算');
+    expect(result.note).toBe('基于已公布官方净值');
   });
 
-  it('uses the preferred supplemental estimate when calculating realtime premium', () => {
+  it('keeps the preferred supplemental estimate separate from official premium', () => {
     const result = calculatePremium({
       marketPrice: 1.25,
       estimatedNav: 1.2,
@@ -30,7 +30,7 @@ describe('premiumService', () => {
       lastNav: 1.1,
     });
 
-    expect(result.premiumRate).toBeCloseTo(5.9322, 4);
+    expect(result.premiumRate).toBeCloseTo(13.6364, 4);
     expect(result.estimatedNav).toBe(1.18);
     expect(result.selectedNavSource).toBe('tiantian');
     expect(result.estimateConfidence).toBe('low');
@@ -47,7 +47,7 @@ describe('premiumService', () => {
       lastNav: 1.1,
     });
 
-    expect(result.premiumRate).toBeCloseTo(4.0799, 4);
+    expect(result.premiumRate).toBeCloseTo(13.6364, 4);
     expect(result.estimatedNav).toBe(1.201);
     expect(result.estimateConfidence).toBe('high');
     expect(result.estimateWarning).toBe('');

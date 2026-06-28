@@ -1,0 +1,12 @@
+<view class="filter-tabs" aria-label="筛选">
+  <button
+    wx:for="{{filters}}"
+    wx:key="key"
+    type="button"
+    class="filter-tab-button {{value === item.key ? 'active' : ''}}"
+    data-key="{{item.key}}"
+    bindtap="handleTap"
+  >
+    {{item.label}}
+  </button>
+</view>

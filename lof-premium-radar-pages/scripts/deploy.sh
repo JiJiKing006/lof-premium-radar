@@ -30,7 +30,6 @@ DEPLOY_VISITOR_ANALYTICS_TARGET_TOTAL="${DEPLOY_VISITOR_ANALYTICS_TARGET_TOTAL:-
 DEPLOY_VISITOR_ANALYTICS_GROWTH_START_DATE="${DEPLOY_VISITOR_ANALYTICS_GROWTH_START_DATE:-2026-06-07}"
 LOF_PUBLIC_PATH="/${DEPLOY_LOF_PUBLIC_PATH#/}"
 LOF_PUBLIC_PATH="${LOF_PUBLIC_PATH%/}"
-LOF_BASE_PATH="${LOF_PUBLIC_PATH}/"
 
 if [[ -z "$DEPLOY_HOST" ]]; then
   cat <<EOF >&2
@@ -120,22 +119,18 @@ check_ssh_connection
 
 echo "==> Checking project"
 cd "$ROOT_DIR"
-npm run typecheck
+npm run check:server
 if [[ "$DEPLOY_SKIP_TESTS" != "1" ]]; then
   npm run test
 fi
-
-echo "==> Building"
-VITE_BASE_PATH="${VITE_BASE_PATH:-$LOF_BASE_PATH}" npm run build
 
 echo "==> Packing release"
 tar \
   --exclude='.git' \
   --exclude='node_modules' \
   --exclude='.cache' \
-  --exclude='dist/.vite' \
   -czf "$ARCHIVE" \
-  dist server data public package.json package-lock.json nginx-default.conf .nojekyll .spa
+  server data package.json package-lock.json nginx-default.conf
 
 echo "==> Uploading to $REMOTE:$DEPLOY_PATH"
 ssh "${SSH_OPTS[@]}" "$REMOTE" "mkdir -p '$DEPLOY_PATH/releases' '$DEPLOY_PATH/shared' '$DEPLOY_STATIC_ROOT' '$DEPLOY_HOME_ROOT'"
@@ -393,9 +388,9 @@ Environment=NODE_ENV=production
 Environment=PORT=${APP_PORT}
 Environment=ADMIN_PASSWORD=${ADMIN_PASSWORD}
 Environment=VISITOR_ANALYTICS_FILE=${DEPLOY_PATH}/shared/visitor-analytics.json
+Environment=FUND_SNAPSHOT_FILE=${DEPLOY_PATH}/shared/fund-snapshots.json
 Environment=VISITOR_ANALYTICS_TARGET_TOTAL=${DEPLOY_VISITOR_ANALYTICS_TARGET_TOTAL}
 Environment=VISITOR_ANALYTICS_GROWTH_START_DATE=${DEPLOY_VISITOR_ANALYTICS_GROWTH_START_DATE}
-Environment=PUBLIC_BASE_PATH=${LOF_PUBLIC_PATH}/
 ExecStart=/usr/bin/env node server/index.js
 Restart=always
 RestartSec=5
@@ -422,22 +417,14 @@ server {
         add_header Cache-Control "no-store";
     }
 
-    location = ${LOF_PUBLIC_PATH} {
-        return 301 ${LOF_PUBLIC_PATH}/;
-    }
-
-    location ^~ ${LOF_PUBLIC_PATH}/assets/ {
-        alias ${DEPLOY_PATH}/current/dist/assets/;
-        try_files \$uri =404;
-        expires 30d;
-        add_header Cache-Control "public, max-age=2592000, immutable";
-    }
-
-    location ^~ ${LOF_PUBLIC_PATH}/ {
-        alias ${DEPLOY_PATH}/current/dist/;
-        index index.html;
-        try_files \$uri \$uri/ ${LOF_PUBLIC_PATH}/index.html;
-        add_header Cache-Control "no-store, no-cache, must-revalidate";
+    location ^~ ${LOF_PUBLIC_PATH}/api/ {
+        proxy_pass http://127.0.0.1:${APP_PORT}/api/;
+        proxy_http_version 1.1;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        add_header Cache-Control "no-store";
     }
 
     include ${STATIC_INCLUDE_DIR}/*.conf;
@@ -453,6 +440,28 @@ server {
 }
 EOF
 
+# Preserve the currently serving verified snapshot before restarting into the
+# new release, so the first public request never waits for external sources.
+snapshot_seed="$(mktemp)"
+if curl -fsS --max-time 5 "http://127.0.0.1:${APP_PORT}/api/funds/quotes?category=ALL&trends=0" >"$snapshot_seed" 2>/dev/null; then
+  SNAPSHOT_INPUT="$snapshot_seed" \
+  SNAPSHOT_OUTPUT="$DEPLOY_PATH/shared/fund-snapshots.json" \
+  node <<'EOF'
+const fs = require('fs');
+const payload = JSON.parse(fs.readFileSync(process.env.SNAPSHOT_INPUT, 'utf8'));
+const rows = Array.isArray(payload?.rows) ? payload.rows : [];
+const categories = new Set(rows.map((row) => String(row.category || row.fundType || '').toUpperCase()));
+if (rows.length >= 120 && categories.has('LOF') && categories.has('QDII') && categories.has('ETF')) {
+  fs.writeFileSync(process.env.SNAPSHOT_OUTPUT, JSON.stringify({
+    version: 1,
+    savedAt: new Date().toISOString(),
+    snapshots: { 'fund-quotes:snapshot:ALL:trends:0': payload },
+  }));
+}
+EOF
+fi
+rm -f "$snapshot_seed"
+
 systemctl daemon-reload
 systemctl enable "$DEPLOY_SERVICE"
 systemctl restart "$DEPLOY_SERVICE"
@@ -465,7 +474,44 @@ find "$DEPLOY_PATH/releases" -mindepth 1 -maxdepth 1 -type d | sort | head -n -5
 systemctl --no-pager --full status "$DEPLOY_SERVICE" | sed -n '1,12p'
 REMOTE_SCRIPT
 
+verify_fund_list_api() {
+  local url="$1"
+  local label="$2"
+  curl -fsS --max-time 30 "$url" | FUND_LIST_LABEL="$label" node -e '
+let input = "";
+process.stdin.on("data", (chunk) => { input += chunk; });
+process.stdin.on("end", () => {
+  let payload;
+  try {
+    payload = JSON.parse(input);
+  } catch {
+    console.error(`${process.env.FUND_LIST_LABEL} smoke test failed: response is not JSON`);
+    process.exit(1);
+  }
+  const rows = Array.isArray(payload?.rows) ? payload.rows : [];
+  const rowCount = Number(payload?.meta?.rowCount ?? rows.length ?? 0);
+  const missingSource = rows.filter((row) => !row.source || !row.updateTime);
+  if (payload?.meta?.status !== "ok" || rowCount <= 0 || rows.length <= 0 || missingSource.length) {
+    console.error(`${process.env.FUND_LIST_LABEL} smoke test failed: deployed fund list is incomplete`);
+    console.error(JSON.stringify({
+      status: payload?.meta?.status,
+      rowCount,
+      rowsLength: rows.length,
+      missingSource: missingSource.slice(0, 5).map((row) => ({ code: row.code, name: row.name })),
+      sourceProvider: payload?.meta?.sourceProvider,
+      sourceStatus: payload?.meta?.sourceStatus,
+      warn: payload?.meta?.warn,
+    }, null, 2));
+    process.exit(1);
+  }
+  console.log(`${process.env.FUND_LIST_LABEL} smoke test passed: rowCount=${rowCount}`);
+});
+'
+}
+
 verify_lof_api() {
+  verify_fund_list_api "${DEPLOY_SMOKE_URL%/}/api/funds?category=LOF&force=1" "root /api/funds"
+  verify_fund_list_api "${DEPLOY_SMOKE_URL%/}${LOF_PUBLIC_PATH}/api/funds?category=LOF" "${LOF_PUBLIC_PATH}/api/funds"
   curl -fsS --max-time 60 "${DEPLOY_SMOKE_URL%/}/api/funds/quotes?category=LOF&trends=0&force=1" | node -e '
 let input = "";
 process.stdin.on("data", (chunk) => { input += chunk; });
@@ -522,19 +568,6 @@ for attempt in $(seq 1 5); do
   echo "LOF API smoke test retrying: attempt ${attempt}/5" >&2
   sleep 3
 done
-
-echo "==> Verifying deployed LOF admin page"
-curl -fsS --max-time 20 "${DEPLOY_SMOKE_URL%/}${LOF_PUBLIC_PATH}/admin" | node -e '
-let input = "";
-process.stdin.on("data", (chunk) => { input += chunk; });
-process.stdin.on("end", () => {
-  if (!input.includes("id=\"app\"") || !input.includes("/lof/assets/")) {
-    console.error("LOF admin page smoke test failed");
-    process.exit(1);
-  }
-  console.log("LOF admin page smoke test passed");
-});
-'
 
 echo "==> Verifying deployed analytics/admin APIs"
 curl -fsS --max-time 20 \
@@ -607,4 +640,4 @@ process.stdin.on("end", () => {
 
 echo "==> Deployed"
 echo "Homepage URL: ${DEPLOY_SMOKE_URL%/}/"
-echo "LOF URL: ${DEPLOY_SMOKE_URL%/}${LOF_PUBLIC_PATH}/"
+echo "LOF API URL: ${DEPLOY_SMOKE_URL%/}/api/funds/quotes"

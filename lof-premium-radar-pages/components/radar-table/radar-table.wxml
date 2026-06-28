@@ -1,0 +1,140 @@
+<view class="table-card board {{hasScrollable ? 'is-scrollable' : ''}} {{horizontalScrolled ? 'is-horizontally-scrolled' : ''}}" aria-label="观察表格">
+  <view class="table-meta board-topline">
+    <text class="table-title">观察表格</text>
+    <block wx:if="{{loading}}">
+      <text class="table-count">回显中</text>
+    </block>
+    <block wx:else>
+      <text class="table-count">{{rows.length}}</text>
+      <text>/ {{totalCount || rows.length}} 条记录</text>
+    </block>
+    <view class="table-tip">
+      <text>{{loading ? '数据加载期间展示骨架屏' : (hasMore ? '向下滑动加载更多' : '已显示全部')}}</text>
+      <text wx:if="{{updateTime}}" class="table-update-time">更新时间 {{updateTime}}</text>
+    </view>
+  </view>
+
+  <scroll-view
+    class="table-scroll table-wrap"
+    scroll-x
+    scroll-y
+    enhanced
+    bounces="{{false}}"
+    scroll-left="{{tableScrollLeft}}"
+    scroll-top="{{tableScrollTop}}"
+    lower-threshold="80"
+    show-scrollbar="{{true}}"
+    bindscroll="handleTableScroll"
+    bindscrolltolower="handleLoadMore"
+  >
+    <view class="table-grid" style="{{gridStyle}}">
+      <view class="thead">
+        <view class="tr">
+          <view
+            wx:for="{{columns}}"
+            wx:key="key"
+            class="th col-{{item.key}} {{item.key === 'favorite' ? 'frozen-favorite-column' : ''}} {{sortKey === item.key ? 'sorted-column' : ''}}"
+            style="{{item.style}}"
+          >
+            <button
+              wx:if="{{!item.disabled}}"
+              class="head-button"
+              type="button"
+              data-key="{{item.key}}"
+              bindtap="handleSort"
+            >
+              <text class="head-button-title">{{item.title}}</text>
+              <text class="head-button-icon">{{sortKey === item.key ? (sortDirection === 'asc' ? '↑' : '↓') : '↕'}}</text>
+            </button>
+            <text wx:else>{{item.title}}</text>
+          </view>
+        </view>
+      </view>
+      <view class="tbody">
+          <block wx:if="{{loading}}">
+            <view wx:for="{{skeletonRows}}" wx:key="*this" class="tr data-row skeleton-row">
+              <view class="td col-favorite frozen-favorite-column" style="{{columnStyles.favorite}}"><view class="skeleton-line skeleton-dot"></view></view>
+              <view class="td col-security"><view class="skeleton-line skeleton-name"></view><view class="skeleton-line skeleton-code"></view></view>
+              <view class="td col-premiumRate"><view class="skeleton-line skeleton-num"></view><view class="skeleton-line skeleton-note"></view></view>
+              <view class="td col-price"><view class="skeleton-line skeleton-num short"></view></view>
+              <view class="td col-changeRate"><view class="skeleton-line skeleton-num"></view></view>
+              <view class="td col-lastNav"><view class="skeleton-line skeleton-num short"></view><view class="skeleton-line skeleton-note"></view></view>
+              <view wx:if="{{showEstimatedNav}}" class="td col-estimatedNav"><view class="skeleton-line skeleton-num short"></view><view class="skeleton-line skeleton-note long"></view></view>
+            </view>
+          </block>
+          <view wx:elif="{{!rows.length}}" class="empty-state">没有匹配的数据</view>
+          <block wx:else>
+            <view
+              wx:for="{{rows}}"
+              wx:key="code"
+              class="tr data-row"
+              data-index="{{index}}"
+              bindtap="handleSelect"
+            >
+              <view class="td col-favorite frozen-favorite-column" style="{{columnStyles.favorite}}">
+                <button
+                  type="button"
+                  class="watch-button {{item.isFavorite ? 'active' : ''}} {{pulseCode === item.code ? 'burst' : ''}}"
+                  data-index="{{index}}"
+                  catchtap="handleFavorite"
+                >
+                  ★
+                </button>
+              </view>
+              <view class="td col-security" style="{{columnStyles.security}}">
+                <view class="fund-cell">
+                  <text class="fund-name">{{item.name}}</text>
+                  <view class="fund-code-line">
+                    <text class="fund-code">{{item.code}}</text>
+                    <text class="limit-pill limit-{{item.purchaseState}}">{{item.purchaseText}}</text>
+                  </view>
+                </view>
+              </view>
+              <view class="td col-premiumRate {{item.classes.premiumRate}} {{sortKey === 'premiumRate' ? 'sorted-column' : ''}} {{item.changedPremiumRate ? 'changed' : ''}}" style="{{columnStyles.premiumRate}}">
+                <text class="strong">{{item.display.premiumRate}}</text>
+                <text class="small">{{item.premiumNote || '暂无数据'}}</text>
+              </view>
+              <view class="td col-price {{item.classes.price}} {{sortKey === 'price' ? 'sorted-column' : ''}} {{item.changedMarketPrice ? 'changed' : ''}}" style="{{columnStyles.price}}">
+                <text class="strong">{{item.display.marketPrice}}</text>
+              </view>
+              <view class="td col-changeRate {{item.classes.changeRate}} {{sortKey === 'changeRate' ? 'sorted-column' : ''}} {{item.changedChangeRate ? 'changed' : ''}}" style="{{columnStyles.changeRate}}">
+                {{item.display.changeRate}}
+              </view>
+              <view class="td col-lastNav {{sortKey === 'lastNav' ? 'sorted-column' : ''}} {{item.changedLastNav ? 'changed' : ''}}" style="{{columnStyles.lastNav}}">
+                <text class="strong">{{item.display.lastNav}}</text>
+                <text class="small">{{item.display.lastNav === '净值未公布' ? '净值未公布' : item.display.navSource + ' ' + item.display.navDate}}</text>
+              </view>
+              <view wx:if="{{showEstimatedNav}}" class="td col-estimatedNav {{sortKey === 'estimatedNav' ? 'sorted-column' : ''}} {{item.changedEstimatedNav ? 'changed' : ''}}" style="{{columnStyles.estimatedNav}}">
+                <text class="strong">{{item.display.estimatedNav}}</text>
+                <text class="small">{{item.display.estimatedNav === '暂无数据' ? '暂无数据' : item.display.estimatedSource + ' ' + item.display.estimatedTime}}</text>
+              </view>
+            </view>
+          </block>
+      </view>
+      <view wx:if="{{!loading && rows.length && hasMore}}" class="load-more-state">
+        <button
+          type="button"
+          class="load-more-button"
+          loading="{{loadingMore}}"
+          disabled="{{loadingMore}}"
+          bindtap="handleLoadMore"
+        >
+          {{loadingMore ? '加载中…' : '加载更多'}}
+        </button>
+      </view>
+      <view wx:if="{{!loading && rows.length && !hasMore}}" class="load-more-state done">已显示全部匹配数据</view>
+      <view class="load-more-sentinel" aria-hidden="true"></view>
+    </view>
+  </scroll-view>
+  <button
+    wx:if="{{internalShowBackTop || showBackTop}}"
+    type="button"
+    class="table-back-top-button"
+    aria-label="回到表格顶部"
+    bindtap="scrollTableToTop"
+  >
+    <text class="back-top-arrow">↑</text>
+    <text>顶部</text>
+  </button>
+  <view class="table-scroll-hint">横向滑动查看更多字段</view>
+</view>

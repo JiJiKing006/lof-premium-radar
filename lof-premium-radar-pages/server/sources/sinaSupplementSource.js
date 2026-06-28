@@ -4,7 +4,7 @@ import { recordSourceFailure, recordSourceSuccess } from '../services/sourceHeal
 
 const QUOTE_STALE_MAX_AGE_MS = 2 * 60_000;
 
-export async function fetchSinaQuoteMap(codes, { force = false } = {}) {
+export async function fetchSinaQuoteMap(codes, { force = false, signal } = {}) {
   const normalizedCodes = [...new Set((codes || []).map(normalizeCode).filter(Boolean))];
   if (!normalizedCodes.length) return new Map();
   const cacheKey = `sina:quote:${normalizedCodes.join(',')}`;
@@ -15,10 +15,8 @@ export async function fetchSinaQuoteMap(codes, { force = false } = {}) {
 
   const startedAt = Date.now();
   try {
-    const rows = [];
-    for (const group of chunk(normalizedCodes, 120)) {
-      rows.push(...(await fetchSinaQuoteBatch(group)));
-    }
+    const batches = await Promise.all(chunk(normalizedCodes, 300).map((group) => fetchSinaQuoteBatch(group, signal)));
+    const rows = batches.flat();
     const map = new Map(rows.map((row) => [row.code, row]));
     recordSourceSuccess('sina-direct', Date.now() - startedAt);
     return cache.set(cacheKey, map, cacheTtl.quotes);
@@ -35,10 +33,10 @@ export function parseSinaQuoteResponse(text) {
     .filter(Boolean);
 }
 
-async function fetchSinaQuoteBatch(codes) {
+async function fetchSinaQuoteBatch(codes, signal) {
   const symbols = codes.map((code) => `${exchangePrefix(code)}${code}`).join(',');
   const response = await fetch(`https://hq.sinajs.cn/list=${symbols}`, {
-    signal: AbortSignal.timeout(10_000),
+    signal: combinedSignal(signal, 10_000),
     headers: {
       accept: '*/*',
       referer: 'https://finance.sina.com.cn/',
@@ -48,6 +46,11 @@ async function fetchSinaQuoteBatch(codes) {
   if (!response.ok) throw new Error(`新浪直接行情返回 ${response.status}`);
   const text = new TextDecoder('gb18030').decode(Buffer.from(await response.arrayBuffer()));
   return parseSinaQuoteResponse(text);
+}
+
+function combinedSignal(signal, timeoutMs) {
+  const timeout = AbortSignal.timeout(timeoutMs);
+  return signal ? AbortSignal.any([signal, timeout]) : timeout;
 }
 
 function parseSinaQuoteLine(line) {

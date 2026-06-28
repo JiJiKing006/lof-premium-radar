@@ -10,9 +10,9 @@ import {
 
 describe('quoteService', () => {
   it('keeps complete category feeds before broad quote fallbacks', () => {
-    expect(sourcePlan('LOF').map((source) => source.name)).toEqual(['eastmoney', 'sina', 'akshare']);
-    expect(sourcePlan('ETF').map((source) => source.name)).toEqual(['eastmoney', 'sina', 'haoetf', 'akshare']);
-    expect(sourcePlan('QDII').map((source) => source.name)).toEqual(['eastmoney', 'sina', 'haoetf', 'akshare']);
+    expect(sourcePlan('LOF').map((source) => source.name)).toEqual(['sina', 'eastmoney', 'akshare']);
+    expect(sourcePlan('ETF').map((source) => source.name)).toEqual(['haoetf', 'eastmoney', 'sina', 'akshare']);
+    expect(sourcePlan('QDII').map((source) => source.name)).toEqual(['jisilu', 'haoetf', 'eastmoney', 'sina', 'akshare']);
   });
 
   it('filters source rows by requested category before accepting a fallback source', () => {
@@ -26,14 +26,14 @@ describe('quoteService', () => {
     expect(filterRowsForCategory(rows, 'ALL')).toHaveLength(3);
   });
 
-  it('keeps 160644 in LOF and out of QDII when broad quote sources classify it as QDII', () => {
+  it('keeps cross-border 160644 in QDII when source category identifies it as QDII', () => {
     const rows = [
-      { code: '160644', name: '互联网QD', category: 'QDII' },
+      { code: '160644', name: '港美互联网LOF', category: 'QDII' },
       { code: '513100', name: '纳指ETF', category: 'QDII' },
     ];
 
-    expect(filterRowsForCategory(rows, 'QDII').map((row) => row.code)).toEqual(['513100']);
-    expect(filterRowsForCategory(rows, 'LOF').map((row) => row.code)).toEqual(['160644']);
+    expect(filterRowsForCategory(rows, 'QDII').map((row) => row.code)).toEqual(['160644', '513100']);
+    expect(filterRowsForCategory(rows, 'LOF').map((row) => row.code)).toEqual([]);
   });
 
   it('uses Palmmicro only as the LOF code universe, not as displayed quote data', () => {
@@ -133,7 +133,7 @@ describe('quoteService', () => {
         changeRate: null,
         volume: null,
         turnover: null,
-        purchaseLimit: { state: 'unknown', label: '未知' },
+        purchaseLimit: { state: 'unavailable', label: '暂无数据', limitText: '暂无数据' },
         source: 'quote-missing',
         sourceStatus: 'missing',
         dataStatus: 'missing_quote',

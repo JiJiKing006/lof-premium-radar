@@ -4,3 +4,4 @@ dist/
 .env.deploy
 .DS_Store
 npm-debug.log*
+project.private.config.json

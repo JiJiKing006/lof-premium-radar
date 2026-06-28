@@ -1,0 +1,50 @@
+<view class="mobile-shell">
+  <block wx:if="{{!selectedFund}}">
+    <view class="sticky-tools" aria-label="筛选工具">
+      <search-bar value="{{query}}" bind:change="handleSearchChange" />
+      <filter-tabs value="{{section}}" bind:change="handleSectionChange" />
+      <sort-bar
+        value="{{excludePausedPurchase}}"
+        bind:change="handleExcludePausedChange"
+      />
+    </view>
+  </block>
+
+  <view class="home-table-frame">
+    <radar-table
+      rows="{{visibleFunds}}"
+      loading="{{initialLoading}}"
+      sort-key="{{sortKey}}"
+      sort-direction="{{sortDirection}}"
+      favorite-codes="{{favoriteCodes}}"
+      pulse-code="{{pulseCode}}"
+      data-version="{{dataVersion}}"
+      total-count="{{visibleTotalCount}}"
+      has-more="{{hasMoreFunds}}"
+      loading-more="{{loadingMoreFunds}}"
+      reset-token="{{tableResetToken}}"
+      update-time="{{lastSuccessAt}}"
+      show-back-top="{{showTableBackTop}}"
+      show-estimated-nav="{{showEstimatedNav}}"
+      bind:sort="handleTableSort"
+      bind:select="handleSelectFund"
+      bind:togglefavorite="toggleFavorite"
+      bind:loadmore="handleLoadMoreFunds"
+    />
+  </view>
+
+  <view class="author-mark" aria-label="网站底部信息">
+    <view class="author-line">
+      <text>作者</text>
+      <text class="author-name">jijiking</text>
+    </view>
+    <view class="icp-record">
+      <text class="icp-badge-icon">备</text>
+      <text>赣ICP备2026012689号-1</text>
+    </view>
+  </view>
+
+  <view class="bottom-safe-area"></view>
+
+  <view wx:if="{{toastText}}" class="watch-toast" role="status">{{toastText}}</view>
+</view>

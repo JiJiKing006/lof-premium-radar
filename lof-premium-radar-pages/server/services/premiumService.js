@@ -1,32 +1,16 @@
 export function calculatePremium({ marketPrice, estimatedNav, lastNav }) {
   const price = toPositiveNumber(marketPrice);
   const estimateResult = resolveEstimatedNav(arguments[0]);
-  const estimate = estimateResult.estimatedNav;
   const nav = toPositiveNumber(lastNav);
 
   if (!price) return { premiumRate: null, basis: 'none', note: 'price 缺失' };
-
-  if (estimate) {
-    return {
-      premiumRate: ((price / estimate) - 1) * 100,
-      basis: 'estimatedNav',
-      note: estimateResult.note,
-      ...estimateResult,
-    };
-  }
 
   if (nav) {
     return {
       premiumRate: ((price / nav) - 1) * 100,
       basis: 'lastNav',
-      note: '基于已公布净值，非实时估算',
-      estimatedNav: null,
-      selectedNavSource: '',
-      selectedNavTime: '',
-      estimateConfidence: 'none',
-      estimateDeviationRate: null,
-      estimateWarning: estimateResult.estimateWarning || '',
-      estimateSources: estimateResult.estimateSources || [],
+      ...estimateResult,
+      note: '基于已公布官方净值',
     };
   }
 

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-06-24 15:43:25",
+  "updatedAt": "2026-06-25 08:28:25",
   "visitors": {
     "41ff7b9b-630e-427b-a898-96ddca8855f9": {
       "deviceId": "41ff7b9b-630e-427b-a898-96ddca8855f9",
@@ -18,13 +18,13 @@
       "deviceId": "84b51a41-0292-4da7-a394-663f31a32767",
       "firstSeenAt": "2026-06-03 14:57:30",
       "firstSeenDate": "2026-06-03",
-      "lastSeenAt": "2026-06-24 15:43:25",
-      "lastSeenDate": "2026-06-24",
+      "lastSeenAt": "2026-06-25 00:08:51",
+      "lastSeenDate": "2026-06-25",
       "firstPath": "/",
       "lastPath": "/",
-      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36",
+      "userAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Mobile/15E148 Safari/604.1",
       "ip": "::ffff:127.0.0.1",
-      "visits": 62,
+      "visits": 63,
       "project": "lof"
     },
     "lof:30dbbbb4-7857-4b60-8869-3bf3dbd626ac": {
@@ -52,6 +52,58 @@
       "ip": "::ffff:127.0.0.1",
       "visits": 2,
       "project": "lof"
+    },
+    "lof:visitor-mqsa0ip1-wdt2ygr6": {
+      "deviceId": "visitor-mqsa0ip1-wdt2ygr6",
+      "project": "lof",
+      "firstSeenAt": "2026-06-25 00:17:04",
+      "firstSeenDate": "2026-06-25",
+      "lastSeenAt": "2026-06-25 00:46:37",
+      "lastSeenDate": "2026-06-25",
+      "firstPath": "/",
+      "lastPath": "/",
+      "userAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.0 Mobile/15E148 Safari/604.1 wechatdevtools/2.01.2510",
+      "ip": "::ffff:127.0.0.1",
+      "visits": 3
+    },
+    "lof:4f00aad1-13b6-4ed2-ae06-30d84cde33c4": {
+      "deviceId": "4f00aad1-13b6-4ed2-ae06-30d84cde33c4",
+      "project": "lof",
+      "firstSeenAt": "2026-06-25 07:36:02",
+      "firstSeenDate": "2026-06-25",
+      "lastSeenAt": "2026-06-25 07:36:02",
+      "lastSeenDate": "2026-06-25",
+      "firstPath": "/",
+      "lastPath": "/",
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.0.0 Safari/537.36",
+      "ip": "::ffff:127.0.0.1",
+      "visits": 1
+    },
+    "lof:1b5e8700-6ad4-4987-88a5-3cd3d4b2b9a2": {
+      "deviceId": "1b5e8700-6ad4-4987-88a5-3cd3d4b2b9a2",
+      "project": "lof",
+      "firstSeenAt": "2026-06-25 08:11:15",
+      "firstSeenDate": "2026-06-25",
+      "lastSeenAt": "2026-06-25 08:25:59",
+      "lastSeenDate": "2026-06-25",
+      "firstPath": "/",
+      "lastPath": "/",
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.0.0 Safari/537.36",
+      "ip": "::ffff:127.0.0.1",
+      "visits": 2
+    },
+    "lof:89540f73-0c35-4255-9727-3f6fe18b86fe": {
+      "deviceId": "89540f73-0c35-4255-9727-3f6fe18b86fe",
+      "project": "lof",
+      "firstSeenAt": "2026-06-25 08:28:25",
+      "firstSeenDate": "2026-06-25",
+      "lastSeenAt": "2026-06-25 08:28:25",
+      "lastSeenDate": "2026-06-25",
+      "firstPath": "/",
+      "lastPath": "/",
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.0.0 Safari/537.36",
+      "ip": "::ffff:127.0.0.1",
+      "visits": 1
     }
   }
 }

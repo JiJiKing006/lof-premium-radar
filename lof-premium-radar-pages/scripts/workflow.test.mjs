@@ -118,7 +118,7 @@ describe('workflow automation', () => {
     expect(prompt).toContain('server/config/sources.js');
     expect(prompt).toContain('server/services/fundAggregator.js');
     expect(prompt).toContain('优先级顺序：天天基金 / 东方财富 -> 集思录 -> HaoETF -> 上交所 / 深交所 -> 继续查找可验证真实来源');
-    expect(prompt).toContain('默认不自动运行 npm run test、npm run typecheck、npm run build 或页面/接口冒烟验证');
+    expect(prompt).toContain('默认不自动运行 npm run test、npm run check:server、微信开发者工具预览或接口冒烟验证');
     expect(prompt).toContain('只有用户明确要求“测试”“验证”“跑一下”时');
     expect(prompt).toContain('检查是否出现大面积 暂无数据 或 净值未公布');
   });
@@ -142,14 +142,14 @@ describe('workflow automation', () => {
     const updated = appendChangelogEntry(changelog, {
       date: '2026-06-02',
       title: '首页新增场内份额字段',
-      files: ['src/views/HomeView.vue', 'src/components/RadarTable.vue'],
+      files: ['pages/index/index.js', 'components/radar-table/radar-table.js'],
       tests: ['npm run test'],
       status: '待上线',
     });
 
     expect(updated).toContain('## 2026-06-02');
     expect(updated).toContain('- 功能：首页新增场内份额字段');
-    expect(updated).toContain('- 修改文件：src/views/HomeView.vue, src/components/RadarTable.vue');
+    expect(updated).toContain('- 修改文件：pages/index/index.js, components/radar-table/radar-table.js');
     expect(updated).toContain('- 测试结果：npm run test');
     expect(updated).toContain('- 上线状态：待上线');
   });

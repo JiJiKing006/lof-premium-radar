@@ -35,6 +35,7 @@ describe('navService in-flight isolation', () => {
   beforeEach(() => {
     cache.items.clear();
     cache.lastValid.clear();
+    cache.lastObserved.clear();
     mocks.fetchJisiluQdiiSnapshot.mockResolvedValue({ rows: [] });
     mocks.fetchLofSnapshot.mockResolvedValue({ rows: [] });
     mocks.fetchHaoetfQuotes.mockResolvedValue([]);

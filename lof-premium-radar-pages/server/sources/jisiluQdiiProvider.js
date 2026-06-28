@@ -1,5 +1,6 @@
 import { sources } from '../config/sources.js';
 import { parseNumber } from '../utils/number.js';
+import { formatShanghaiTime } from '../services/sourceHealth.js';
 
 const MARKET_NAMES = {
   europe: '欧美市场',
@@ -58,9 +59,11 @@ async function fetchMarket(market, signal) {
 }
 
 function normalizeJisiluRow(cell, market) {
-  const apply = normalizeApplyStatus(cell.apply_status, cell.min_amt);
   const premium = pickPremium(cell);
-  const quoteTime = cell.last_time || cell.last_est_time || '';
+  const quoteDate = cell.price_dt || cell.last_est_dt || '';
+  const quoteTime = normalizeQuoteTime(quoteDate, cell.last_time || cell.last_est_time || '');
+  const apply = normalizeApplyStatus(cell.apply_status, cell.min_amt, formatShanghaiTime());
+  const estimatedNav = parseNumber(cell.estimate_value2 !== '-' ? cell.estimate_value2 : cell.estimate_value);
 
   return {
     section: 'qdii',
@@ -68,23 +71,34 @@ function normalizeJisiluRow(cell, market) {
     marketName: MARKET_NAMES[market],
     code: String(cell.fund_id || ''),
     name: cell.fund_nm || cell.fund_nm_color || '',
+    category: 'QDII',
     issuer: cell.issuer_nm || '',
     indexName: cell.index_nm || '',
     fundType: cell.lof_type || '',
     price: safeText(cell.price),
     priceValue: parseNumber(cell.price),
+    marketPrice: parseNumber(cell.price),
     change: withPercent(cell.increase_rt),
     changeValue: parseNumber(cell.increase_rt),
-    quoteDate: cell.price_dt || cell.last_est_dt || '',
+    changeRate: parseNumber(cell.increase_rt),
+    quoteDate,
     quoteTime,
     realtimeEst: safeText(cell.estimate_value2 !== '-' ? cell.estimate_value2 : cell.estimate_value),
     realtimeEstValue: parseNumber(cell.estimate_value2 !== '-' ? cell.estimate_value2 : cell.estimate_value),
+    estimatedNav,
+    estimatedNavSource: 'jisilu',
+    estimatedNavTime: estimatedNav !== null ? quoteTime : '',
     realtimePremium: premium.text,
     realtimePremiumValue: premium.value,
+    premiumRate: premium.value,
     premiumBasis: premium.basis,
     officialEst: safeText(cell.fund_nav),
     officialEstValue: parseNumber(cell.fund_nav),
+    lastNav: parseNumber(cell.fund_nav),
     estDate: cell.nav_dt || '',
+    navDate: cell.nav_dt || '',
+    navSource: 'jisilu',
+    navQuoteTime: quoteTime,
     officialPremium: withPercent(cell.nav_discount_rt),
     officialPremiumValue: parseNumber(cell.nav_discount_rt),
     referenceEst: safeText(cell.ref_price),
@@ -93,11 +107,22 @@ function normalizeJisiluRow(cell, market) {
     referencePremiumValue: parseNumber(cell.ref_increase_rt),
     volume: safeText(cell.volume),
     amount: safeText(cell.amount),
+    turnover: parseNumber(cell.amount),
     amountChange: safeText(cell.amount_incr),
     purchaseLimit: apply,
     redeemStatus: cell.redeem_status || '',
-    sourceStatus: cell.apply_redeem_status || '',
+    source: 'jisilu',
+    sourceStatus: 'primary',
   };
+}
+
+function normalizeQuoteTime(date, time) {
+  const safeDate = String(date || '').trim();
+  const safeTime = String(time || '').trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(safeDate) && /^\d{2}:\d{2}(:\d{2})?$/.test(safeTime)) {
+    return `${safeDate} ${safeTime.length === 5 ? `${safeTime}:00` : safeTime}`;
+  }
+  return '';
 }
 
 function pickPremium(cell) {
@@ -110,7 +135,7 @@ function pickPremium(cell) {
   return { text: withPercent(cell.nav_discount_rt), value: parseNumber(cell.nav_discount_rt), basis: '净值' };
 }
 
-function normalizeApplyStatus(status, minAmount) {
+function normalizeApplyStatus(status, minAmount, updateTime) {
   const value = safeText(status);
   let label = value || '-';
   let state = 'unknown';
@@ -133,6 +158,7 @@ function normalizeApplyStatus(status, minAmount) {
     state,
     minBuy: minAmount ? String(minAmount) : '',
     source: '集思录申购状态',
+    updateTime,
   };
 }
 
