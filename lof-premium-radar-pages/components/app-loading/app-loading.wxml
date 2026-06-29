@@ -1,0 +1,10 @@
+<view wx:if="{{visible}}" class="app-loading-mask" catchtap="preventClose" catchtouchmove="preventClose" role="status" aria-label="{{title}}">
+  <view class="app-loading-card">
+    <view class="app-loading-icon-wrap">
+      <image class="app-loading-icon" src="/images/icons/refresh-cycle.svg" mode="aspectFit" />
+    </view>
+    <text class="app-loading-title">{{title}}</text>
+    <text wx:if="{{note}}" class="app-loading-note">{{note}}</text>
+    <view class="app-loading-track"><view class="app-loading-track-bar"></view></view>
+  </view>
+</view>

@@ -5,3 +5,4 @@ dist/
 .DS_Store
 npm-debug.log*
 project.private.config.json
+data/wechat-subscriptions.json

@@ -1,4 +1,7 @@
 {
   "navigationBarTitleText": "基金详情",
-  "enablePullDownRefresh": false
+  "enablePullDownRefresh": false,
+  "usingComponents": {
+    "app-loading": "/components/app-loading/app-loading"
+  }
 }

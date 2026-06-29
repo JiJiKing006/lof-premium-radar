@@ -1,63 +1,31 @@
+const { allowAction } = require('../../utils/action-guard');
+
 const COLUMN_RULES = {
-  favorite: { width: 72 },
-  security: { min: 220, preferred: 238, max: 286 },
-  premiumRate: { min: 176, preferred: 184, max: 216 },
-  price: { min: 120, preferred: 126, max: 146 },
-  changeRate: { min: 132, preferred: 136, max: 154 },
-  lastNav: { min: 198, preferred: 208, max: 242 },
-  estimatedNav: { min: 198, preferred: 210, max: 244 }
+  favorite: { percent: 11, priority: 'high' },
+  security: { percent: 34, priority: 'high' },
+  premiumRate: { percent: 20, priority: 'high' },
+  price: { percent: 16, priority: 'high' },
+  turnover: { percent: 19, priority: 'medium' }
 };
 
-function buildColumns(showEstimatedNav, rows = []) {
-  const securityWidth = estimateSecurityColumnWidth(rows);
-  const columns = [
-    buildColumn('favorite', '自选', COLUMN_RULES.favorite.width, { disabled: true }),
-    buildColumn('security', '名称/代码', securityWidth, { disabled: true }),
-    buildColumn('premiumRate', '实时溢价率', COLUMN_RULES.premiumRate.preferred),
-    buildColumn('price', '现价', COLUMN_RULES.price.preferred),
-    buildColumn('changeRate', '涨跌幅', COLUMN_RULES.changeRate.preferred),
-    buildColumn('lastNav', '官方净值', COLUMN_RULES.lastNav.preferred)
+function buildColumns() {
+  return [
+    buildColumn('favorite', '自选', { disabled: true }),
+    buildColumn('security', '名称/代码', { disabled: true }),
+    buildColumn('premiumRate', '实时溢价率'),
+    buildColumn('price', '现价'),
+    buildColumn('turnover', '成交额')
   ];
-  if (showEstimatedNav) columns.push(buildColumn('estimatedNav', '估算净值', COLUMN_RULES.estimatedNav.preferred));
-  return columns;
 }
 
-function buildColumn(key, title, width, options = {}) {
-  const roundedWidth = Math.round(width);
+function buildColumn(key, title, options = {}) {
+  const rule = COLUMN_RULES[key];
   return Object.assign({
     key,
     title,
-    width: roundedWidth,
-    style: `width:${roundedWidth}rpx;flex-basis:${roundedWidth}rpx;`
+    priority: rule.priority,
+    style: `width:${rule.percent}%;flex-basis:${rule.percent}%;`
   }, options);
-}
-
-function estimateSecurityColumnWidth(rows) {
-  const labels = (Array.isArray(rows) ? rows : [])
-    .map((row) => [row && row.name, row && row.code].filter(Boolean).join(' '));
-  if (!labels.length) return COLUMN_RULES.security.preferred;
-  const weights = labels.map(visibleTextWeight).sort((a, b) => a - b);
-  const p80 = weights[Math.min(weights.length - 1, Math.floor(weights.length * 0.8))] || 0;
-  const width = 186 + p80 * 4.8;
-  return clamp(width, COLUMN_RULES.security.min, COLUMN_RULES.security.max);
-}
-
-function visibleTextWeight(value) {
-  return Array.from(String(value || '')).reduce((total, char) => {
-    if (/[\u3400-\u9fff]/u.test(char)) return total + 1;
-    if (/[0-9]/u.test(char)) return total + 0.58;
-    return total + 0.68;
-  }, 0);
-}
-
-function clamp(value, min, max) {
-  return Math.round(Math.min(max, Math.max(min, value)));
-}
-
-function buildGridStyle(columns) {
-  const totalWidth = columns.reduce((sum, column) => sum + Number(column.width || 0), 0);
-  const width = Math.max(1030, totalWidth);
-  return `width:${width}rpx;min-width:${width}rpx;`;
 }
 
 function buildColumnStyles(columns) {
@@ -67,12 +35,16 @@ function buildColumnStyles(columns) {
   }, {});
 }
 
+const DEFAULT_COLUMNS = buildColumns();
+
 Component({
   properties: {
     rows: { type: Array, value: [] },
     loading: { type: Boolean, value: false },
     sortKey: { type: String, value: 'premiumRate' },
     sortDirection: { type: String, value: 'desc' },
+    activeSortKey: { type: String, value: 'premiumRate' },
+    sortMode: { type: String, value: 'desc' },
     favoriteCodes: { type: Array, value: [] },
     pulseCode: { type: String, value: '' },
     dataVersion: { type: String, value: '' },
@@ -81,30 +53,24 @@ Component({
     loadingMore: { type: Boolean, value: false },
     resetToken: { type: Number, value: 0 },
     updateTime: { type: String, value: '' },
+    refreshing: { type: Boolean, value: false },
     showBackTop: { type: Boolean, value: false },
-    showEstimatedNav: { type: Boolean, value: true }
+    showEstimatedNav: { type: Boolean, value: false }
   },
 
   data: {
     hasScrollable: false,
-    tableScrollLeft: 0,
-    tableScrollTop: 0,
-    horizontalScrolled: false,
+    scrollIntoView: '',
     internalShowBackTop: false,
     skeletonRows: Array.from({ length: 10 }, (_, index) => index),
-    columns: buildColumns(true),
-    columnStyles: buildColumnStyles(buildColumns(true)),
-    gridStyle: buildGridStyle(buildColumns(true))
+    columns: DEFAULT_COLUMNS,
+    columnStyles: buildColumnStyles(DEFAULT_COLUMNS)
   },
 
   observers: {
     rows(rows) {
-      this.refreshColumns({ rows });
+      this.setData({ hasScrollable: Array.isArray(rows) && rows.length > 12 });
       this.queueLoadMoreObserver();
-    },
-
-    showEstimatedNav(value) {
-      this.refreshColumns({ showEstimatedNav: value });
     },
 
     resetToken() {
@@ -117,12 +83,12 @@ Component({
 
     loadingMore(value) {
       if (!value) this.loadMoreLocked = false;
-      this.queueLoadMoreObserver();
     }
   },
 
   lifetimes: {
     ready() {
+      this.measureScrollViewport();
       this.queueLoadMoreObserver();
     },
 
@@ -137,67 +103,67 @@ Component({
   methods: {
     handleSort(event) {
       const key = event.currentTarget.dataset.key;
+      if (!allowAction(this, `sort:${key}`)) return;
       if (key) this.triggerEvent('sort', { key });
     },
 
     handleSelect(event) {
-      const index = Number(event.currentTarget.dataset.index);
-      const fund = this.data.rows[index];
+      const fund = this.data.rows[Number(event.currentTarget.dataset.index)];
+      if (!fund || !allowAction(this, `select:${fund.code}`)) return;
       this.triggerEvent('select', { fund });
     },
 
     handleFavorite(event) {
-      const index = Number(event.currentTarget.dataset.index);
-      const fund = this.data.rows[index];
+      const fund = this.data.rows[Number(event.currentTarget.dataset.index)];
+      if (!fund || !allowAction(this, `favorite:${fund.code}`)) return;
       this.triggerEvent('togglefavorite', { fund });
     },
 
-    handleLoadMore() {
+    handleLoadMore(event) {
+      if (event && event.type === 'tap' && !allowAction(this, 'load-more')) return;
       this.requestLoadMore();
     },
 
+    handleRefresh() {
+      if (this.data.refreshing || !allowAction(this, 'refresh')) return;
+      this.resetInlineScroll();
+      this.triggerEvent('refresh');
+    },
+
     handleTableScroll(event) {
-      const scrollLeft = Number(event.detail && event.detail.scrollLeft || 0);
       const scrollTop = Number(event.detail && event.detail.scrollTop || 0);
-      const horizontalScrolled = scrollLeft > 1;
       const internalShowBackTop = scrollTop > 220;
-      const patch = {};
-      if (Math.abs(scrollTop - this.data.tableScrollTop) > 8) patch.tableScrollTop = scrollTop;
-      if (horizontalScrolled !== this.data.horizontalScrolled) patch.horizontalScrolled = horizontalScrolled;
-      if (internalShowBackTop !== this.data.internalShowBackTop) patch.internalShowBackTop = internalShowBackTop;
-      if (Object.keys(patch).length) this.setData(patch);
+      const scrollHeight = Number(event.detail && event.detail.scrollHeight || 0);
+      this.currentScrollTop = scrollTop;
+      if (internalShowBackTop !== this.data.internalShowBackTop) this.setData({ internalShowBackTop });
+      if (scrollHeight && this.tableViewportHeight && scrollHeight - scrollTop - this.tableViewportHeight < 240) {
+        this.requestLoadMore();
+      }
     },
 
     scrollTableToTop() {
+      if (!allowAction(this, 'back-top')) return;
       this.resetInlineScroll();
     },
 
-    refreshColumns(options = {}) {
-      const rows = Array.isArray(options.rows) ? options.rows : this.data.rows;
-      const showEstimatedNav = Object.prototype.hasOwnProperty.call(options, 'showEstimatedNav')
-        ? options.showEstimatedNav
-        : this.data.showEstimatedNav;
-      const columns = buildColumns(showEstimatedNav !== false, rows);
-      this.setData({
-        hasScrollable: Array.isArray(rows) && rows.length > 12,
-        columns,
-        columnStyles: buildColumnStyles(columns),
-        gridStyle: buildGridStyle(columns)
+    resetInlineScroll() {
+      this.setData({ scrollIntoView: '' }, () => {
+        this.setData({ scrollIntoView: 'table-body-top', internalShowBackTop: false });
       });
     },
 
-    resetInlineScroll() {
-      this.setData({
-        tableScrollLeft: 0,
-        tableScrollTop: 0,
-        horizontalScrolled: false,
-        internalShowBackTop: false
-      });
+    measureScrollViewport() {
+      if (!this.createSelectorQuery) return;
+      this.createSelectorQuery().select('.table-scroll').boundingClientRect((rect) => {
+        this.tableViewportHeight = Number(rect && rect.height || 0);
+      }).exec();
     },
 
     requestLoadMore() {
       if (!this.data.hasMore || this.data.loading || this.data.loadingMore || this.loadMoreLocked) return;
       this.loadMoreLocked = true;
+      if (this.loadMoreObserver) this.loadMoreObserver.disconnect();
+      this.loadMoreObserver = null;
       this.triggerEvent('loadmore');
     },
 
@@ -207,10 +173,11 @@ Component({
         this.loadMoreObserverTimer = null;
         if (this.loadMoreObserver) this.loadMoreObserver.disconnect();
         if (!this.data.hasMore || this.data.loading || this.data.loadingMore || !this.createIntersectionObserver) return;
-        this.loadMoreObserver = this.createIntersectionObserver({ thresholds: [0, 0.01] })
+        this.loadMoreObserver = this.createIntersectionObserver({ thresholds: [0] })
           .relativeTo('.table-scroll');
         this.loadMoreObserver.observe('.load-more-sentinel', (result) => {
-          if (Number(result && result.intersectionRatio || 0) > 0) this.requestLoadMore();
+          const intersectionHeight = Number(result && result.intersectionRect && result.intersectionRect.height || 0);
+          if (Number(result && result.intersectionRatio || 0) > 0 || intersectionHeight > 0) this.requestLoadMore();
         });
       }, 0);
     }

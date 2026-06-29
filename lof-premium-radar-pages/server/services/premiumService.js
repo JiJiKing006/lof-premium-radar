@@ -1,9 +1,41 @@
 export function calculatePremium({ marketPrice, estimatedNav, lastNav }) {
+  const input = arguments[0] || {};
   const price = toPositiveNumber(marketPrice);
-  const estimateResult = resolveEstimatedNav(arguments[0]);
+  const estimateResult = resolveEstimatedNav(input);
   const nav = toPositiveNumber(lastNav);
 
   if (!price) return { premiumRate: null, basis: 'none', note: 'price 缺失' };
+
+  const iopv = toPositiveNumber(input.iopv);
+  if (iopv && input.iopvStale !== true && String(input.iopvSource || '').trim()) {
+    return {
+      premiumRate: ((price / iopv) - 1) * 100,
+      basis: 'iopv',
+      ...estimateResult,
+      note: '基于交易所IOPV',
+    };
+  }
+
+  const realtimeReferenceNav = toPositiveNumber(input.realtimeReferenceNav);
+  if (isEligibleRealtimeReference(realtimeReferenceNav, input)) {
+    return {
+      premiumRate: ((price / realtimeReferenceNav) - 1) * 100,
+      basis: 'estimatedNav',
+      ...estimateResult,
+      estimatedNav: realtimeReferenceNav,
+      selectedNavSource: String(input.realtimeReferenceSource || ''),
+      selectedNavTime: String(input.realtimeReferenceTime || ''),
+      estimateConfidence: input.realtimeReferenceKind === 'realtime' ? 'source-realtime' : 'source-estimate',
+      estimateWarning: '',
+      estimateSources: [{
+        role: 'realtimeReference',
+        source: String(input.realtimeReferenceSource || ''),
+        value: realtimeReferenceNav,
+        time: String(input.realtimeReferenceTime || ''),
+      }],
+      note: '基于目标网站估值（非官方净值）',
+    };
+  }
 
   if (nav) {
     return {
@@ -15,6 +47,21 @@ export function calculatePremium({ marketPrice, estimatedNav, lastNav }) {
   }
 
   return { premiumRate: null, basis: 'none', note: 'nav 缺失' };
+}
+
+function isEligibleRealtimeReference(value, input) {
+  if (!value || input.realtimeReferenceStale === true) return false;
+  if (!String(input.realtimeReferenceSource || '').trim()) return false;
+  if (!isPlausibleEstimatedNav(value, input)) return false;
+
+  const estimateDate = normalizeDate(input.realtimeReferenceDate);
+  const officialNavDate = normalizeDate(input.navDate);
+  return !(estimateDate && officialNavDate && estimateDate < officialNavDate);
+}
+
+function normalizeDate(value) {
+  const match = String(value || '').match(/^(\d{4}-\d{2}-\d{2})/);
+  return match ? match[1] : '';
 }
 
 function resolveEstimatedNav(input) {

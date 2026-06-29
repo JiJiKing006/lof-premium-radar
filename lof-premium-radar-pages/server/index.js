@@ -7,6 +7,7 @@ import { getHotArbitrageList } from './services/hotArbitrageService.js';
 import { fetchMarketIndices } from './sources/marketIndexSource.js';
 import { isAdminPasswordValid, visitorAnalytics } from './services/visitorAnalytics.js';
 import { warmQuoteCaches } from './services/quoteService.js';
+import { createWechatSubscriptionService, startWechatSubscriptionScheduler } from './services/wechatSubscriptionService.js';
 
 const port = Number(process.env.PORT || 4173);
 
@@ -14,6 +15,12 @@ dns.setDefaultResultOrder('ipv4first');
 
 const app = express();
 const apiRouter = express.Router();
+const wechatSubscriptionService = createWechatSubscriptionService({
+  getRows: async () => {
+    const snapshot = await getFundQuotes({ category: 'ALL', force: true, waitForFresh: true, includeTrends: false });
+    return snapshot.rows || [];
+  },
+});
 
 hydratePersistentFundSnapshots();
 
@@ -35,65 +42,90 @@ apiRouter.get('/funds', async (request, response) => {
   }
 });
 
-apiRouter.get('/funds/quotes', async (request, response) => {
+apiRouter.get('/funds/quotes', handleFundQuotes);
+apiRouter.post('/funds/quotes', handleFundQuotes);
+
+async function handleFundQuotes(request, response) {
+  const input = quoteRequestInput(request);
   try {
     const snapshot = await getFundQuotes({
-      category: String(request.query.category || ''),
-      force: request.query.force === '1',
-      includeTrends: request.query.trends !== '0',
+      category: String(input.category || ''),
+      force: isTrueFlag(input.force),
+      includeTrends: includeTrends(input),
+      waitForFresh: String(input.fields || '').toLowerCase() === 'home',
     });
     response.setHeader('Cache-Control', 'no-store');
-    response.json(formatFundQuoteResponse(snapshot, {
-      fields: request.query.fields,
-      page: request.query.page,
-      pageSize: request.query.pageSize,
-      query: request.query.query,
-      marketFilter: request.query.marketFilter,
-      excludePausedPurchase: request.query.excludePausedPurchase,
-      sortKey: request.query.sortKey,
-      sortDirection: request.query.sortDirection,
-    }));
+    response.json(formatFundQuoteResponse(snapshot, quoteResponseOptions(input)));
   } catch (error) {
     response.status(503).json({
       meta: { status: error.message || '行情服务不可用', stale: true },
       rows: [],
     });
   }
-});
+}
 
-apiRouter.get('/funds/quotes/refresh', async (request, response) => {
+apiRouter.get('/funds/quotes/refresh', handleFundQuotesRefresh);
+apiRouter.post('/funds/quotes/refresh', handleFundQuotesRefresh);
+
+async function handleFundQuotesRefresh(request, response) {
+  const input = quoteRequestInput(request);
   try {
     const snapshot = await getFundQuotes({
-      category: String(request.query.category || ''),
+      category: String(input.category || ''),
       force: true,
-      waitForFresh: false,
-      includeTrends: request.query.trends !== '0',
+      waitForFresh: true,
+      includeTrends: includeTrends(input),
     });
     response.setHeader('Cache-Control', 'no-store');
-    response.json(formatFundQuoteResponse(snapshot, quoteResponseOptions(request)));
+    response.json(formatFundQuoteResponse(snapshot, quoteResponseOptions(input)));
   } catch (error) {
     response.status(503).json({
       meta: { status: error.message || '首页数据刷新失败', stale: true },
       rows: [],
     });
   }
-});
+}
 
-apiRouter.get('/funds/quotes/page', (request, response) => {
+apiRouter.get('/funds/quotes/page', handleFundQuotesPage);
+apiRouter.post('/funds/quotes/page', handleFundQuotesPage);
+
+async function handleFundQuotesPage(request, response) {
+  const input = quoteRequestInput(request);
   try {
-    const snapshot = getFundQuotePage({
-      category: String(request.query.category || ''),
-      includeTrends: request.query.trends !== '0',
-    });
+    const pageOptions = {
+      category: String(input.category || ''),
+      includeTrends: includeTrends(input),
+      snapshotId: String(input.snapshotId || ''),
+    };
+    let snapshot;
+    let resetPagination = false;
+    try {
+      if (Number(input.page || 1) > 1 && !pageOptions.snapshotId) {
+        const error = new Error('分页缺少首页快照，请从第一页继续');
+        error.code = 'PAGE_SNAPSHOT_NOT_READY';
+        throw error;
+      }
+      snapshot = getFundQuotePage(pageOptions);
+    } catch (error) {
+      if (!['PAGE_SNAPSHOT_NOT_READY', 'PAGE_SNAPSHOT_EXPIRED'].includes(error.code)) throw error;
+      snapshot = await getFundQuotes({
+        category: pageOptions.category,
+        includeTrends: pageOptions.includeTrends,
+      });
+      resetPagination = true;
+    }
     response.setHeader('Cache-Control', 'no-store');
-    response.json(formatFundQuoteResponse(snapshot, quoteResponseOptions(request)));
+    response.json(formatFundQuoteResponse(snapshot, {
+      ...quoteResponseOptions(input),
+      ...(resetPagination ? { page: 1, snapshotReset: true } : {}),
+    }));
   } catch (error) {
-    response.status(error.code === 'PAGE_SNAPSHOT_NOT_READY' ? 409 : 503).json({
+    response.status(503).json({
       meta: { status: error.message || '分页数据不可用', stale: true },
       rows: [],
     });
   }
-});
+}
 
 apiRouter.get('/funds/hot-arbitrage', async (request, response) => {
   try {
@@ -135,7 +167,10 @@ apiRouter.get('/funds/:code', async (request, response) => {
       force: request.query.force === '1',
     });
     if (!fund) {
-      response.status(404).json({ error: '基金不存在' });
+      const normalizedCode = String(request.params.code || '').replace(/^(SZ|SH)/i, '');
+      response.status(/^\d{6}$/.test(normalizedCode) ? 503 : 400).json({
+        error: /^\d{6}$/.test(normalizedCode) ? '基金详情数据源暂不可用，请稍后重试' : '基金代码格式错误',
+      });
       return;
     }
     response.setHeader('Cache-Control', 'no-store');
@@ -182,6 +217,36 @@ apiRouter.post('/analytics/visit', async (request, response) => {
   }
 });
 
+apiRouter.post('/subscriptions/register', async (request, response) => {
+  try {
+    const result = await wechatSubscriptionService.registerByLoginCode(request.body?.code, {
+      testMode: request.body?.testMode === 'develop',
+    });
+    response.setHeader('Cache-Control', 'no-store');
+    response.json(result);
+  } catch (error) {
+    response.status(400).json({ ok: false, error: error.message || '订阅登记失败' });
+  }
+});
+
+apiRouter.post('/subscriptions/status', async (request, response) => {
+  try {
+    response.setHeader('Cache-Control', 'no-store');
+    response.json(await wechatSubscriptionService.getStatusByLoginCode(request.body?.code));
+  } catch (error) {
+    response.status(400).json({ ok: false, error: error.message || '提醒状态查询失败' });
+  }
+});
+
+apiRouter.post('/subscriptions/cancel', async (request, response) => {
+  try {
+    response.setHeader('Cache-Control', 'no-store');
+    response.json(await wechatSubscriptionService.cancelByLoginCode(request.body?.code));
+  } catch (error) {
+    response.status(400).json({ ok: false, error: error.message || '取消提醒失败' });
+  }
+});
+
 apiRouter.post('/admin/login', (request, response) => {
   if (!isAdminPasswordValid(request.body?.password)) {
     response.status(401).json({ ok: false, error: '密码错误' });
@@ -210,19 +275,38 @@ app.listen(port, () => {
       .then(() => getFundQuotes({ category: 'ALL', force: true, waitForFresh: true, includeTrends: false }))
       .catch(() => {});
   }, 200);
+  startWechatSubscriptionScheduler({
+    service: wechatSubscriptionService,
+    getRows: () => getFundQuotes({ category: 'ALL', force: true, waitForFresh: true, includeTrends: false }),
+  });
 });
 
-function quoteResponseOptions(request) {
+function quoteRequestInput(request) {
+  const query = request && request.query && typeof request.query === 'object' ? request.query : {};
+  const body = request && request.body && typeof request.body === 'object' ? request.body : {};
+  return { ...query, ...body };
+}
+
+function quoteResponseOptions(input = {}) {
   return {
-    fields: request.query.fields,
-    page: request.query.page,
-    pageSize: request.query.pageSize,
-    query: request.query.query,
-    marketFilter: request.query.marketFilter,
-    excludePausedPurchase: request.query.excludePausedPurchase,
-    sortKey: request.query.sortKey,
-    sortDirection: request.query.sortDirection,
+    fields: input.fields,
+    page: input.page,
+    pageSize: input.pageSize,
+    query: input.query,
+    marketFilter: input.marketFilter,
+    excludePausedPurchase: input.excludePausedPurchase,
+    sortKey: input.sortKey,
+    sortDirection: input.sortDirection,
+    snapshotId: input.snapshotId,
   };
+}
+
+function isTrueFlag(value) {
+  return value === true || value === 1 || String(value || '') === '1';
+}
+
+function includeTrends(input) {
+  return input.trends !== false && String(input.trends ?? '1') !== '0';
 }
 
 function clientIp(request) {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { dedupeFundsByCodePriority, filterRenderablePremiumRows, formatFundQuoteResponse, mergeMarketQuoteMaps, mergeStableFinancialFields, mergeStablePurchaseStatuses, toUnifiedFund } from './fundAggregator.js';
+import { dedupeFundsByCodePriority, filterRenderablePremiumRows, formatFundQuoteResponse, getFundQuotePage, mergeMarketQuoteMaps, mergeStableFinancialFields, mergeStablePurchaseStatuses, toUnifiedFund } from './fundAggregator.js';
 
 describe('fundAggregator', () => {
   it('keeps a verified quote purchase status when the supplemental status is unavailable', () => {
@@ -129,8 +129,75 @@ describe('fundAggregator', () => {
     expect(row.lastNav).toBe(1);
     expect(row.premiumRate).toBeCloseTo(20, 8);
     expect(row.navSource).toBe('tiantian');
+    expect(row.abnormalReason).not.toContain('nav 缺失');
     expect(row.valuationCarriedForward).toBe(true);
     expect(row.carriedForwardFields).toEqual(['officialNav']);
+  });
+
+  it('刷新返回更旧净值时保留较新的官方净值并用实时价格重算溢价', () => {
+    const [row] = mergeStableFinancialFields([
+      {
+        code: '160216', marketPrice: 1.1, lastNav: 1, premiumRate: 10,
+        navDate: '2026-06-27', navSource: 'tiantian', navQuoteTime: '2026-06-27 22:00:00',
+      },
+    ], [
+      {
+        code: '160216', marketPrice: 1.2, lastNav: 0.98, premiumRate: 22.4489,
+        navDate: '2026-06-26', navSource: 'jisilu', navQuoteTime: '2026-06-28 10:30:00',
+        quoteTime: '2026-06-28 10:30:00',
+      },
+    ]);
+
+    expect(row.lastNav).toBe(1);
+    expect(row.navDate).toBe('2026-06-27');
+    expect(row.navSource).toBe('tiantian');
+    expect(row.premiumRate).toBeCloseTo(20, 8);
+    expect(row.abnormalReason).not.toContain('nav 缺失');
+    expect(row.valuationCarriedForward).toBe(true);
+    expect(row.carriedForwardFields).toEqual(['officialNav']);
+  });
+
+  it('keeps a fresh target-estimate premium while carrying forward only the official NAV fields', () => {
+    const [row] = mergeStableFinancialFields([
+      {
+        code: '501225', marketPrice: 4.52, lastNav: 3.6406, premiumRate: 24.15,
+        navDate: '2026-06-25', navSource: 'eastmoney', navQuoteTime: '2026-06-25 00:00:00',
+      },
+    ], [
+      {
+        code: '501225', marketPrice: 4.517, lastNav: null, estimatedNav: 3.487,
+        premiumRate: 29.5382850588, premiumBasis: 'estimatedNav',
+        premiumNote: '基于目标网站估值（非官方净值）', estimatedNavSource: 'lof',
+        estimatedNavTime: '2026-06-29 10:52:00', quoteTime: '2026-06-29 10:53:03',
+      },
+    ]);
+
+    expect(row.lastNav).toBe(3.6406);
+    expect(row.navDate).toBe('2026-06-25');
+    expect(row.premiumRate).toBeCloseTo(29.5382850588, 8);
+    expect(row.premiumBasis).toBe('estimatedNav');
+    expect(row.premiumNote).toBe('基于目标网站估值（非官方净值）');
+  });
+
+  it('uses the newest dated official NAV atomically when calculating premium', () => {
+    const row = toUnifiedFund({
+      quote: {
+        code: '501225', name: '全球芯片LOF', category: 'LOF', marketPrice: 4.6,
+        lastNav: 3.4, navDate: '2026-06-24', navSource: 'jisilu',
+        source: 'jisilu', sourceStatus: 'primary', quoteTime: '2026-06-26 10:00:00',
+      },
+      nav: {
+        code: '501225', lastNav: 3.5, navDate: '2026-06-25', navSource: 'eastmoney',
+        navQuoteTime: '2026-06-25 22:00:00',
+      },
+      updateTime: '2026-06-26 10:00:01',
+    });
+
+    expect(row.lastNav).toBe(3.5);
+    expect(row.navDate).toBe('2026-06-25');
+    expect(row.navSource).toBe('eastmoney');
+    expect(row.navQuoteTime).toBe('2026-06-25 22:00:00');
+    expect(row.premiumRate).toBeCloseTo(31.428571, 6);
   });
 
   it('calculates premium from official NAV while retaining the selected estimate separately', () => {
@@ -160,8 +227,35 @@ describe('fundAggregator', () => {
     expect(row.estimatedNav).toBe(6.7975);
     expect(row.estimatedNavSource).toBe('tiantian');
     expect(row.estimateConfidence).toBe('low');
-    expect(row.premiumRate).toBeCloseTo(-2.2235, 4);
+    expect(row.premiumRate).toBeCloseTo(-2.4893, 4);
     expect(row.abnormalReason).toContain('估算净值多源偏差过大');
+  });
+
+  it('calculates realtime premium from the freshly fetched target reference without replacing official NAV', () => {
+    const row = toUnifiedFund({
+      quote: {
+        code: '501225', name: '全球芯片LOF', category: 'LOF', marketPrice: 4.536,
+        source: 'sina', sourceStatus: 'fallback', quoteTime: '2026-06-29 10:38:00',
+      },
+      nav: {
+        code: '501225', lastNav: 3.6406, navDate: '2026-06-25', navSource: 'eastmoney',
+        navQuoteTime: '2026-06-25 00:00:00',
+      },
+      premiumReference: {
+        value: 3.487, source: 'lof', kind: 'official-estimate', estimateDate: '2026-06-26',
+        quoteTime: '2026-06-29 10:38:00', stale: false,
+      },
+      updateTime: '2026-06-29 10:38:01',
+    });
+
+    expect(row.lastNav).toBe(3.6406);
+    expect(row.navDate).toBe('2026-06-25');
+    expect(row.navSource).toBe('eastmoney');
+    expect(row.estimatedNav).toBe(3.487);
+    expect(row.estimatedNavSource).toBe('lof');
+    expect(row.premiumRate).toBeCloseTo(30.0832, 4);
+    expect(row.premiumBasis).toBe('estimatedNav');
+    expect(row.premiumNote).toBe('基于目标网站估值（非官方净值）');
   });
 
   it('keeps estimated NAV source separate from official NAV source', () => {
@@ -421,8 +515,8 @@ describe('fundAggregator', () => {
     const response = formatFundQuoteResponse({
       meta: { updateTime: '2026-06-27 15:01:00' },
       rows: [
-        { code: '160001', category: 'LOF', marketPrice: 1.2, premiumRate: 2, settlementCycle: 'T+2', purchaseLimit: { state: 'paused', label: '暂停申购' } },
-        { code: '160002', category: 'LOF', marketPrice: 0.8, premiumRate: 1, settlementCycle: 'T+2', purchaseLimit: { state: 'open', label: '不限额' } },
+        { code: '160001', category: 'LOF', marketPrice: 1.2, lastNav: 1.1, premiumRate: 2, settlementCycle: 'T+2', purchaseLimit: { state: 'paused', label: '暂停申购' } },
+        { code: '160002', category: 'LOF', marketPrice: 0.8, lastNav: 0.79, premiumRate: 1, settlementCycle: 'T+2', purchaseLimit: { state: 'open', label: '不限额' } },
       ],
     }, {
       fields: 'home', page: 1, pageSize: 30, marketFilter: 'T+2',
@@ -431,6 +525,75 @@ describe('fundAggregator', () => {
 
     expect(response.rows.map((row) => row.code)).toEqual(['160002']);
     expect(response.meta.pagination).toMatchObject({ total: 1, hasMore: false });
+  });
+
+  it('首页列表只保留关键数据完整的 LOF 并隐藏纳指 ETF 等纯场内基金', () => {
+    const snapshot = {
+      meta: { updateTime: '2026-06-29 10:00:00' },
+      rows: [
+        { code: '501225', category: 'LOF', marketPrice: 4.6, lastNav: 3.5, premiumRate: 30, purchaseLimit: { state: 'open', label: '开放申购' } },
+        { code: '513100', category: 'ETF', marketPrice: 2.1, lastNav: 2, premiumRate: 5, purchaseLimit: { state: 'paused', label: '暂停申购' } },
+        { code: '159941', category: 'ETF', marketPrice: 1.6, lastNav: 1.5, premiumRate: 4, purchaseLimit: { state: 'exchange', label: '场内交易' } },
+        { code: '161130', category: 'LOF', marketPrice: 4.6, lastNav: null, premiumRate: null, purchaseLimit: { state: 'paused', label: '暂停申购' } },
+      ],
+    };
+
+    const home = formatFundQuoteResponse(snapshot, { fields: 'home', page: 1, pageSize: 30 });
+    const full = formatFundQuoteResponse(snapshot, {});
+
+    expect(home.rows.map((row) => row.code)).toEqual(['501225']);
+    expect(home.meta.pagination.total).toBe(1);
+    expect(full.rows.map((row) => row.code)).toEqual(['501225', '513100', '159941', '161130']);
+  });
+
+  it('后续分页固定使用第一页快照且不受新快照排序变化影响', () => {
+    const firstSnapshot = {
+      meta: { updateTime: '2026-06-29 10:00:00' },
+      rows: [
+        { code: '501225', category: 'LOF', marketPrice: 1.3, lastNav: 1, premiumRate: 30 },
+        { code: '160001', category: 'LOF', marketPrice: 1.2, lastNav: 1, premiumRate: 20 },
+        { code: '160002', category: 'LOF', marketPrice: 1.1, lastNav: 1, premiumRate: 10 },
+      ],
+    };
+    const firstPage = formatFundQuoteResponse(firstSnapshot, {
+      fields: 'home', page: 1, pageSize: 2, sortKey: 'premiumRate', sortDirection: 'desc',
+    });
+    const snapshotId = firstPage.meta.pagination.snapshotId;
+
+    formatFundQuoteResponse({
+      meta: { updateTime: '2026-06-29 10:00:01' },
+      rows: [
+        { code: '160002', category: 'LOF', marketPrice: 1.99, lastNav: 1, premiumRate: 99 },
+        { code: '501225', category: 'LOF', marketPrice: 1.3, lastNav: 1, premiumRate: 30 },
+        { code: '160001', category: 'LOF', marketPrice: 1.2, lastNav: 1, premiumRate: 20 },
+      ],
+    }, { fields: 'home', page: 1, pageSize: 2, sortKey: 'premiumRate', sortDirection: 'desc' });
+
+    const pinned = getFundQuotePage({ snapshotId });
+    const secondPage = formatFundQuoteResponse(pinned, {
+      fields: 'home', page: 2, pageSize: 2, sortKey: 'premiumRate', sortDirection: 'desc', snapshotId,
+    });
+
+    expect(firstPage.rows.map((row) => row.code)).toEqual(['501225', '160001']);
+    expect(secondPage.rows.map((row) => row.code)).toEqual(['160002']);
+    expect(secondPage.meta.pagination.snapshotId).toBe(snapshotId);
+  });
+
+  it('分页快照失效时明确要求重新从第一页加载', () => {
+    expect(() => getFundQuotePage({ snapshotId: 'expired-snapshot' })).toThrow('分页快照已失效');
+  });
+
+  it('排序值相同时始终使用基金代码稳定排序', () => {
+    const response = formatFundQuoteResponse({
+      meta: {},
+      rows: [
+        { code: '501225', category: 'LOF', marketPrice: 1.3, lastNav: 1, premiumRate: 30 },
+        { code: '160002', category: 'LOF', marketPrice: 1.3, lastNav: 1, premiumRate: 30 },
+        { code: '160001', category: 'LOF', marketPrice: 1.3, lastNav: 1, premiumRate: 30 },
+      ],
+    }, { fields: 'home', sortKey: 'premiumRate', sortDirection: 'desc' });
+
+    expect(response.rows.map((row) => row.code)).toEqual(['160001', '160002', '501225']);
   });
 
   it('无数据的排序项始终放在真实数值之后', () => {

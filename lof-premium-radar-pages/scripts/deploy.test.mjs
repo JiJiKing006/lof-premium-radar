@@ -29,6 +29,9 @@ describe('deployment nginx configuration', () => {
     expect(nginxDefault).not.toContain('/srv/lof/current/dist');
 
     expect(serverIndex).toContain("app.use('/api', apiRouter);");
+    expect(serverIndex).toContain("apiRouter.post('/funds/quotes'");
+    expect(serverIndex).toContain("apiRouter.post('/funds/quotes/refresh'");
+    expect(serverIndex).toContain("apiRouter.post('/funds/quotes/page'");
     expect(serverIndex).not.toContain('createViteServer');
     expect(serverIndex).not.toContain('express.static');
   });
@@ -118,6 +121,13 @@ describe('deployment nginx configuration', () => {
     expect(deployScript).toContain("DEPLOY_VISITOR_ANALYTICS_GROWTH_START_DATE='$DEPLOY_VISITOR_ANALYTICS_GROWTH_START_DATE'");
     expect(deployScript).toContain('Environment=VISITOR_ANALYTICS_TARGET_TOTAL=${DEPLOY_VISITOR_ANALYTICS_TARGET_TOTAL}');
     expect(deployScript).toContain('Environment=VISITOR_ANALYTICS_GROWTH_START_DATE=${DEPLOY_VISITOR_ANALYTICS_GROWTH_START_DATE}');
+  });
+
+  it('keeps WeChat credentials in server environment variables and subscription data in shared storage', () => {
+    expect(deployScript).toContain('DEPLOY_WX_APP_SECRET="${DEPLOY_WX_APP_SECRET:-}"');
+    expect(deployScript).toContain('Environment=WX_APP_SECRET=${DEPLOY_WX_APP_SECRET}');
+    expect(deployScript).toContain('Environment=WX_SUBSCRIPTION_FILE=${DEPLOY_PATH}/shared/wechat-subscriptions.json');
+    expect(deployScript).not.toContain('5280d9914ef2cf0fe1a926e9000d693a');
   });
 
   it('keeps optional sibling static projects outside the LOF release directory', () => {

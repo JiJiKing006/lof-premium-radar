@@ -2,6 +2,58 @@ import { describe, expect, it } from 'vitest';
 import { calculatePremium } from './premiumService.js';
 
 describe('premiumService', () => {
+  it('prefers a fresh exchange IOPV over every estimated or official NAV basis', () => {
+    const result = calculatePremium({
+      marketPrice: 1.25,
+      iopv: 1.24,
+      iopvSource: 'sse',
+      iopvTime: '2026-06-29 10:30:15',
+      realtimeReferenceNav: 1.2,
+      realtimeReferenceSource: 'lof',
+      realtimeReferenceDate: '2026-06-28',
+      lastNav: 1.1,
+      navDate: '2026-06-27',
+    });
+
+    expect(result.premiumRate).toBeCloseTo(0.80645, 5);
+    expect(result.basis).toBe('iopv');
+    expect(result.note).toBe('基于交易所IOPV');
+  });
+
+  it('uses a fresh target-site estimate for realtime premium while keeping it labeled as non-official', () => {
+    const result = calculatePremium({
+      marketPrice: 4.536,
+      realtimeReferenceNav: 3.487,
+      realtimeReferenceSource: 'lof',
+      realtimeReferenceTime: '2026-06-29 10:38:00',
+      realtimeReferenceDate: '2026-06-26',
+      lastNav: 3.6406,
+      navDate: '2026-06-25',
+    });
+
+    expect(result.premiumRate).toBeCloseTo(30.0832, 4);
+    expect(result.basis).toBe('estimatedNav');
+    expect(result.note).toBe('基于目标网站估值（非官方净值）');
+    expect(result.estimatedNav).toBe(3.487);
+    expect(result.selectedNavSource).toBe('lof');
+  });
+
+  it('rejects a stale or older target-site estimate and falls back to the latest official NAV', () => {
+    const result = calculatePremium({
+      marketPrice: 4.536,
+      realtimeReferenceNav: 3.487,
+      realtimeReferenceSource: 'lof',
+      realtimeReferenceDate: '2026-06-24',
+      realtimeReferenceStale: true,
+      lastNav: 3.6406,
+      navDate: '2026-06-25',
+    });
+
+    expect(result.premiumRate).toBeCloseTo(24.5948, 4);
+    expect(result.basis).toBe('lastNav');
+    expect(result.note).toBe('基于已公布官方净值');
+  });
+
   it('uses only official nav when calculating premium', () => {
     const result = calculatePremium({ marketPrice: 1.25, estimatedNav: 1.2, lastNav: 1.1 });
 

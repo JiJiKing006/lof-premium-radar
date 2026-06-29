@@ -1,11 +1,10 @@
 {
-  "navigationBarTitleText": "LOF 溢价雷达",
-  "enablePullDownRefresh": true,
+  "navigationBarTitleText": "吉吉查溢",
+  "enablePullDownRefresh": false,
   "backgroundTextStyle": "dark",
   "usingComponents": {
-    "filter-tabs": "/components/filter-tabs/filter-tabs",
+    "app-loading": "/components/app-loading/app-loading",
     "search-bar": "/components/search-bar/search-bar",
-    "sort-bar": "/components/sort-bar/sort-bar",
     "radar-table": "/components/radar-table/radar-table"
   }
 }

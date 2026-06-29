@@ -1,4 +1,5 @@
 <view class="mobile-shell">
+  <app-loading visible="{{initialLoading && !visibleFunds.length}}" title="加载自选中" note="正在获取自选基金真实行情" />
   <data-status-bar
     meta="{{meta}}"
     paused="{{false}}"

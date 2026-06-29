@@ -1,7 +1,45 @@
 import { describe, expect, it } from 'vitest';
-import { mergeHaoetfNavRow, mergeLofNavRow, isNasdaqTechnologyQuote, selectEastmoneyNavCodes, selectTiantianCodes } from './navService.js';
+import { buildLofPremiumReferenceMap, mergeHaoetfNavRow, mergeLofNavRow, isNasdaqTechnologyQuote, selectEastmoneyNavCodes, selectTiantianCodes } from './navService.js';
 
 describe('navService', () => {
+  it('maps the target website realtime estimate first and keeps its provenance', () => {
+    const map = buildLofPremiumReferenceMap({
+      scrapedAt: '2026-06-29T02:38:27.000Z',
+      rows: [{
+        code: 'SH501225', quoteDate: '2026-06-29', quoteTime: '10:38',
+        officialEstValue: 3.487, estDate: '2026-06-26',
+        realtimeEstValue: 3.5, realtimePremiumValue: 29.6,
+      }],
+    });
+
+    expect(map.get('501225')).toMatchObject({
+      value: 3.5,
+      source: 'lof',
+      kind: 'realtime',
+      estimateDate: '2026-06-26',
+      quoteTime: '2026-06-29 10:38:00',
+      stale: false,
+    });
+  });
+
+  it('falls back to the target website official estimate without treating it as official NAV', () => {
+    const map = buildLofPremiumReferenceMap({
+      scrapedAt: '2026-06-29T02:38:27.000Z',
+      rows: [{
+        code: 'SH501225', quoteDate: '2026-06-29', quoteTime: '10:38',
+        officialEstValue: 3.487, officialPremiumValue: 30.07, estDate: '2026-06-26',
+        referenceEstValue: 3.478,
+      }],
+    });
+
+    expect(map.get('501225')).toMatchObject({
+      value: 3.487,
+      source: 'lof',
+      kind: 'official-estimate',
+      sourcePremiumRate: 30.07,
+    });
+  });
+
   it('includes Nasdaq technology ETFs in Tiantian NAV supplementation', () => {
     const codes = selectTiantianCodes([
       { code: '513100', name: '纳指ETF', category: 'ETF', turnover: 100 },
@@ -26,7 +64,7 @@ describe('navService', () => {
   it('selects LOF rows with missing or Palmmicro-derived NAV for Eastmoney NAV cross-check', () => {
     const navMap = new Map([
       ['160723', { code: '160723', lastNav: 3.28, navSource: 'lof' }],
-      ['161125', { code: '161125', lastNav: 3.13, navSource: 'tiantian' }],
+      ['161125', { code: '161125', lastNav: 3.13, navSource: 'tiantian', eastmoneyCheckedAt: '2026-06-29 09:25:00' }],
       ['501300', { code: '501300', lastNav: null, navSource: '' }],
     ]);
 
@@ -35,10 +73,22 @@ describe('navService', () => {
       { code: '161125', category: 'LOF' },
       { code: '501300', category: 'LOF' },
       { code: '513100', category: 'QDII' },
-    ], navMap)).toEqual(['160723', '501300']);
+    ], navMap, { now: new Date('2026-06-29T01:30:00Z').getTime() })).toEqual(['160723', '501300']);
   });
 
-  it('uses Palmmicro reference EST as an estimated NAV fallback for LOF rows without realtime EST', () => {
+  it('rechecks a previously verified LOF NAV after the official NAV refresh interval', () => {
+    const navMap = new Map([
+      ['161125', {
+        code: '161125', lastNav: 3.13, navSource: 'eastmoney', eastmoneyCheckedAt: '2026-06-29 09:00:00',
+      }],
+    ]);
+
+    expect(selectEastmoneyNavCodes([
+      { code: '161125', category: 'LOF' },
+    ], navMap, { now: new Date('2026-06-29T01:30:01Z').getTime() })).toEqual(['161125']);
+  });
+
+  it('keeps Palmmicro EST separate from official NAV when no verified official NAV exists', () => {
     const row = mergeLofNavRow({}, {
       code: 'SH501225',
       officialEstValue: 3.323,
@@ -53,16 +103,16 @@ describe('navService', () => {
 
     expect(row).toMatchObject({
       code: '501225',
-      lastNav: 3.323,
+      lastNav: null,
       estimatedNav: 3.312,
-      navDate: '2026-05-26',
-      navQuoteTime: '2026-05-27 15:00',
-      navSource: 'lof',
+      navDate: '',
+      navQuoteTime: '',
+      navSource: '',
       estimatedNavSource: 'lof',
     });
   });
 
-  it('uses Palmmicro official EST as the last LOF estimated NAV fallback', () => {
+  it('does not let a newer dated Palmmicro EST replace a verified official NAV', () => {
     const row = mergeLofNavRow({
       code: '501225',
       lastNav: 3.3418,
@@ -87,7 +137,30 @@ describe('navService', () => {
       navSource: 'eastmoney',
       estimatedNavSource: 'lof',
       navDate: '2026-06-02',
-      navQuoteTime: '2026-06-03 15:00',
+      navQuoteTime: '',
+    });
+  });
+
+  it('does not let an older incoming LOF official NAV replace a newer cached NAV', () => {
+    const row = mergeLofNavRow({
+      code: '501225',
+      lastNav: 3.407,
+      navSource: 'eastmoney',
+      navDate: '2026-06-03',
+      navQuoteTime: '2026-06-03 22:00:00',
+    }, {
+      code: 'SH501225',
+      officialEstValue: 3.3418,
+      estDate: '2026-06-02',
+      quoteDate: '2026-06-04',
+      quoteTime: '15:00',
+    });
+
+    expect(row).toMatchObject({
+      lastNav: 3.407,
+      navSource: 'eastmoney',
+      navDate: '2026-06-03',
+      navQuoteTime: '2026-06-03 22:00:00',
     });
   });
 
@@ -112,7 +185,7 @@ describe('navService', () => {
       navSource: 'eastmoney',
       estimatedNavSource: 'haoetf',
       navDate: '2026-06-02',
-      navQuoteTime: '2026-06-03 15:00:00',
+      navQuoteTime: '',
     });
   });
 });

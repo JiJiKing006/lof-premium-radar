@@ -8,7 +8,7 @@ function filterAndSortFunds(funds, state) {
       String(fund.raw && fund.raw.indexName || '').toLowerCase().includes(keyword);
 
     if (!matchesKeyword) return false;
-    if (!isLofFund(fund) && !hasRenderablePremiumRate(fund)) return false;
+    if (!hasCompletePremiumDisplaySet(fund)) return false;
     if (state.marketFilter && state.marketFilter !== 'ALL' && settlementCycle(fund) !== state.marketFilter) return false;
     if (state.excludePausedPurchase && isPausedPurchase(fund)) return false;
     return true;
@@ -18,7 +18,9 @@ function filterAndSortFunds(funds, state) {
   return filtered.slice().sort((left, right) => {
     const leftValue = sortValue(left, state.sortKey);
     const rightValue = sortValue(right, state.sortKey);
-    return (leftValue - rightValue) * multiplier;
+    const delta = (leftValue - rightValue) * multiplier;
+    if (delta !== 0) return delta;
+    return String(left.code || '').localeCompare(String(right.code || ''));
   });
 }
 
@@ -26,8 +28,15 @@ function hasRenderablePremiumRate(fund) {
   return displayPremiumRateValue(fund) !== null;
 }
 
-function isLofFund(fund) {
-  return String(fund.type || fund.raw && (fund.raw.category || fund.raw.type) || '').toUpperCase() === 'LOF';
+function hasCompletePremiumDisplaySet(fund) {
+  const raw = fund.raw || {};
+  const category = String(fund.type || raw.category || raw.fundType || '').toUpperCase();
+  const price = Number(fund.marketPrice ?? fund.price ?? raw.marketPrice ?? raw.price);
+  const nav = Number(fund.lastNav ?? fund.nav ?? raw.lastNav ?? raw.nav);
+  return category === 'LOF'
+    && Number.isFinite(price) && price > 0
+    && Number.isFinite(nav) && nav > 0
+    && hasRenderablePremiumRate(fund);
 }
 
 function displayPremiumRateValue(fund) {

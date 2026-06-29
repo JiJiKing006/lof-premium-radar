@@ -1,4 +1,4 @@
-const { requestJson } = require('./request');
+const { requestJson, postJson } = require('./request');
 const { toNumber, formatNumber, officialNavText, percentText, amountText, premiumClass, priceClass, valueClass } = require('./format');
 const { sourceLabel } = require('./source-links');
 
@@ -18,14 +18,16 @@ async function fetchFundsSnapshot(options = {}) {
   if (options.excludePausedPurchase) params.excludePausedPurchase = '1';
   if (options.sortKey) params.sortKey = String(options.sortKey);
   if (options.sortDirection) params.sortDirection = String(options.sortDirection);
+  if (options.snapshotId) params.snapshotId = String(options.snapshotId);
   const endpoint = options.requestMode === 'page'
     ? '/api/funds/quotes/page'
     : options.requestMode === 'refresh'
       ? '/api/funds/quotes/refresh'
       : '/api/funds/quotes';
-  const raw = await requestJson(endpoint, params, {
+  const raw = await postJson(endpoint, params, {
     timeoutMs: options.timeoutMs,
-    timeoutMessage: options.timeoutMessage
+    timeoutMessage: options.timeoutMessage,
+    showLoading: options.showLoading
   });
   const meta = normalizeMeta(raw.meta || {}, section || 'HOME');
   const rows = (raw.rows || []).map((row) => normalizeFund(row, meta));
@@ -39,7 +41,8 @@ async function fetchFundDetail(code, options = {}) {
   if (['LOF', 'QDII', 'ETF'].includes(section)) params.category = section;
   const row = await requestJson(`/api/funds/${code}`, params, {
     timeoutMs: 60000,
-    timeoutMessage: '详情数据源暂时无响应'
+    timeoutMessage: '详情数据源暂时无响应',
+    showLoading: options.showLoading
   });
   const meta = normalizeMeta({ sourceProvider: row.source, updateTime: row.updateTime }, row.category || options.section || '');
   return normalizeFund(row, meta);
@@ -48,7 +51,7 @@ async function fetchFundDetail(code, options = {}) {
 async function fetchFundHistory(code, options = {}) {
   const params = { t: String(Date.now()), limit: String(options.limit || 60) };
   if (options.force) params.force = '1';
-  return requestJson(`/api/funds/${code}/history`, params);
+  return requestJson(`/api/funds/${code}/history`, params, { showLoading: options.showLoading });
 }
 
 function normalizeMeta(meta, section) {

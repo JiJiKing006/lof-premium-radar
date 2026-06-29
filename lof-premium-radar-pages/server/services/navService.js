@@ -1,15 +1,21 @@
 import { cache, cacheTtl } from './cacheService.js';
 import { normalizeCode, toNumber } from './fundNormalizer.js';
-import { recordSourceFailure, recordSourceSuccess } from './sourceHealth.js';
+import { formatShanghaiTime, recordSourceFailure, recordSourceSuccess } from './sourceHealth.js';
 import { fetchJisiluQdiiSnapshot } from '../sources/jisiluQdiiProvider.js';
 import { fetchLofSnapshot } from '../sources/lofProvider.js';
 import { fetchTiantianNav } from '../sources/tiantianSource.js';
 import { fetchEastmoneyFundNav } from '../sources/eastmoneyFundNavSource.js';
 import { fetchHaoetfQuotes } from '../sources/haoetfSource.js';
+import { selectLatestOfficialNav } from './officialNavResolver.js';
 
 const NAV_KEY = 'nav:map';
+const LOF_TARGET_SNAPSHOT_KEY = 'nav:lof-target-snapshot';
 const TIANTIAN_LIMIT = 100;
+const EASTMONEY_OFFICIAL_NAV_RECHECK_MS = 15 * 60_000;
 const navInFlight = new Map();
+let lofTargetSnapshotInFlight = null;
+let lofTargetRetryAfterAt = 0;
+let lofTargetRetryReason = '';
 
 export async function getNavMap(quotes, { force = false } = {}) {
   if (!force) {
@@ -20,7 +26,7 @@ export async function getNavMap(quotes, { force = false } = {}) {
   const inFlightKey = navRequestKey(quotes);
   if (navInFlight.has(inFlightKey)) return navInFlight.get(inFlightKey);
 
-  const promise = fetchFreshNavMap(quotes).finally(() => {
+  const promise = fetchFreshNavMap(quotes, { force }).finally(() => {
     navInFlight.delete(inFlightKey);
   });
   navInFlight.set(inFlightKey, promise);
@@ -28,28 +34,128 @@ export async function getNavMap(quotes, { force = false } = {}) {
   return promise;
 }
 
-export async function getSingleNav(code) {
-  const normalizedCode = normalizeCode(code);
-  const cachedMap = cache.get(NAV_KEY) || cache.getStale(NAV_KEY);
-  const cached = cachedMap?.get(normalizedCode);
-  if (cached?.lastNav || cached?.estimatedNav) return cached;
-
-  const startedAt = Date.now();
-  try {
-    const row = await fetchTiantianNav(normalizedCode);
-    recordSourceSuccess('tiantian', Date.now() - startedAt);
-    if (cachedMap) {
-      cachedMap.set(normalizedCode, row);
-      cache.set(NAV_KEY, cachedMap, cacheTtl.nav);
-    }
-    return row;
-  } catch (error) {
-    recordSourceFailure('tiantian', error, Date.now() - startedAt);
-    return cached || null;
-  }
+export async function getLofPremiumReferenceMap({ force = false } = {}) {
+  const snapshot = await getLofTargetSnapshot({ force });
+  return buildLofPremiumReferenceMap(snapshot);
 }
 
-async function fetchFreshNavMap(quotes) {
+export function buildLofPremiumReferenceMap(snapshot = {}) {
+  const result = new Map();
+  const stale = Boolean(snapshot.stale);
+  const fetchedAt = normalizeSnapshotTime(snapshot.scrapedAt);
+  for (const row of snapshot.rows || []) {
+    const code = normalizeCode(row.code);
+    const candidate = selectLofPremiumReference(row);
+    if (!code || !candidate) continue;
+    result.set(code, {
+      code,
+      value: candidate.value,
+      source: 'lof',
+      kind: candidate.kind,
+      estimateDate: String(row.estDate || ''),
+      quoteTime: normalizeTargetQuoteTime(row.quoteDate, row.quoteTime) || fetchedAt,
+      fetchedAt,
+      sourcePremiumRate: candidate.premiumRate,
+      stale,
+    });
+  }
+  return result;
+}
+
+async function getLofTargetSnapshot({ force = false } = {}) {
+  if (Date.now() < lofTargetRetryAfterAt) {
+    const stale = cache.getStale(LOF_TARGET_SNAPSHOT_KEY, { maxAgeMs: 5 * 60_000 });
+    if (stale) return { ...stale, stale: true, error: lofTargetRetryReason };
+    throw new Error(lofTargetRetryReason || '目标估值源限流冷却中');
+  }
+  if (!force) {
+    const cached = cache.get(LOF_TARGET_SNAPSHOT_KEY);
+    if (cached) return cached;
+  }
+  if (lofTargetSnapshotInFlight) return lofTargetSnapshotInFlight;
+
+  lofTargetSnapshotInFlight = fetchLofSnapshot()
+    .then((snapshot) => {
+      lofTargetRetryAfterAt = 0;
+      lofTargetRetryReason = '';
+      return cache.set(LOF_TARGET_SNAPSHOT_KEY, { ...snapshot, stale: false }, cacheTtl.quotes);
+    })
+    .catch((error) => {
+      const retryAfterMs = Number(error?.retryAfterMs);
+      if (Number.isFinite(retryAfterMs) && retryAfterMs > 0) {
+        lofTargetRetryAfterAt = Date.now() + retryAfterMs;
+        lofTargetRetryReason = String(error?.message || '目标估值源限流冷却中');
+      }
+      const stale = cache.getStale(LOF_TARGET_SNAPSHOT_KEY, { maxAgeMs: 5 * 60_000 });
+      if (stale) return { ...stale, stale: true, error: String(error?.message || error) };
+      throw error;
+    })
+    .finally(() => {
+      lofTargetSnapshotInFlight = null;
+    });
+  return lofTargetSnapshotInFlight;
+}
+
+function selectLofPremiumReference(row) {
+  const candidates = [
+    { value: firstNumber(row.realtimeEstValue, row.realtimeEst), kind: 'realtime', premiumRate: firstNumber(row.realtimePremiumValue) },
+    { value: firstNumber(row.officialEstValue, row.officialEst), kind: 'official-estimate', premiumRate: firstNumber(row.officialPremiumValue) },
+    { value: firstNumber(row.referenceEstValue, row.referenceEst), kind: 'reference-estimate', premiumRate: firstNumber(row.referencePremiumValue) },
+  ];
+  return candidates.find((candidate) => Number.isFinite(candidate.value) && candidate.value > 0) || null;
+}
+
+function normalizeTargetQuoteTime(date, time) {
+  const safeDate = String(date || '').trim();
+  const safeTime = String(time || '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(safeDate) || !/^\d{2}:\d{2}(:\d{2})?$/.test(safeTime)) return '';
+  return `${safeDate} ${safeTime.length === 5 ? `${safeTime}:00` : safeTime}`;
+}
+
+function normalizeSnapshotTime(value) {
+  const time = new Date(value || 0);
+  return Number.isFinite(time.getTime()) ? formatShanghaiTime(time) : '';
+}
+
+export async function getSingleNav(code) {
+  const normalizedCode = normalizeCode(code);
+  const freshMap = cache.get(NAV_KEY);
+  const fresh = freshMap?.get(normalizedCode);
+  if (fresh?.lastNav || fresh?.estimatedNav) return fresh;
+
+  const cachedMap = cache.getStale(NAV_KEY) || new Map();
+  const cached = cachedMap.get(normalizedCode);
+  const startedAt = Date.now();
+  const [tiantianResult, eastmoneyResult] = await Promise.allSettled([
+    fetchTiantianNav(normalizedCode),
+    fetchEastmoneyFundNav(normalizedCode),
+  ]);
+  recordSingleSourceResult('tiantian', tiantianResult, startedAt);
+  recordSingleSourceResult('eastmoney-fund-nav', eastmoneyResult, startedAt);
+
+  const tiantian = tiantianResult.status === 'fulfilled' ? tiantianResult.value : null;
+  const eastmoney = eastmoneyResult.status === 'fulfilled'
+    ? { ...eastmoneyResult.value, eastmoneyCheckedAt: eastmoneyResult.value.updateTime || '' }
+    : null;
+  if (!tiantian && !eastmoney) return cached || null;
+
+  const estimatedNav = tiantian?.estimatedNav ?? cached?.estimatedNav ?? null;
+  const merged = applyOfficialNav({
+    ...(cached || {}),
+    ...(tiantian || {}),
+    ...(eastmoney || {}),
+    code: normalizedCode,
+    estimatedNav,
+    estimatedNavSource: estimatedNav !== null
+      ? tiantian?.estimatedNavSource || tiantian?.navSource || cached?.estimatedNavSource || ''
+      : '',
+  }, [cached, tiantian, eastmoney]);
+  cachedMap.set(normalizedCode, merged);
+  cache.set(NAV_KEY, cachedMap, cacheTtl.nav);
+  return merged;
+}
+
+async function fetchFreshNavMap(quotes, { force = false } = {}) {
   const previous = cache.getStale(NAV_KEY);
 
   const navMap = new Map();
@@ -57,7 +163,7 @@ async function fetchFreshNavMap(quotes) {
     for (const [code, row] of previous.entries()) navMap.set(code, row);
   }
 
-  await Promise.allSettled([loadJisilu(navMap), loadLof(navMap)]);
+  await Promise.allSettled([loadJisilu(navMap), loadLof(navMap, { force })]);
   await loadTiantian(navMap, selectTiantianCodes(quotes));
   await loadHaoetf(navMap, quotes);
   await loadEastmoneyFundNav(navMap, selectEastmoneyNavCodes(quotes, navMap));
@@ -73,16 +179,18 @@ async function loadJisilu(navMap) {
       const code = normalizeCode(row.code);
       if (!code) continue;
       const estimatedNav = firstNumber(row.realtimeEstValue, row.realtimeEst, row.referenceEstValue, row.referenceEst);
-      navMap.set(code, {
+      const existing = navMap.get(code) || {};
+      const incoming = {
         code,
         lastNav: firstNumber(row.officialEstValue, row.officialEst),
         estimatedNav,
         navDate: row.estDate || '',
-        navQuoteTime: row.quoteDate && row.quoteTime ? `${row.quoteDate} ${row.quoteTime}` : '',
+        navQuoteTime: row.navQuoteTime || row.quoteTime || '',
         navSource: 'jisilu',
         estimatedNavSource: estimatedNav !== null ? 'jisilu' : '',
         subscriptionStatus: row.purchaseLimit?.limitText || '',
-      });
+      };
+      navMap.set(code, applyOfficialNav({ ...existing, ...incoming }, [existing, incoming]));
     }
     recordSourceSuccess('jisilu', Date.now() - startedAt);
   } catch (error) {
@@ -90,10 +198,10 @@ async function loadJisilu(navMap) {
   }
 }
 
-async function loadLof(navMap) {
+async function loadLof(navMap, { force = false } = {}) {
   const startedAt = Date.now();
   try {
-    const snapshot = await fetchLofSnapshot();
+    const snapshot = await getLofTargetSnapshot({ force });
     for (const row of snapshot.rows || []) {
       const code = normalizeCode(row.code);
       if (!code) continue;
@@ -117,17 +225,13 @@ export function mergeLofNavRow(existing = {}, row = {}) {
     row.officialEstValue,
     row.officialEst,
   );
-  return {
+  return applyOfficialNav({
     ...existing,
     code,
-    lastNav: firstNumber(existing.lastNav, row.officialEstValue, row.officialEst),
     estimatedNav,
-    navDate: existing.navDate || row.estDate || '',
-    navQuoteTime: existing.navQuoteTime || (row.quoteDate && row.quoteTime ? `${row.quoteDate} ${row.quoteTime}` : ''),
-    navSource: existing.navSource || 'lof',
     estimatedNavSource: existing.estimatedNavSource || (estimatedNav !== null ? 'lof' : ''),
     subscriptionStatus: existing.subscriptionStatus || row.purchaseLimit?.limitText || '',
-  };
+  }, [existing]);
 }
 
 async function loadHaoetf(navMap, quotes = []) {
@@ -162,17 +266,19 @@ async function loadHaoetf(navMap, quotes = []) {
 export function mergeHaoetfNavRow(existing = {}, row = {}) {
   const code = normalizeCode(row.code);
   const estimatedNav = firstNumber(existing.estimatedNav, row.estimatedNav);
-  const lastNav = firstNumber(existing.lastNav, row.lastNav);
-  return {
+  const incomingOfficialNav = {
+    lastNav: firstNumber(row.lastNav),
+    navDate: row.navDate || '',
+    navQuoteTime: row.navQuoteTime || row.quoteTime || '',
+    navSource: 'haoetf',
+    updateTime: row.updateTime || '',
+  };
+  return applyOfficialNav({
     ...existing,
     code,
-    lastNav,
     estimatedNav,
-    navDate: existing.navDate || row.navDate || '',
-    navQuoteTime: existing.navQuoteTime || row.navQuoteTime || row.quoteTime || '',
-    navSource: existing.navSource || (lastNav !== null ? 'haoetf' : ''),
     estimatedNavSource: existing.estimatedNavSource || (estimatedNav !== null ? 'haoetf' : ''),
-  };
+  }, [existing, incomingOfficialNav]);
 }
 
 async function loadTiantian(navMap, codes) {
@@ -185,18 +291,14 @@ async function loadTiantian(navMap, codes) {
         if (result.status !== 'fulfilled') continue;
         const row = result.value;
         const existing = navMap.get(row.code) || {};
-        navMap.set(row.code, {
+        navMap.set(row.code, applyOfficialNav({
           ...existing,
           ...row,
-          lastNav: row.lastNav ?? existing.lastNav ?? null,
           estimatedNav: row.estimatedNav ?? existing.estimatedNav ?? null,
-          navDate: row.navDate || existing.navDate || '',
-          navQuoteTime: row.navQuoteTime || existing.navQuoteTime || '',
-          navSource: 'tiantian',
           estimatedNavSource: row.estimatedNav !== null && row.estimatedNav !== undefined
             ? 'tiantian'
             : existing.estimatedNavSource || '',
-        });
+        }, [existing, { ...row, navSource: 'tiantian' }]));
         success += 1;
       }
     }
@@ -218,16 +320,13 @@ async function loadEastmoneyFundNav(navMap, codes) {
         if (result.status !== 'fulfilled') continue;
         const row = result.value;
         const existing = navMap.get(row.code) || {};
-        navMap.set(row.code, {
+        navMap.set(row.code, applyOfficialNav({
           ...existing,
           ...row,
-          lastNav: row.lastNav ?? existing.lastNav ?? null,
+          eastmoneyCheckedAt: row.updateTime || existing.eastmoneyCheckedAt || '',
           estimatedNav: existing.estimatedNav ?? row.estimatedNav ?? null,
-          navDate: row.navDate || existing.navDate || '',
-          navQuoteTime: row.navQuoteTime || existing.navQuoteTime || '',
-          navSource: 'eastmoney',
           estimatedNavSource: existing.estimatedNavSource || (row.estimatedNav !== null && row.estimatedNav !== undefined ? 'eastmoney' : ''),
-        });
+        }, [existing, { ...row, navSource: 'eastmoney' }]));
         success += 1;
       }
     }
@@ -246,13 +345,16 @@ export function selectTiantianCodes(quotes) {
     .slice(0, TIANTIAN_LIMIT);
 }
 
-export function selectEastmoneyNavCodes(quotes, navMap = new Map()) {
+export function selectEastmoneyNavCodes(quotes, navMap = new Map(), { now = Date.now() } = {}) {
   return quotes
     .filter((row) => row.category === 'LOF')
     .filter((row) => {
       const code = normalizeCode(row.code);
       const nav = navMap.get(code);
-      return !nav?.lastNav || String(nav.navSource || '').toLowerCase() === 'lof';
+      if (!nav?.lastNav) return true;
+      if (!/(eastmoney|tiantian)/i.test(String(nav.navSource || ''))) return true;
+      const checkedAt = parseShanghaiTime(nav.eastmoneyCheckedAt);
+      return !checkedAt || now - checkedAt >= EASTMONEY_OFFICIAL_NAV_RECHECK_MS;
     })
     .map((row) => normalizeCode(row.code))
     .filter(Boolean);
@@ -275,6 +377,40 @@ function firstNumber(...values) {
     if (number !== null) return number;
   }
   return null;
+}
+
+function applyOfficialNav(base, candidates) {
+  const selected = selectLatestOfficialNav(candidates);
+  if (!selected) {
+    return {
+      ...base,
+      lastNav: null,
+      navDate: '',
+      navQuoteTime: '',
+      navSource: '',
+    };
+  }
+  return {
+    ...base,
+    lastNav: selected.lastNav,
+    navDate: selected.navDate,
+    navQuoteTime: selected.navQuoteTime,
+    navSource: selected.navSource,
+    navFetchedAt: selected.navFetchedAt,
+  };
+}
+
+function recordSingleSourceResult(source, result, startedAt) {
+  const latency = Date.now() - startedAt;
+  if (result.status === 'fulfilled') recordSourceSuccess(source, latency);
+  else recordSourceFailure(source, result.reason, latency);
+}
+
+function parseShanghaiTime(value) {
+  const text = String(value || '').trim();
+  if (!text) return 0;
+  const time = new Date(`${text.replace(' ', 'T')}+08:00`).getTime();
+  return Number.isFinite(time) ? time : 0;
 }
 
 function navRequestKey(quotes = []) {

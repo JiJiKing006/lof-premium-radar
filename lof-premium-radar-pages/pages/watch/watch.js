@@ -73,7 +73,7 @@ Page({
   async fetchSnapshot({ force = false } = {}) {
     this.setData({ pollingError: '', initialLoading: this.data.funds.length === 0 });
     try {
-      const snapshot = await fetchFundsSnapshot({ section: 'ALL', force, includeTrends: false });
+      const snapshot = await fetchFundsSnapshot({ section: 'ALL', force, includeTrends: false, showLoading: false });
       if (!snapshot || !Array.isArray(snapshot.rows)) throw new Error('行情接口返回空数据');
       writeSnapshot(HOME_SECTION, snapshot);
       this.applySnapshot(snapshot);

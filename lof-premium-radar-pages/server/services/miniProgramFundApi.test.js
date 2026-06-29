@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import vm from 'node:vm';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 function loadMiniProgramModule(filename, moduleCache = new Map()) {
   const absolutePath = path.resolve(filename);
@@ -22,6 +22,37 @@ function loadMiniProgramModule(filename, moduleCache = new Map()) {
 }
 
 describe('mini-program fund API normalization', () => {
+  it('sends table queries as POST JSON so filters and snapshot ids are not encoded into the URL', async () => {
+    const originalWx = globalThis.wx;
+    const request = vi.fn((options) => options.success({
+      statusCode: 200,
+      data: { meta: { pagination: { snapshotId: 'snapshot-1' } }, rows: [] },
+    }));
+    globalThis.wx = {
+      getStorageSync: () => '',
+      request,
+    };
+
+    try {
+      const { fetchFundsSnapshot } = loadMiniProgramModule(path.resolve('utils/fund-api.js'));
+      await fetchFundsSnapshot({
+        fields: 'home', page: 2, pageSize: 30, query: '全球芯片',
+        excludePausedPurchase: true, snapshotId: 'snapshot-1', requestMode: 'page',
+      });
+
+      expect(request).toHaveBeenCalledTimes(1);
+      expect(request.mock.calls[0][0]).toMatchObject({
+        method: 'POST',
+        url: expect.stringContaining('/api/funds/quotes/page'),
+        data: expect.objectContaining({
+          page: '2', query: '全球芯片', snapshotId: 'snapshot-1', excludePausedPurchase: '1',
+        }),
+      });
+    } finally {
+      globalThis.wx = originalWx;
+    }
+  });
+
   it('keeps the last verified purchase status when refresh only returns unavailable', () => {
     const { normalizeFund, mergeStablePurchaseStatuses } = loadMiniProgramModule(path.resolve('utils/fund-api.js'));
     const meta = { sourceProvider: 'eastmoney', updateTime: '2026-06-27 15:00:00' };

@@ -50,6 +50,11 @@ function requestJson(path, data, options = {}) {
   const url = `${apiBaseUrl()}${path}`;
   const timeout = Number(options.timeoutMs) > 0 ? Number(options.timeoutMs) : 10000;
   return new Promise((resolve, reject) => {
+    let finished = false;
+    const finish = () => {
+      if (finished) return;
+      finished = true;
+    };
     wx.request({
       url,
       method: 'GET',
@@ -57,13 +62,15 @@ function requestJson(path, data, options = {}) {
       timeout,
       header: { Accept: 'application/json' },
       success(response) {
+        finish();
         if (response.statusCode >= 200 && response.statusCode < 300) {
           resolve(response.data);
           return;
         }
-        reject(new Error(`接口返回 ${response.statusCode}`));
+        reject(httpError(response));
       },
       fail(error) {
+        finish();
         const message = error && error.errMsg ? error.errMsg : '接口请求失败';
         reject(new Error(/timeout/i.test(message) ? (options.timeoutMessage || '接口请求超时，请重试') : message));
       }
@@ -71,4 +78,42 @@ function requestJson(path, data, options = {}) {
   });
 }
 
-module.exports = { requestJson };
+function postJson(path, data, options = {}) {
+  const url = `${apiBaseUrl()}${path}`;
+  const timeout = Number(options.timeoutMs) > 0 ? Number(options.timeoutMs) : 10000;
+  return new Promise((resolve, reject) => {
+    let finished = false;
+    const finish = () => {
+      if (finished) return;
+      finished = true;
+    };
+    wx.request({
+      url,
+      method: 'POST',
+      data,
+      timeout,
+      header: { Accept: 'application/json', 'Content-Type': 'application/json' },
+      success(response) {
+        finish();
+        if (response.statusCode >= 200 && response.statusCode < 300) return resolve(response.data);
+        reject(httpError(response));
+      },
+      fail(error) {
+        finish();
+        const message = error && error.errMsg ? error.errMsg : '接口请求失败';
+        reject(new Error(/timeout/i.test(message) ? (options.timeoutMessage || '接口请求超时，请重试') : message));
+      }
+    });
+  });
+}
+
+function httpError(response) {
+  const payload = response && response.data || {};
+  const message = payload.error || payload.meta && payload.meta.status || `接口返回 ${response && response.statusCode}`;
+  const error = new Error(message);
+  error.statusCode = Number(response && response.statusCode) || 0;
+  error.responseData = payload;
+  return error;
+}
+
+module.exports = { requestJson, postJson };

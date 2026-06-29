@@ -1,15 +1,21 @@
 const { fetchFundsSnapshot, fetchFundDetail, normalizeFund, mergeStablePurchaseStatuses } = require('../../utils/fund-api');
-const { filterAndSortFunds } = require('../../utils/fund-filter');
+const { filterAndSortFunds, settlementCycle } = require('../../utils/fund-filter');
 const { readSnapshot, writeSnapshot } = require('../../utils/cache');
 const { recordVisitor, getOrCreateDeviceId } = require('../../utils/analytics');
+const { registerSubscription, getSubscriptionStatus, cancelSubscription } = require('../../utils/subscription');
+const { allowAction } = require('../../utils/action-guard');
 
 const PAGE_SIZE = 30;
 const SEARCH_DEBOUNCE_MS = 160;
 const WATCH_STORAGE_KEY = 'fund-watchlist';
 const WATCH_SECTION = 'WATCH';
-const DEFAULT_SECTION = 'T+2';
-const DEFAULT_MARKET_FILTER = 'T+2';
+const DEFAULT_SECTION = 'ALL';
+const DEFAULT_MARKET_FILTER = 'ALL';
 const PURCHASE_STATUS_RECOVERY_DELAY_MS = 3800;
+const PURCHASE_STATUS_RECOVERY_MAX_ATTEMPTS = 1;
+const SUBSCRIBE_TEMPLATE_ID = 'nChCRD1ljtNdWE20NSZIogo5tYX5sX4xP4UPEdZVLyM';
+const SUBSCRIBE_NOTE = '仅供参考，不做投资建议';
+const MIN_REFRESH_LOADING_MS = 650;
 
 function getCurrentFunds(page) {
   return page && Array.isArray(page.currentFunds) ? page.currentFunds : [];
@@ -27,9 +33,11 @@ Page({
     activeTypeLabel: DEFAULT_SECTION,
     query: '',
     marketFilter: DEFAULT_MARKET_FILTER,
-    excludePausedPurchase: false,
+    excludePausedPurchase: true,
     sortKey: 'premiumRate',
     sortDirection: 'desc',
+    activeSortKey: 'premiumRate',
+    sortMode: 'desc',
     funds: [],
     visibleFunds: [],
     visibleTotalCount: 0,
@@ -48,7 +56,15 @@ Page({
     tableResetToken: 0,
     manualRefreshing: false,
     showTableBackTop: false,
-    showEstimatedNav: true
+    showEstimatedNav: false,
+    showMonitorModal: false,
+    reminderAdded: false,
+    showCancelReminderModal: false,
+    cancellingReminder: false,
+    reminderSubmitting: false,
+    operationLoading: false,
+    loadingTitle: '',
+    loadingNote: ''
   },
 
   onLoad() {
@@ -58,6 +74,7 @@ Page({
     this.filteredFundsCache = [];
     this.visiblePage = 1;
     this.loadingMoreFunds = false;
+    this.purchaseStatusRecoveryAttempts = 0;
     this.refreshFavoriteCodes();
     this.hydrateSectionSnapshot({ allowStale: true });
     this.fetchSectionSnapshot();
@@ -65,6 +82,7 @@ Page({
   },
 
   onShow() {
+    this.refreshReminderStatus();
     const favoriteChanged = this.refreshFavoriteCodes();
     if (favoriteChanged && this.data.section === WATCH_SECTION) {
       this.fetchSectionSnapshot({ force: false });
@@ -81,7 +99,6 @@ Page({
     this.clearPulseTimer();
     this.clearSearchTimer();
     this.clearPurchaseStatusRecoveryTimer();
-    this.clearPostRefreshTimer();
   },
 
   hydrateSectionSnapshot(options = {}) {
@@ -111,7 +128,8 @@ Page({
     background = false,
     requestMode = '',
     timeoutMs,
-    timeoutMessage
+    timeoutMessage,
+    skipRecovery = false
   } = {}) {
     const targetSection = section || this.data.section;
     const requestId = `${Date.now()}:${Math.random()}`;
@@ -128,15 +146,21 @@ Page({
         timeoutMessage
       });
       if (this.sectionRequestIds[targetSection] !== requestId) return;
-      if (!fetchedSnapshot || !Array.isArray(fetchedSnapshot.rows) || (!fetchedSnapshot.rows.length && targetSection !== WATCH_SECTION)) {
+      const allowsEmptyResult = targetSection === WATCH_SECTION || Boolean(String(this.data.query || '').trim());
+      if (!fetchedSnapshot || !Array.isArray(fetchedSnapshot.rows) || (!fetchedSnapshot.rows.length && !allowsEmptyResult)) {
         throw new Error('行情接口返回空数据');
       }
       const snapshot = this.stabilizeSnapshotPurchaseStatuses(targetSection, fetchedSnapshot);
       writeSnapshot(this.snapshotCacheKey(targetSection), snapshot);
       this.rememberSectionSnapshot(targetSection, snapshot);
       if (targetSection === this.data.section) {
-        this.applySectionSnapshot(snapshot, { section: targetSection, keepPage: Boolean(background) });
+        this.applySectionSnapshot(snapshot, {
+          section: targetSection,
+          keepPage: Boolean(background),
+          skipRecovery
+        });
       }
+      return snapshot;
     } catch (error) {
       const fallback = readSnapshot(this.snapshotCacheKey(targetSection), { allowStale: true });
       if (fallback && targetSection === this.data.section) {
@@ -144,9 +168,10 @@ Page({
           section: targetSection,
           stale: true,
           keepPage: true,
-          errorMessage: error && error.message ? error.message : '行情接口加载失败'
+          skipRecovery: true,
+          errorMessage: background ? '' : error && error.message ? error.message : '行情接口加载失败'
         });
-        return;
+        return false;
       }
       if (!background && targetSection === this.data.section) {
         this.setData({
@@ -154,6 +179,7 @@ Page({
           pollingError: error && error.message ? error.message : '行情接口加载失败'
         });
       }
+      return false;
     }
   },
 
@@ -187,7 +213,7 @@ Page({
     this.sectionStates[section] = Object.assign({}, currentState, {
       funds,
       meta,
-      lastSuccessAt: meta.updateTime || meta.latestQuoteTime || '',
+      lastSuccessAt: formatUpdateTime(meta.updateTime || meta.latestQuoteTime || ''),
       abnormalCount
     });
     if (section !== this.data.section) return;
@@ -195,12 +221,12 @@ Page({
     this.setData({
       meta,
       initialLoading: false,
-      lastSuccessAt: meta.updateTime || meta.latestQuoteTime || '',
+      lastSuccessAt: formatUpdateTime(meta.updateTime || meta.latestQuoteTime || ''),
       pollingError: options.errorMessage || '',
       abnormalCount
     });
     this.updateVisibleFunds({ keepPage: Boolean(options.keepPage), serverPagination: meta.pagination || null });
-    this.schedulePurchaseStatusRecovery(funds);
+    if (!options.skipRecovery) this.schedulePurchaseStatusRecovery(funds);
   },
 
   rememberSectionSnapshot(section, snapshot) {
@@ -211,7 +237,7 @@ Page({
     this.sectionStates[section] = Object.assign({}, previous, {
       funds,
       meta,
-      lastSuccessAt: meta.updateTime || meta.latestQuoteTime || '',
+      lastSuccessAt: formatUpdateTime(meta.updateTime || meta.latestQuoteTime || ''),
       abnormalCount: funds.filter((fund) => fund.stale || fund.confidence < 70 || fund.errorMessage).length
     });
   },
@@ -237,6 +263,7 @@ Page({
   restoreSectionState(section) {
     const state = this.sectionStates && this.sectionStates[section];
     if (!state || !Array.isArray(state.funds)) return false;
+    if (String(state.query || '').trim()) return false;
     setCurrentFunds(this, state.funds);
     this.filteredFundsCache = Array.isArray(state.filteredFunds) ? state.filteredFunds : [];
     this.visiblePage = state.visiblePage || 1;
@@ -244,11 +271,13 @@ Page({
       section,
       activeTypeLabel: sectionLabel(section),
       selectedFund: null,
-      query: state.query || '',
+      query: '',
       marketFilter: marketFilterForSection(section),
       excludePausedPurchase: Boolean(state.excludePausedPurchase),
-      sortKey: state.sortKey || 'premiumRate',
-      sortDirection: state.sortDirection || 'desc',
+      sortKey: 'premiumRate',
+      sortDirection: 'desc',
+      activeSortKey: 'premiumRate',
+      sortMode: 'desc',
       meta: state.meta || null,
       initialLoading: false,
       pollingError: '',
@@ -278,9 +307,13 @@ Page({
       excludePausedPurchase: this.data.excludePausedPurchase,
       sortKey: this.data.sortKey,
       sortDirection: this.data.sortDirection,
+      snapshotId: page > 1
+        ? options.snapshotId || this.data.meta && this.data.meta.pagination && this.data.meta.pagination.snapshotId
+        : '',
       requestMode: options.requestMode,
       timeoutMs: options.timeoutMs,
-      timeoutMessage: options.timeoutMessage
+      timeoutMessage: options.timeoutMessage,
+      showLoading: false
     });
   },
 
@@ -305,7 +338,7 @@ Page({
       };
     }
     const settled = await Promise.all(favoriteCodes.map((code) => (
-      fetchFundDetail(code, { section: 'ALL', force: options.force })
+      fetchFundDetail(code, { section: 'ALL', force: options.force, showLoading: false })
         .then((fund) => fund && fund.raw ? fund.raw : null)
         .catch(() => null)
     )));
@@ -343,6 +376,8 @@ Page({
       isFavorite: favoriteSet.has(fund.code),
       purchaseText: purchaseText(fund),
       purchaseState: purchaseState(fund),
+      settlementCycle: settlementCycle(fund),
+      settlementState: settlementCycle(fund) === 'T+2' ? 'short' : 'long',
       changedPremiumRate: hasChangedField(fund, ['premiumRate', 'realtimePremium']),
       changedMarketPrice: hasChangedField(fund, ['marketPrice', 'price']),
       changedChangeRate: hasChangedField(fund, ['changeRate', 'changePercent', 'changeValue']),
@@ -384,13 +419,14 @@ Page({
       visibleFunds,
       visibleTotalCount: totalCount,
       hasMoreFunds: pagination ? Boolean(pagination.hasMore) : visibleFunds.length < filteredFunds.length,
-      showEstimatedNav: marketFilterForSection(this.data.section) !== 'T+2',
+      showEstimatedNav: false,
       dataVersion: `${this.data.meta && (this.data.meta.updateTime || this.data.meta.latestQuoteTime) || 'initial'}:${filteredFunds.length}:${visibleFunds.map((fund) => [fund.code, fund.marketPrice, fund.premiumRate, fund.lastNav, fund.estimatedNav].join(':')).join('|')}`
     });
   },
 
   handleLoadMoreFunds() {
-    if (this.loadingMoreFunds || this.data.initialLoading || !this.data.hasMoreFunds) return;
+    if (this.loadingMoreFunds || this.data.initialLoading || this.data.manualRefreshing || !this.data.hasMoreFunds) return;
+    if (this.loadMoreRetryAt && Date.now() < this.loadMoreRetryAt) return;
     this.loadingMoreFunds = true;
     this.setData({ loadingMoreFunds: true });
     const requestsApi = this.data.section !== WATCH_SECTION;
@@ -407,45 +443,97 @@ Page({
   },
 
   async fetchNextFundsPage() {
-    const targetPage = (this.visiblePage || 1) + 1;
-    try {
-      const snapshot = await this.fetchSnapshotForSection(this.data.section, {
-        force: false,
-        page: targetPage,
-        pageSize: PAGE_SIZE,
-        requestMode: 'page',
-        timeoutMs: 1000,
-        timeoutMessage: '分页数据请求超时，请重试'
-      });
-      this.applySectionSnapshot(snapshot, { section: this.data.section, append: true, keepPage: true });
-    } catch (error) {
-      this.showToast(error && error.message ? error.message : '加载更多失败', 1200);
+    const targetSection = this.data.section;
+    let snapshotId = this.data.meta && this.data.meta.pagination && this.data.meta.pagination.snapshotId;
+    let lastError;
+    if (!snapshotId) {
+      try {
+        snapshotId = await this.ensurePaginationSnapshot();
+      } catch (error) {
+        lastError = error;
+      }
+      if (!snapshotId) {
+        this.loadMoreRetryAt = Date.now() + 2000;
+        this.showToast(lastError && lastError.message ? lastError.message : '分页快照更新中，请稍后重试', 1200);
+        return;
+      }
+      if (!this.data.hasMoreFunds) return;
     }
+    const expectedSnapshotId = snapshotId;
+    const targetPage = (this.visiblePage || 1) + 1;
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        const snapshot = await this.fetchSnapshotForSection(targetSection, {
+          force: false,
+          page: targetPage,
+          pageSize: PAGE_SIZE,
+          snapshotId,
+          requestMode: 'page',
+          timeoutMs: 5000,
+          timeoutMessage: '分页数据请求超时，请重试'
+        });
+        const currentSnapshotId = this.data.meta && this.data.meta.pagination && this.data.meta.pagination.snapshotId;
+        if (targetSection !== this.data.section || currentSnapshotId !== expectedSnapshotId) return;
+        if (snapshot.meta && snapshot.meta.pagination && snapshot.meta.pagination.snapshotReset) {
+          this.visiblePage = 1;
+          this.applySectionSnapshot(snapshot, { section: targetSection, append: false, keepPage: false });
+          this.loadMoreRetryAt = 0;
+          this.showToast('数据已更新，正在继续加载', 1200);
+          return;
+        }
+        this.applySectionSnapshot(snapshot, { section: targetSection, append: true, keepPage: true });
+        this.loadMoreRetryAt = 0;
+        return;
+      } catch (error) {
+        lastError = error;
+        if (attempt === 0) await wait(250);
+      }
+    }
+    this.loadMoreRetryAt = Date.now() + 2000;
+    this.showToast(lastError && lastError.message ? lastError.message : '加载更多失败', 1200);
   },
 
-  onPullDownRefresh() {
-    this.handleManualRefresh();
+  async ensurePaginationSnapshot() {
+    const snapshot = await this.fetchSnapshotForSection(this.data.section, {
+      force: false,
+      page: 1,
+      pageSize: PAGE_SIZE,
+      requestMode: 'page',
+      timeoutMs: 5000,
+      timeoutMessage: '分页快照初始化超时，请重试'
+    });
+    this.applySectionSnapshot(snapshot, {
+      section: this.data.section,
+      append: false,
+      keepPage: false,
+      skipRecovery: true
+    });
+    return snapshot && snapshot.meta && snapshot.meta.pagination && snapshot.meta.pagination.snapshotId || '';
   },
 
   async handleManualRefresh() {
-    if (this.data.manualRefreshing) {
-      stopPullDownRefreshSafely();
-      return;
-    }
+    if (this.data.manualRefreshing) return;
+    if (!allowAction(this, 'manual-refresh')) return;
+    this.clearPurchaseStatusRecoveryTimer();
+    this.purchaseStatusRecoveryAttempts = 0;
+    this.visiblePage = 1;
+    this.resetTableScroll();
+    const loadingStartedAt = Date.now();
+    this.showOperationLoading('刷新数据中', '正在更新真实行情，请稍候');
     this.setData({ manualRefreshing: true, pollingError: '' });
-    showLoadingSafely('加载数据中');
     try {
       await this.fetchSectionSnapshot({
         force: true,
         requestMode: 'refresh',
-        timeoutMs: 1200,
-        timeoutMessage: '首页数据刷新超时，已保留上一份真实数据'
+        timeoutMs: 6000,
+        timeoutMessage: '首页数据刷新超时，已保留上一份真实数据',
+        skipRecovery: true
       });
-      this.schedulePostRefreshSnapshot();
     } finally {
+      const remaining = MIN_REFRESH_LOADING_MS - (Date.now() - loadingStartedAt);
+      if (remaining > 0) await wait(remaining);
       this.setData({ manualRefreshing: false });
-      hideLoadingSafely();
-      stopPullDownRefreshSafely();
+      this.hideOperationLoading();
     }
   },
 
@@ -470,9 +558,15 @@ Page({
 
   schedulePurchaseStatusRecovery(funds) {
     const hasMissingPurchaseStatus = (Array.isArray(funds) ? funds : []).some((fund) => !hasUsablePurchaseStatus(fund));
-    if (!hasMissingPurchaseStatus || this.purchaseStatusRecoveryTimer) return;
+    if (!hasMissingPurchaseStatus) {
+      this.purchaseStatusRecoveryAttempts = 0;
+      this.clearPurchaseStatusRecoveryTimer();
+      return;
+    }
+    if (this.purchaseStatusRecoveryTimer || this.purchaseStatusRecoveryAttempts >= PURCHASE_STATUS_RECOVERY_MAX_ATTEMPTS) return;
     this.purchaseStatusRecoveryTimer = setTimeout(() => {
       this.purchaseStatusRecoveryTimer = null;
+      this.purchaseStatusRecoveryAttempts += 1;
       if (this.data.section !== WATCH_SECTION) this.fetchInteractiveSnapshot();
     }, PURCHASE_STATUS_RECOVERY_DELAY_MS);
   },
@@ -482,32 +576,19 @@ Page({
     this.purchaseStatusRecoveryTimer = null;
   },
 
-  schedulePostRefreshSnapshot() {
-    this.clearPostRefreshTimer();
-    this.postRefreshTimer = setTimeout(() => {
-      this.postRefreshTimer = null;
-      if (this.data.section === WATCH_SECTION) return;
-      this.fetchSectionSnapshot({
-        background: true,
-        requestMode: 'page',
-        timeoutMs: 1000,
-        timeoutMessage: ''
-      });
-    }, 1100);
-  },
-
-  clearPostRefreshTimer() {
-    if (this.postRefreshTimer) clearTimeout(this.postRefreshTimer);
-    this.postRefreshTimer = null;
-  },
-
   handleSectionChange(event) {
     this.clearSearchTimer();
     const section = event.detail.value;
     if (!section || section === this.data.section) return;
-    this.resetTableScroll();
+    if (!allowAction(this, `section:${section}`)) return;
     this.rememberCurrentSectionState();
-    if (this.restoreSectionState(section)) return;
+    this.refreshFavoriteCodes();
+    this.setData({ query: '' });
+    this.resetTableScroll();
+    if (this.restoreSectionState(section)) {
+      this.fetchSectionSnapshot({ section, force: true });
+      return;
+    }
     setCurrentFunds(this, []);
     this.setData({
       section,
@@ -518,14 +599,166 @@ Page({
       excludePausedPurchase: false,
       sortKey: 'premiumRate',
       sortDirection: 'desc',
+      activeSortKey: 'premiumRate',
+      sortMode: 'desc',
       visibleFunds: [],
       visibleTotalCount: 0,
       hasMoreFunds: false,
       meta: null,
       initialLoading: true
     });
-    const hydrated = this.hydrateSectionSnapshot({ section, allowStale: true });
-    if (!hydrated) this.fetchSectionSnapshot({ section });
+    this.hydrateSectionSnapshot({ section, allowStale: true });
+    this.fetchSectionSnapshot({ section, force: true });
+  },
+
+  showAllFunds() {
+    this.handleSectionChange({ detail: { value: 'ALL' } });
+  },
+
+  showWatchFunds() {
+    this.handleSectionChange({ detail: { value: WATCH_SECTION } });
+  },
+
+  handleReminderEntry() {
+    if (!allowAction(this, 'reminder-entry')) return;
+    if (this.data.reminderAdded) {
+      this.setData({ showCancelReminderModal: true });
+      return;
+    }
+    this.setData({ showMonitorModal: true });
+  },
+
+  closeMonitorModal() {
+    if (!allowAction(this, 'close-monitor')) return;
+    this.setData({ showMonitorModal: false });
+  },
+
+  closeCancelReminderModal() {
+    if (!allowAction(this, 'close-cancel-reminder')) return;
+    if (!this.data.cancellingReminder) this.setData({ showCancelReminderModal: false });
+  },
+
+  async confirmCancelReminder() {
+    if (this.data.cancellingReminder) return;
+    if (!allowAction(this, 'confirm-cancel-reminder')) return;
+    this.setData({ cancellingReminder: true });
+    this.showOperationLoading('取消提醒中', '正在更新你的提醒设置');
+    try {
+      await cancelSubscription();
+      this.setData({ reminderAdded: false, showCancelReminderModal: false });
+      this.showToast('已取消提醒', 1600);
+    } catch (error) {
+      this.showToast(error && error.message ? error.message : '取消提醒失败', 1800);
+    } finally {
+      this.setData({ cancellingReminder: false });
+      this.hideOperationLoading();
+    }
+  },
+
+  async refreshReminderStatus() {
+    try {
+      const result = await getSubscriptionStatus();
+      this.setData({ reminderAdded: Boolean(result && result.added) });
+    } catch (_) {
+      // 状态查询失败不覆盖本地刚完成的提醒状态。
+    }
+  },
+
+  async handleMonitorPreview() {
+    if (!allowAction(this, 'monitor-preview')) return;
+    if (!wx.requestSubscribeMessage) {
+      this.showToast('当前微信版本暂不支持订阅消息', 1800);
+      return;
+    }
+    this.closeMonitorModal();
+    let reminderSubmitting = false;
+    try {
+      const result = await requestOneTimeSubscription(SUBSCRIBE_TEMPLATE_ID);
+      const status = result && result[SUBSCRIBE_TEMPLATE_ID];
+      if (status === 'reject') {
+        this.showToast('你已取消本次订阅', 1600);
+        return;
+      }
+      if (status === 'ban') {
+        this.showToast('订阅消息已被禁用，请在微信设置中开启', 2200);
+        return;
+      }
+      if (status !== 'accept') {
+        this.showToast('未获得订阅授权', 1600);
+        return;
+      }
+      reminderSubmitting = true;
+      this.setData({ reminderSubmitting: true });
+      this.showOperationLoading('添加提醒中', '正在保存订阅并生成真实机会数据');
+      const preview = await this.buildSubscriptionMessagePreview();
+      console.log('[订阅消息模板内容]', JSON.stringify(preview, null, 2));
+      const registration = await registerSubscription({ testMode: isDevelopmentMiniProgram() });
+      this.setData({ reminderAdded: true });
+      console.log('[每日机会提醒] 一次性订阅授权成功');
+      this.showToast(registration && registration.testScheduled
+        ? '订阅成功，测试消息将在10秒后发送'
+        : '已订阅一次机会提醒', registration && registration.testScheduled ? 3000 : 1800);
+    } catch (error) {
+      console.error('[每日机会提醒] 订阅失败', error);
+      this.showToast(error && error.message ? error.message : '订阅失败，请稍后重试', 2000);
+    } finally {
+      if (reminderSubmitting) {
+        this.setData({ reminderSubmitting: false });
+        this.hideOperationLoading();
+      }
+    }
+  },
+
+  async buildSubscriptionMessagePreview() {
+    const snapshot = await fetchFundsSnapshot({
+      section: 'ALL',
+      includeTrends: false,
+      fields: 'home',
+      page: 1,
+      pageSize: PAGE_SIZE,
+      marketFilter: 'ALL',
+      excludePausedPurchase: true,
+      sortKey: 'premiumRate',
+      sortDirection: 'desc',
+      requestMode: 'page',
+      timeoutMs: 3000,
+      timeoutMessage: '机会数据加载失败，请稍后重试',
+      showLoading: false
+    });
+    const top1 = buildSubscriptionTop1(snapshot && snapshot.rows);
+    if (!top1.length) throw new Error('暂无符合条件的真实机会数据');
+    const date = formatDateOnly(new Date());
+    const messageContent = formatSubscriptionFundLine(top1[0]);
+    return {
+      templateId: SUBSCRIBE_TEMPLATE_ID,
+      subscriptionType: '一次性订阅',
+      keywords: {
+        日期: date,
+        消息内容: messageContent,
+        备注: SUBSCRIBE_NOTE
+      },
+      top1: {
+        name: top1[0].name,
+        code: top1[0].code,
+        premiumRate: top1[0].display.premiumRate,
+        updateTime: top1[0].display.updateTime
+      }
+    };
+  },
+
+  preventModalClose() {
+  },
+
+  showOperationLoading(title, note) {
+    this.setData({
+      operationLoading: true,
+      loadingTitle: title || '加载中',
+      loadingNote: note || '请稍候'
+    });
+  },
+
+  hideOperationLoading() {
+    this.setData({ operationLoading: false, loadingTitle: '', loadingNote: '' });
   },
 
   resetTableScroll() {
@@ -547,7 +780,11 @@ Page({
 
   handleExcludePausedChange(event) {
     this.clearSearchTimer();
-    this.setData({ excludePausedPurchase: Boolean(event.detail.value) });
+    if (!allowAction(this, 'exclude-paused')) return;
+    const nextValue = event && event.currentTarget && event.currentTarget.dataset.direct
+      ? !this.data.excludePausedPurchase
+      : Boolean(event.detail.value);
+    this.setData({ excludePausedPurchase: nextValue });
     this.resetTableScroll();
     if (this.data.section === WATCH_SECTION) this.updateVisibleFunds();
     else this.fetchInteractiveSnapshot();
@@ -557,11 +794,12 @@ Page({
     this.clearSearchTimer();
     const key = event.detail.key;
     if (!key) return;
-    if (this.data.sortKey === key) {
-      this.setData({ sortDirection: this.data.sortDirection === 'asc' ? 'desc' : 'asc' });
-    } else {
-      this.setData({ sortKey: key, sortDirection: 'asc' });
-    }
+    if (!allowAction(this, `sort:${key}`)) return;
+    const currentMode = this.data.activeSortKey === key ? this.data.sortMode : 'default';
+    const nextMode = currentMode === 'default' ? 'desc' : currentMode === 'desc' ? 'asc' : 'default';
+    this.setData(nextMode === 'default'
+      ? { activeSortKey: '', sortMode: 'default', sortKey: 'premiumRate', sortDirection: 'desc' }
+      : { activeSortKey: key, sortMode: nextMode, sortKey: key, sortDirection: nextMode });
     if (this.data.section === WATCH_SECTION) this.updateVisibleFunds();
     else this.fetchInteractiveSnapshot();
   },
@@ -578,6 +816,7 @@ Page({
   handleSelectFund(event) {
     const fund = event.detail.fund;
     if (!fund || !fund.code) return;
+    if (!allowAction(this, `select:${fund.code}`)) return;
     wx.navigateTo({
       url: `/pages/detail/detail?code=${encodeURIComponent(fund.code)}&section=${encodeURIComponent(fund.type || 'ALL')}`
     });
@@ -586,6 +825,7 @@ Page({
   toggleFavorite(event) {
     const fund = event.detail.fund;
     if (!fund || !fund.code) return;
+    if (!allowAction(this, `favorite:${fund.code}`)) return;
     const next = new Set(this.data.favoriteCodes);
     const willAdd = !next.has(fund.code);
     if (willAdd) next.add(fund.code);
@@ -656,6 +896,7 @@ function buildWatchMeta(options = {}) {
 
 function sectionLabel(section) {
   const map = {
+    ALL: '全部',
     WATCH: '自选',
     'T+2': 'T+2',
     'T+3': 'T+3'
@@ -668,22 +909,32 @@ function marketFilterForSection(section) {
   return 'ALL';
 }
 
-function stopPullDownRefreshSafely() {
-  if (wx.stopPullDownRefresh) wx.stopPullDownRefresh();
-}
-
-function showLoadingSafely(title) {
-  if (wx.showLoading) wx.showLoading({ title, mask: true });
-}
-
-function hideLoadingSafely() {
-  if (wx.hideLoading) wx.hideLoading();
+function formatUpdateTime(value) {
+  const text = String(value || '').trim();
+  if (!text) return '';
+  const normalized = text.replace('T', ' ').replace(/\.\d{3}Z?$/, '').replace(/Z$/, '');
+  const fullMatch = normalized.match(/^(\d{4})[-\/]?(\d{2})[-\/]?(\d{2})\s+(\d{2}):(\d{2}):(\d{2})/);
+  if (!fullMatch) return normalized;
+  return `${fullMatch[1]}-${fullMatch[2]}-${fullMatch[3]} ${fullMatch[4]}:${fullMatch[5]}:${fullMatch[6]}`;
 }
 
 function localTimestamp() {
   const date = new Date();
   const pad = (value) => String(value).padStart(2, '0');
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+}
+
+function wait(duration) {
+  return new Promise((resolve) => setTimeout(resolve, duration));
+}
+
+function isDevelopmentMiniProgram() {
+  try {
+    const accountInfo = wx.getAccountInfoSync && wx.getAccountInfoSync();
+    return accountInfo && accountInfo.miniProgram && accountInfo.miniProgram.envVersion === 'develop';
+  } catch (_) {
+    return false;
+  }
 }
 
 function appendUniqueFunds(existing, incoming) {
@@ -743,4 +994,42 @@ function purchaseState(fund) {
 function hasChangedField(fund, fields) {
   const changedFields = Array.isArray(fund.changedFields) ? fund.changedFields : [];
   return fields.some((field) => changedFields.includes(field));
+}
+
+function requestOneTimeSubscription(templateId) {
+  return new Promise((resolve, reject) => {
+    wx.requestSubscribeMessage({
+      tmplIds: [templateId],
+      success: resolve,
+      fail: (error) => reject(new Error(error && error.errMsg || '无法打开订阅授权'))
+    });
+  });
+}
+
+function buildSubscriptionTop1(rows) {
+  return (Array.isArray(rows) ? rows : [])
+    .filter((fund) => isEligibleSubscriptionFund(fund))
+    .sort((left, right) => Number(right.premiumRate) - Number(left.premiumRate))
+    .slice(0, 1);
+}
+
+function isEligibleSubscriptionFund(fund) {
+  if (!fund || !Number.isFinite(Number(fund.premiumRate))) return false;
+  const limit = fund.purchaseLimit || {};
+  const state = String(limit.state || fund.subscriptionState || '').toLowerCase();
+  const label = String([limit.label, limit.limitText, fund.subscriptionStatus].filter(Boolean).join(' '));
+  if (state === 'paused' || /暂停申购|停止申购/.test(label)) return false;
+  if (state === 'exchange' || /场内交易/.test(label)) return false;
+  return true;
+}
+
+function formatSubscriptionFundLine(fund) {
+  const suffix = `(${fund.code})${fund.display.premiumRate}`;
+  const nameBudget = Math.max(0, 20 - Array.from(suffix).length);
+  return `${Array.from(String(fund.name || '')).slice(0, nameBudget).join('')}${suffix}`;
+}
+
+function formatDateOnly(date) {
+  const pad = (value) => String(value).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }

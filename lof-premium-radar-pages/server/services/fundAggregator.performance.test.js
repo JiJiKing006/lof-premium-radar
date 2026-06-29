@@ -3,6 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   getQuotes: vi.fn(),
   getNavMap: vi.fn(),
+  getSingleNav: vi.fn(),
+  getLofPremiumReferenceMap: vi.fn(),
   fetchEastmoneyQuoteMap: vi.fn(),
   fetchSinaQuoteMap: vi.fn(),
   fetchSubscriptionLimitMap: vi.fn(),
@@ -16,7 +18,8 @@ vi.mock('./quoteService.js', () => ({
 
 vi.mock('./navService.js', () => ({
   getNavMap: mocks.getNavMap,
-  getSingleNav: vi.fn(),
+  getSingleNav: mocks.getSingleNav,
+  getLofPremiumReferenceMap: mocks.getLofPremiumReferenceMap,
 }));
 
 vi.mock('../sources/eastmoneySupplementSource.js', () => ({
@@ -47,6 +50,8 @@ describe('fundAggregator performance', () => {
     cache.lastObserved.clear();
     mocks.getQuotes.mockReset();
     mocks.getNavMap.mockReset();
+    mocks.getSingleNav.mockReset();
+    mocks.getLofPremiumReferenceMap.mockReset();
     mocks.fetchEastmoneyQuoteMap.mockReset();
     mocks.fetchSinaQuoteMap.mockReset();
     mocks.fetchSubscriptionLimitMap.mockReset();
@@ -81,6 +86,8 @@ describe('fundAggregator performance', () => {
         navQuoteTime: '2026-06-08 10:30:00',
       }],
     ]));
+    mocks.getSingleNav.mockResolvedValue(null);
+    mocks.getLofPremiumReferenceMap.mockResolvedValue(new Map());
     mocks.fetchEastmoneyQuoteMap.mockResolvedValue(new Map());
     mocks.fetchSinaQuoteMap.mockResolvedValue(new Map());
     mocks.fetchSubscriptionLimitMap.mockResolvedValue(new Map());
@@ -90,6 +97,39 @@ describe('fundAggregator performance', () => {
 
   afterEach(() => {
     vi.useRealTimers();
+  });
+
+  it('forces the target premium website into the same manual-refresh response', async () => {
+    mocks.getLofPremiumReferenceMap.mockResolvedValue(new Map([
+      ['501300', {
+        value: 0.95, source: 'lof', kind: 'official-estimate', estimateDate: '2026-06-08',
+        quoteTime: '2026-06-08 10:30:00', stale: false,
+      }],
+    ]));
+
+    const snapshot = await getFundQuotes({
+      category: 'LOF', force: true, waitForFresh: true, includeTrends: false,
+    });
+
+    expect(mocks.getLofPremiumReferenceMap).toHaveBeenCalledWith({ force: true });
+    expect(mocks.getNavMap).toHaveBeenCalledWith(expect.any(Array), { force: true });
+    expect(snapshot.rows[0]).toMatchObject({
+      estimatedNav: 0.95,
+      premiumBasis: 'estimatedNav',
+      premiumNote: '基于目标网站估值（非官方净值）',
+    });
+  });
+
+  it('reports target premium source failure while falling back to the official NAV basis', async () => {
+    mocks.getLofPremiumReferenceMap.mockRejectedValue(new Error('源站限流'));
+
+    const snapshot = await getFundQuotes({
+      category: 'LOF', force: true, waitForFresh: true, includeTrends: false,
+    });
+
+    expect(snapshot.meta.warn).toContain('premium-reference supplemental data failed: 源站限流');
+    expect(snapshot.rows[0].premiumBasis).toBe('lastNav');
+    expect(snapshot.rows[0].premiumRate).toBeCloseTo((0.942 / 0.94 - 1) * 100, 8);
   });
 
   it('does not let slow non-LOF NAV supplements block the homepage quote snapshot', async () => {
@@ -291,6 +331,27 @@ describe('fundAggregator performance', () => {
     expect(mocks.getQuotes).toHaveBeenCalledTimes(callsBeforeDetail);
   });
 
+  it('详情聚合快照偶发缺行时使用真实单基金行情补查', async () => {
+    mocks.getQuotes.mockResolvedValue({ rows: [], source: 'sina', sourceStatus: 'fallback', errors: [] });
+    mocks.fetchEastmoneyQuoteMap.mockResolvedValue(new Map([
+      ['501225', {
+        code: '501225', name: '全球芯片LOF', category: 'LOF', marketPrice: 4.6,
+        source: 'eastmoney', sourceStatus: 'primary', quoteTime: '2026-06-29 10:00:00',
+      }],
+    ]));
+    mocks.getSingleNav.mockResolvedValue({
+      code: '501225', lastNav: 3.5, navSource: 'tiantian', navQuoteTime: '2026-06-28 22:00:00',
+    });
+
+    const fund = await getFundDetail('501225', { category: 'LOF' });
+
+    expect(fund).toMatchObject({
+      code: '501225', name: '全球芯片LOF', marketPrice: 4.6, lastNav: 3.5,
+      source: 'eastmoney', navSource: 'tiantian',
+    });
+    expect(fund.premiumRate).toBeCloseTo(31.4286, 4);
+  });
+
   it('详情接口超过 1.5 秒仍继续等待真实数据', async () => {
     vi.useFakeTimers();
     const payload = {
@@ -425,5 +486,38 @@ describe('fundAggregator performance', () => {
     expect(firstSnapshot).toBe(secondSnapshot);
     expect(firstSnapshot.rows).toHaveLength(1);
     expect(firstSnapshot.rows[0].premiumRate).toBeCloseTo(0.2128, 4);
+  });
+
+  it('waits for an existing background build and then performs a fresh manual-refresh build', async () => {
+    await getFundQuotes({ category: 'LOF', includeTrends: false });
+
+    let resolveBackground;
+    mocks.getQuotes
+      .mockImplementationOnce(() => new Promise((resolve) => { resolveBackground = resolve; }))
+      .mockResolvedValueOnce({
+        rows: [{
+          code: '501300', name: '美元债LOF', category: 'LOF', marketPrice: 1.02,
+          changeRate: 1.2, turnover: 3_000_000, source: 'sina', sourceStatus: 'fallback',
+          quoteTime: '2026-06-08 10:31:00',
+        }],
+        source: 'sina', sourceStatus: 'fallback', errors: [],
+      });
+
+    await getFundQuotes({ category: 'LOF', force: true, waitForFresh: false, includeTrends: false });
+    const manualRefresh = getFundQuotes({ category: 'LOF', force: true, waitForFresh: true, includeTrends: false });
+
+    resolveBackground({
+      rows: [{
+        code: '501300', name: '美元债LOF', category: 'LOF', marketPrice: 0.95,
+        changeRate: 0.1, turnover: 0, source: 'sina', sourceStatus: 'fallback',
+        quoteTime: '2026-06-08 10:30:30',
+      }],
+      source: 'sina', sourceStatus: 'fallback', errors: [],
+    });
+
+    const snapshot = await manualRefresh;
+
+    expect(mocks.getQuotes).toHaveBeenCalledTimes(3);
+    expect(snapshot.rows[0]).toMatchObject({ marketPrice: 1.02, turnover: 3_000_000 });
   });
 });

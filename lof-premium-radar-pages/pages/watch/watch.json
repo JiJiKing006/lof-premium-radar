@@ -2,6 +2,7 @@
   "navigationBarTitleText": "自选基金",
   "enablePullDownRefresh": false,
   "usingComponents": {
+    "app-loading": "/components/app-loading/app-loading",
     "data-status-bar": "/components/data-status-bar/data-status-bar",
     "search-bar": "/components/search-bar/search-bar",
     "sort-bar": "/components/sort-bar/sort-bar",

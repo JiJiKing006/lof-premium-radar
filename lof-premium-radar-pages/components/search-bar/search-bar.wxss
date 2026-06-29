@@ -17,12 +17,12 @@
   width: 100%;
   max-width: 100%;
   min-width: 0;
-  min-height: 80rpx;
+  min-height: 68rpx;
   align-items: center;
   gap: 12rpx;
-  padding: 0 16rpx;
-  border: 1rpx solid #d4dae2;
-  border-radius: 16rpx;
+  padding: 0 18rpx;
+  border: 1rpx solid #dce2ea;
+  border-radius: 10rpx;
   background: #fff;
   box-sizing: border-box;
 }
@@ -30,15 +30,15 @@
 .search-icon {
   width: 18rpx;
   height: 18rpx;
-  border: 4rpx solid #173a5e;
+  border: 3rpx solid #66758a;
   border-radius: 999rpx;
-  box-shadow: 10rpx 10rpx 0 -6rpx #173a5e;
+  box-shadow: 10rpx 10rpx 0 -6rpx #66758a;
 }
 
 .search-input {
   flex: 1;
   min-width: 0;
-  color: #101820;
-  font-size: 30rpx;
-  font-weight: 800;
+  color: #172131;
+  font-size: 24rpx;
+  font-weight: 600;
 }

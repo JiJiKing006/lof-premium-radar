@@ -20,8 +20,8 @@ function recordVisitor(deviceId, path, project) {
       method: 'POST',
       data: { deviceId, path, project },
       timeout: 5000,
-      success: resolve,
-      fail: resolve
+      success(result) { resolve(result); },
+      fail(error) { resolve(error); }
     });
   });
 }
