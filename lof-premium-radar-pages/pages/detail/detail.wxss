@@ -415,44 +415,6 @@
 
 .history-head .history-cell:first-child { z-index: 15; background: #f5f8fc; }
 
-.formula-card {
-  display: grid;
-  gap: 9rpx;
-  padding: 20rpx 18rpx 22rpx;
-  color: #68778c;
-  font-size: 19rpx;
-  font-weight: 650;
-  text-align: center;
-}
-
-.formula-title {
-  color: #1261c6;
-  font-size: 25rpx;
-  font-weight: 900;
-  letter-spacing: .8rpx;
-}
-
-.source-audit-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-
-.source-audit-row {
-  display: grid;
-  grid-template-columns: 32rpx minmax(0, 1fr);
-  min-width: 0;
-  gap: 10rpx;
-  padding: 15rpx 16rpx;
-  border-right: 1rpx solid #edf0f4;
-  border-bottom: 1rpx solid #edf0f4;
-}
-
-.source-audit-row:nth-child(2n) { border-right: 0; }
-.source-audit-row:nth-last-child(-n + 2) { border-bottom: 0; }
-.audit-icon { width: 29rpx; height: 29rpx; margin-top: 2rpx; }
-.audit-content { display: grid; min-width: 0; grid-template-columns: minmax(0, auto) minmax(0, 1fr); gap: 2rpx 10rpx; }
-.audit-label { color: #68778c; font-size: 18rpx; font-weight: 650; white-space: nowrap; }
-.audit-source { min-width: 0; overflow: hidden; color: #172131; font-size: 19rpx; font-weight: 850; text-overflow: ellipsis; white-space: nowrap; }
-.audit-time { grid-column: 1 / -1; overflow: hidden; color: #78879b; font-size: 15rpx; font-weight: 600; font-variant-numeric: tabular-nums; text-overflow: ellipsis; white-space: nowrap; }
-.source-missing .audit-source { color: #8a96a8; }
-
 .empty-state { padding: 54rpx 28rpx; color: #7b899d; font-size: 23rpx; font-weight: 750; text-align: center; }
 .empty-state.compact { padding: 70rpx 28rpx; }
 .value-up,

@@ -10,11 +10,11 @@ const COLUMN_RULES = {
 
 function buildColumns() {
   return [
-    buildColumn('favorite', '自选', { disabled: true }),
+    buildColumn('favorite', '收藏', { disabled: true }),
     buildColumn('security', '名称/代码', { disabled: true }),
     buildColumn('premiumRate', '实时溢价率'),
-    buildColumn('price', '现价'),
-    buildColumn('turnover', '成交额')
+    buildColumn('price', '当前值'),
+    buildColumn('turnover', '金额')
   ];
 }
 

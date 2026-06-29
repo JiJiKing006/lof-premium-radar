@@ -74,7 +74,7 @@ Page({
     this.setData({ pollingError: '', initialLoading: this.data.funds.length === 0 });
     try {
       const snapshot = await fetchFundsSnapshot({ section: 'ALL', force, includeTrends: false, showLoading: false });
-      if (!snapshot || !Array.isArray(snapshot.rows)) throw new Error('行情接口返回空数据');
+      if (!snapshot || !Array.isArray(snapshot.rows)) throw new Error('信息接口返回空数据');
       writeSnapshot(HOME_SECTION, snapshot);
       this.applySnapshot(snapshot);
     } catch (error) {
@@ -82,13 +82,13 @@ Page({
       if (fallback) {
         this.applySnapshot(fallback, {
           stale: true,
-          errorMessage: error && error.message ? error.message : '行情接口加载失败'
+          errorMessage: error && error.message ? error.message : '信息加载失败'
         });
         return;
       }
       this.setData({
         initialLoading: false,
-        pollingError: error && error.message ? error.message : '行情接口加载失败'
+        pollingError: error && error.message ? error.message : '信息加载失败'
       });
     }
   },
@@ -226,7 +226,7 @@ Page({
     this.setData({
       favoriteCodes,
       pulseCode: fund.code,
-      toastText: willAdd ? `已加入自选：${fund.name}` : `已移出自选：${fund.name}`
+      toastText: willAdd ? `已加入收藏：${fund.name}` : `已移出收藏：${fund.name}`
     });
     this.updateVisibleFunds();
     this.clearPulseTimer();
@@ -269,13 +269,40 @@ function storeFavoriteCodes(codes) {
 }
 
 function purchaseText(fund) {
-  const limit = fund.purchaseLimit || {};
-  const rawLabel = limit.label || limit.limitText || fund.subscriptionStatus || '';
-  const label = !rawLabel || /^(未知|--|-|N\/A)$/i.test(rawLabel) ? '暂无数据' : rawLabel;
-  const state = limit.state || fund.subscriptionState || 'unavailable';
-  if (state === 'open' && (/无限额|不限额/.test(label) || /开放/.test(label))) return '不限额';
-  if (/开放申购\s*\/\s*无限额|开放申购.*不限额/.test(label)) return '不限额';
-  return label;
+  const limit = fund && fund.purchaseLimit || {};
+  const label = String(limit.label || limit.limitText || fund && fund.subscriptionStatus || '').trim();
+  const state = String(limit.state || fund && fund.subscriptionState || '').toLowerCase();
+  const explicitAmount = purchaseLimitAmount(limit, label);
+
+  if (state === 'paused' || /暂停|停止/.test(label)) return '暂停';
+  if (state === 'open' || /不限额|无限额|不限|开放/.test(label) || explicitAmount !== null && explicitAmount >= 800_000_000) return '不限';
+  if (state === 'limited' || /限|大额/.test(label)) {
+    return explicitAmount === null ? '暂无数据' : `限 ${formatPurchaseAmount(explicitAmount)}`;
+  }
+  return '暂无数据';
+}
+
+function purchaseLimitAmount(limit, label) {
+  const value = limit.dailyLimit ?? limit.limitAmount ?? limit.amountYuan;
+  if (value !== null && value !== undefined && value !== '') {
+    const amount = Number(value);
+    if (Number.isFinite(amount) && amount > 0) return amount;
+  }
+  const match = String(label || '').match(/(\d+(?:\.\d+)?)\s*(亿|万|元)/);
+  if (!match) return null;
+  const scale = match[2] === '亿' ? 100_000_000 : match[2] === '万' ? 10_000 : 1;
+  const amount = Number(match[1]) * scale;
+  return Number.isFinite(amount) && amount > 0 ? amount : null;
+}
+
+function formatPurchaseAmount(amount) {
+  if (amount > 10_000) return `${trimPurchaseDecimal(amount / 10_000, 4)} 万`;
+  return `${trimPurchaseDecimal(amount, 2)} 元`;
+}
+
+function trimPurchaseDecimal(value, precision) {
+  if (Number.isInteger(value)) return String(value);
+  return value.toFixed(precision).replace(/(\.\d*?[1-9])0+$|\.0+$/, '$1');
 }
 
 function purchaseState(fund) {

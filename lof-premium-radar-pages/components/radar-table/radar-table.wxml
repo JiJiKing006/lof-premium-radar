@@ -1,4 +1,4 @@
-<view class="table-card {{hasScrollable ? 'is-scrollable' : ''}}" aria-label="全部基金数据表格">
+<view class="table-card {{hasScrollable ? 'is-scrollable' : ''}}" aria-label="全部数据表格">
   <view class="table-meta">
     <view class="table-summary">
       <text class="table-title">全部</text>

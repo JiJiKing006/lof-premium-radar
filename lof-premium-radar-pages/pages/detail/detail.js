@@ -1,15 +1,14 @@
 const { fetchFundDetail, fetchFundHistory } = require('../../utils/fund-api');
 const { formatNumber, officialNavText, percentText, amountText, formatShareValue, shareChangeClass, valueClass } = require('../../utils/format');
-const { sourceLabel } = require('../../utils/source-links');
 
 const HISTORY_COLUMNS = [
   historyColumn('date', '日期', 'date', 'date', 168),
   historyColumn('premiumRate', '历史溢价率', 'premiumRate', 'percent', 178),
-  historyColumn('changeRate', '场内涨幅', 'changeRate', 'percent', 154),
-  historyColumn('unitNav', '单位净值', 'unitNav', 'number', 154),
-  historyColumn('navGrowthRate', '净值涨幅', 'navGrowthRate', 'percent', 154),
-  historyColumn('volume', '成交量', 'volume', 'amount', 164),
-  historyColumn('turnover', '成交额', 'turnover', 'amount', 176)
+  historyColumn('changeRate', '日变化', 'changeRate', 'percent', 154),
+  historyColumn('unitNav', '单位值', 'unitNav', 'number', 154),
+  historyColumn('navGrowthRate', '公布值变化', 'navGrowthRate', 'percent', 178),
+  historyColumn('volume', '数量', 'volume', 'amount', 164),
+  historyColumn('turnover', '金额', 'turnover', 'amount', 176)
 ];
 
 Page({
@@ -20,7 +19,6 @@ Page({
     summaryCards: [],
     leftFields: [],
     rightFields: [],
-    auditRows: [],
     trendPoints: [],
     trendSegments: [],
     trendAxis: [],
@@ -84,39 +82,31 @@ Page({
 
   applyFund(fund) {
     wx.setNavigationBarTitle({
-      title: `${fund.name || '基金详情'}（${fund.code || this.data.code}）`
+      title: `${fund.name || '数据详情'}（${fund.code || this.data.code}）`
     });
 
     const analysis = buildHistoryAnalysis(this.data.historyRows, fund);
     const current = Object.assign({}, fund, {
-      titleText: `${fund.name || '基金详情'}（${fund.code || this.data.code}）`,
+      titleText: `${fund.name || '数据详情'}（${fund.code || this.data.code}）`,
       purchaseText: purchaseText(fund),
       purchaseState: purchaseState(fund),
       settlementCycleText: fund.settlementCycle || '暂无数据',
       settlementState: fund.settlementCycle === 'T+2' ? 'short' : fund.settlementCycle === 'T+3' ? 'long' : 'unknown',
-      navSourceText: sourceText(navSource(fund)),
-      estimatedSourceText: sourceText(estimatedSource(fund)),
-      quoteSourceText: sourceText(fund.quoteSource || fund.source),
-      shareSourceText: hasShareData(fund) ? sourceText(fund.shareSource) : '暂无数据',
       shareChangeClass: shareChangeClass(fund.shareChange)
     });
 
     const changeValue = fund.changeRate ?? fund.changePercent;
     const premiumValue = fund.premiumRate;
-    const shareTrace = hasShareData(fund) ? traceText(fund.shareSource, fund.shareTime) : '';
-    const navTrace = traceText(navSource(fund), fund.navDate || fund.navQuoteTime);
-    const estimateTrace = traceText(estimatedSource(fund), fund.estimatedNavTime || fund.navQuoteTime);
-
     this.setData({
       current,
       summaryCards: [
         {
           key: 'price',
-          label: '现价',
+          label: '当前值',
           icon: '/images/icons/detail-price.svg',
           value: formatNumber(fund.marketPrice ?? fund.price),
           className: valueClass(changeValue),
-          sideLabel: '较上日涨跌幅',
+          sideLabel: '较上日变化',
           sideValue: percentText(changeValue, { sign: true }),
           sideClass: valueClass(changeValue),
           toneClass: ''
@@ -127,7 +117,7 @@ Page({
           icon: '/images/icons/detail-premium.svg',
           value: percentText(premiumValue),
           className: valueClass(premiumValue),
-          note: fund.premiumNote || '暂无数据',
+          note: Number.isFinite(Number(premiumValue)) ? '基于已公布数据' : '暂无数据',
           toneClass: premiumTone(premiumValue)
         },
         {
@@ -141,7 +131,7 @@ Page({
         },
         {
           key: 'turnover-change',
-          label: '较上一日成交额',
+          label: '日金额变化',
           icon: '/images/icons/detail-turnover.svg',
           value: analysis.turnoverChangeText,
           className: analysis.turnoverChangeClass,
@@ -151,25 +141,19 @@ Page({
       ],
       leftFields: [
         detailField('代码', fund.code || '暂无数据', '/images/icons/detail-code.svg'),
-        detailField('现价', formatNumber(fund.marketPrice ?? fund.price), '/images/icons/detail-price.svg', valueClass(changeValue)),
+        detailField('当前值', formatNumber(fund.marketPrice ?? fund.price), '/images/icons/detail-price.svg', valueClass(changeValue)),
         detailField('实时溢价率', percentText(premiumValue), '/images/icons/detail-premium.svg', valueClass(premiumValue)),
-        detailField('官方净值', officialNavText(fund.lastNav ?? fund.nav), '/images/icons/detail-nav.svg', '', navTrace),
-        detailField('成交量', amountText(fund.volume), '/images/icons/detail-volume.svg'),
-        detailField('场内份额', formatShareValue(fund.shareAmount), '/images/icons/detail-share.svg', '', shareTrace)
+        detailField('公布值', officialNavText(fund.lastNav ?? fund.nav), '/images/icons/detail-nav.svg'),
+        detailField('数量', amountText(fund.volume), '/images/icons/detail-volume.svg'),
+        detailField('份额', formatShareValue(fund.shareAmount), '/images/icons/detail-share.svg')
       ],
       rightFields: [
         detailField('名称', fund.name || '暂无数据', '/images/icons/detail-name.svg'),
-        detailField('涨跌幅', percentText(changeValue, { sign: true }), '/images/icons/detail-change.svg', valueClass(changeValue)),
+        detailField('日变化', percentText(changeValue, { sign: true }), '/images/icons/detail-change.svg', valueClass(changeValue)),
         detailField(analysis.streakLabel, analysis.streakValue, '/images/icons/detail-streak.svg', analysis.streakClass),
-        detailField('估算净值', formatNumber(fund.estimatedNav ?? fund.estimatedValue, 4), '/images/icons/detail-estimate.svg', '', estimateTrace),
-        detailField('成交额', amountText(fund.turnover ?? fund.amount), '/images/icons/detail-turnover.svg'),
-        detailField('较上日份额', hasShareData(fund) ? formatShareValue(fund.shareChange) : '暂无数据', '/images/icons/detail-share-change.svg', shareChangeClass(fund.shareChange), shareTrace)
-      ],
-      auditRows: [
-        { label: '行情', icon: '/images/icons/detail-source-quote.svg', source: sourceText(fund.quoteSource || fund.source), time: fund.quoteTime || fund.updateTime || '暂无数据' },
-        { label: '官方净值', icon: '/images/icons/detail-nav.svg', source: sourceText(navSource(fund)), time: fund.navDate || fund.navQuoteTime || fund.updateTime || '暂无数据' },
-        { label: '估算净值', icon: '/images/icons/detail-estimate.svg', source: sourceText(estimatedSource(fund)), time: fund.estimatedNavTime || fund.navQuoteTime || fund.updateTime || '暂无数据' },
-        { label: '申购状态', icon: '/images/icons/detail-subscription.svg', source: sourceText(fund.subscriptionSource), time: fund.subscriptionTime || '暂无数据' }
+        detailField('参考值', formatNumber(fund.estimatedNav ?? fund.estimatedValue, 4), '/images/icons/detail-estimate.svg'),
+        detailField('金额', amountText(fund.turnover ?? fund.amount), '/images/icons/detail-turnover.svg'),
+        detailField('份额变化', hasShareData(fund) ? formatShareValue(fund.shareChange) : '暂无数据', '/images/icons/detail-share-change.svg', shareChangeClass(fund.shareChange))
       ],
       trendPoints: analysis.trend.points,
       trendSegments: analysis.trend.segments,
@@ -368,31 +352,41 @@ function premiumTone(value) {
   return number > 0 ? 'premium-tone-up' : 'premium-tone-down';
 }
 
-function traceText(source, time) {
-  const sourceValue = sourceText(source);
-  const timeValue = String(time || '').trim() || '暂无数据';
-  return `${sourceValue} · ${timeValue}`;
-}
-
-function navSource(fund) {
-  return fund.navSource || fund.source || '';
-}
-
-function estimatedSource(fund) {
-  return fund.estimatedNavSource || '';
-}
-
-function sourceText(source) {
-  return sourceLabel(source) || '暂无数据';
-}
-
 function purchaseText(fund) {
-  const rawLabel = fund.purchaseLimit && (fund.purchaseLimit.label || fund.purchaseLimit.limitText) || fund.subscriptionStatus || '';
-  const label = !rawLabel || /^(未知|--|-|N\/A)$/i.test(rawLabel) ? '暂无数据' : rawLabel;
-  const state = fund.purchaseLimit && fund.purchaseLimit.state || fund.subscriptionState || 'unavailable';
-  if (state === 'open' && (/无限额|不限额/.test(label) || /开放/.test(label))) return '不限额';
-  if (/开放申购\s*\/\s*无限额|开放申购.*不限额/.test(label)) return '不限额';
-  return label;
+  const limit = fund && fund.purchaseLimit || {};
+  const label = String(limit.label || limit.limitText || fund && fund.subscriptionStatus || '').trim();
+  const state = String(limit.state || fund && fund.subscriptionState || '').toLowerCase();
+  const explicitAmount = purchaseLimitAmount(limit, label);
+
+  if (state === 'paused' || /暂停|停止/.test(label)) return '暂停';
+  if (state === 'open' || /不限额|无限额|不限|开放/.test(label) || explicitAmount !== null && explicitAmount >= 800_000_000) return '不限';
+  if (state === 'limited' || /限|大额/.test(label)) {
+    return explicitAmount === null ? '暂无数据' : `限 ${formatPurchaseAmount(explicitAmount)}`;
+  }
+  return '暂无数据';
+}
+
+function purchaseLimitAmount(limit, label) {
+  const value = limit.dailyLimit ?? limit.limitAmount ?? limit.amountYuan;
+  if (value !== null && value !== undefined && value !== '') {
+    const amount = Number(value);
+    if (Number.isFinite(amount) && amount > 0) return amount;
+  }
+  const match = String(label || '').match(/(\d+(?:\.\d+)?)\s*(亿|万|元)/);
+  if (!match) return null;
+  const scale = match[2] === '亿' ? 100_000_000 : match[2] === '万' ? 10_000 : 1;
+  const amount = Number(match[1]) * scale;
+  return Number.isFinite(amount) && amount > 0 ? amount : null;
+}
+
+function formatPurchaseAmount(amount) {
+  if (amount > 10_000) return `${trimPurchaseDecimal(amount / 10_000, 4)} 万`;
+  return `${trimPurchaseDecimal(amount, 2)} 元`;
+}
+
+function trimPurchaseDecimal(value, precision) {
+  if (Number.isInteger(value)) return String(value);
+  return value.toFixed(precision).replace(/(\.\d*?[1-9])0+$|\.0+$/, '$1');
 }
 
 function purchaseState(fund) {

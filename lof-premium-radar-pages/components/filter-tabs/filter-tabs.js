@@ -5,7 +5,7 @@ Component({
 
   data: {
     filters: [
-      { key: 'WATCH', label: '自选' },
+      { key: 'WATCH', label: '收藏' },
       { key: 'T+2', label: 'T+2' },
       { key: 'T+3', label: 'T+3' }
     ]

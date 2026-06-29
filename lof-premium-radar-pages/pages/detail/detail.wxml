@@ -1,5 +1,5 @@
 <view class="detail-panel market-detail">
-  <app-loading visible="{{detailLoading && !current}}" title="加载详情中" note="正在获取行情、净值与溢价数据" />
+  <app-loading visible="{{detailLoading && !current}}" title="加载详情中" note="正在获取最新信息与溢价数据" />
   <view class="detail-scroll">
     <view wx:if="{{current}}" class="detail-hero">
       <view class="detail-title-row">
@@ -67,9 +67,9 @@
       <view class="detail-section-header">
         <view class="section-title-wrap">
           <text class="section-mark"></text>
-          <text class="section-title">实时行情</text>
+          <text class="section-title">最新信息</text>
         </view>
-        <text>行情、净值、成交、份额</text>
+        <text>数值、变化、金额、份额</text>
       </view>
       <view class="live-columns">
         <view class="live-column">
@@ -99,9 +99,9 @@
       <view class="detail-section-header">
         <view class="section-title-wrap">
           <text class="section-mark"></text>
-          <text class="section-title">历史净值与溢价率</text>
+          <text class="section-title">历史数据与溢价率</text>
         </view>
-        <text>仅用同日官方净值与场内收盘价计算</text>
+        <text>基于同日已公布数据计算</text>
       </view>
       <scroll-view class="history-table-wrap" scroll-x scroll-y enhanced show-scrollbar="{{false}}">
         <view class="history-grid" style="{{historyGridStyle}}">
@@ -125,39 +125,6 @@
       </scroll-view>
     </view>
 
-    <view wx:if="{{current}}" class="detail-section formula-section">
-      <view class="detail-section-header">
-        <view class="section-title-wrap">
-          <text class="section-mark"></text>
-          <text class="section-title">计算公式</text>
-        </view>
-        <text>官方净值实时计算</text>
-      </view>
-      <view class="formula-card">
-        <text class="formula-title">溢价率 =（现价 - 官方净值）/ 官方净值</text>
-        <text>仅使用官方公布净值；估算净值仅作辅助观察，不替代官方净值。</text>
-      </view>
-    </view>
-
-    <view wx:if="{{current}}" class="detail-section audit-section">
-      <view class="detail-section-header">
-        <view class="section-title-wrap">
-          <text class="section-mark"></text>
-          <text class="section-title">来源审计</text>
-        </view>
-        <text>来源与时间逐项匹配</text>
-      </view>
-      <view class="source-audit-list">
-        <view wx:for="{{auditRows}}" wx:key="label" class="source-audit-row {{item.source === '暂无数据' ? 'source-missing' : ''}}">
-          <image class="audit-icon" src="{{item.icon}}" mode="aspectFit" />
-          <view class="audit-content">
-            <text class="audit-label">{{item.label}}</text>
-            <text class="audit-source">{{item.source}}</text>
-            <text class="audit-time">{{item.time}}</text>
-          </view>
-        </view>
-      </view>
-    </view>
   </view>
 
   <button

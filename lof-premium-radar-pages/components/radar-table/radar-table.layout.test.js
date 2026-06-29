@@ -34,13 +34,13 @@ describe('首页表格滚动与页面刷新', () => {
     expect(pageTemplate).not.toContain('bindtouchmove="handlePageTouchMove"');
   });
 
-  it('单屏展示四个数据字段加自选列且不展示涨跌幅', () => {
+  it('单屏展示四个数据字段加收藏列且不展示日变化', () => {
     const styles = fs.readFileSync(path.join(projectRoot, 'components/radar-table/radar-table.wxss'), 'utf8');
     const script = fs.readFileSync(path.join(projectRoot, 'components/radar-table/radar-table.js'), 'utf8');
     const template = fs.readFileSync(path.join(projectRoot, 'components/radar-table/radar-table.wxml'), 'utf8');
 
-    expect(script).toContain("buildColumn('turnover', '成交额')");
-    expect(script).toContain("buildColumn('favorite', '自选'");
+    expect(script).toContain("buildColumn('turnover', '金额')");
+    expect(script).toContain("buildColumn('favorite', '收藏'");
     expect(script).not.toContain("buildColumn('changeRate'");
     expect(script).not.toContain("buildColumn('lastNav'");
     expect(script).not.toContain("buildColumn('estimatedNav'");
@@ -50,15 +50,15 @@ describe('首页表格滚动与页面刷新', () => {
     expect(styles).not.toContain('position: sticky;\n  left: 0');
   });
 
-  it('排序、提醒铃铛和弹窗关闭均使用本地图标', () => {
+  it('排序使用本地图标且首页不再包含提醒入口', () => {
     const tableTemplate = fs.readFileSync(path.join(projectRoot, 'components/radar-table/radar-table.wxml'), 'utf8');
     const pageTemplate = fs.readFileSync(path.join(projectRoot, 'pages/index/index.wxml'), 'utf8');
 
     expect(tableTemplate).toContain('src="/images/icons/sort.svg"');
     expect(tableTemplate).not.toContain("'↑'");
     expect(tableTemplate).not.toContain("'↓'");
-    expect(pageTemplate).toContain("'/images/icons/bell.svg'");
-    expect(pageTemplate).toContain('src="/images/icons/close.svg"');
+    expect(pageTemplate).not.toContain('/images/icons/bell.svg');
+    expect(pageTemplate).not.toContain('monitor-modal');
     expect(fs.existsSync(path.join(projectRoot, 'images/icons/sort.svg'))).toBe(true);
     expect(fs.existsSync(path.join(projectRoot, 'images/icons/bell.svg'))).toBe(true);
     expect(fs.existsSync(path.join(projectRoot, 'images/icons/close.svg'))).toBe(true);
@@ -135,27 +135,16 @@ describe('首页表格滚动与页面刷新', () => {
     expect(pageScript).toContain("settlementCycle: settlementCycle(fund)");
   });
 
-  it('提醒弹窗发起一次性订阅并在控制台输出真实 Top1 预览', () => {
+  it('首页移除推荐导向的提醒文案和入口', () => {
     const pageTemplate = fs.readFileSync(path.join(projectRoot, 'pages/index/index.wxml'), 'utf8');
     const pageScript = fs.readFileSync(path.join(projectRoot, 'pages/index/index.js'), 'utf8');
 
-    expect(pageTemplate).toContain('开启每日机会提醒');
-    expect(pageTemplate).toContain('立即提醒');
-    expect(pageTemplate).toContain('TOP1');
-    expect(pageTemplate).not.toContain('TOP3');
-    expect(pageScript).toContain("const SUBSCRIBE_TEMPLATE_ID = 'nChCRD1ljtNdWE20NSZIogo5tYX5sX4xP4UPEdZVLyM'");
-    expect(pageScript).toContain('wx.requestSubscribeMessage({');
-    expect(pageScript).toContain('tmplIds: [templateId]');
-    expect(pageScript).toContain("status !== 'accept'");
-    expect(pageScript).toContain("console.log('[订阅消息模板内容]'");
-    expect(pageScript).toContain("excludePausedPurchase: true");
-    expect(pageScript).toContain("sortKey: 'premiumRate'");
-    expect(pageScript).toContain("sortDirection: 'desc'");
-    expect(pageScript).toContain("state === 'paused'");
-    expect(pageScript).toContain("state === 'exchange'");
-    expect(pageScript).toContain("const SUBSCRIBE_NOTE = '仅供参考，不做投资建议'");
-    expect(pageScript).toContain('await registerSubscription({ testMode: isDevelopmentMiniProgram() })');
-    expect(fs.readFileSync(path.join(projectRoot, 'utils/subscription.js'), 'utf8')).toContain("postJson('/api/subscriptions/register'");
+    expect(pageTemplate).not.toContain('机会');
+    expect(pageTemplate).not.toContain('TOP1');
+    expect(pageTemplate).not.toContain('标的');
+    expect(pageScript).not.toContain('SUBSCRIBE_TEMPLATE_ID');
+    expect(pageScript).not.toContain('requestSubscribeMessage');
+    expect(pageScript).not.toContain('registerSubscription');
   });
 
   it('全项目使用统一自定义 loading，并关闭请求层原生 loading toast', () => {
@@ -173,10 +162,8 @@ describe('首页表格滚动与页面刷新', () => {
     expect(requestScript).not.toContain('beginRequestToast');
     expect(pageScript).toContain('showLoading: false');
     expect(pageTemplate).toContain('<app-loading');
-    expect(pageTemplate).toContain("operationLoading ? loadingTitle : '加载行情中'");
+    expect(pageTemplate).toContain("operationLoading ? loadingTitle : '加载信息中'");
     expect(pageScript).toContain("this.showOperationLoading('刷新数据中'");
-    expect(pageScript).toContain("this.showOperationLoading('添加提醒中'");
-    expect(pageScript).toContain("this.showOperationLoading('取消提醒中'");
     expect(loadingTemplate).toContain('/images/icons/refresh-cycle.svg');
     expect(loadingTemplate).toContain('{{title}}');
     expect(loadingStyles).toContain('.app-loading-mask');
@@ -333,16 +320,14 @@ describe('首页表格滚动与页面刷新', () => {
     expect(styles).toMatch(/\.table-back-top-button\s*\{[\s\S]*?width:\s*66rpx;[\s\S]*?height:\s*66rpx;[\s\S]*?border-radius:\s*50%;/);
   });
 
-  it('首页始终渲染隐藏暂停申购与提醒入口', () => {
+  it('首页渲染中性状态筛选并移除提醒入口', () => {
     const pageTemplate = fs.readFileSync(path.join(projectRoot, 'pages/index/index.wxml'), 'utf8');
     const pageStyles = fs.readFileSync(path.join(projectRoot, 'pages/index/index.wxss'), 'utf8');
 
-    expect(pageTemplate).toContain('隐藏暂停申购');
-    expect(pageTemplate).toContain('添加提醒');
-    expect(pageTemplate).toContain('已添加提醒');
-    expect(pageTemplate).toContain('/images/icons/bell-off.svg');
-    expect(pageTemplate).toContain('取消每日提醒？');
-    expect(pageTemplate).not.toContain('监控');
+    expect(pageTemplate).toContain('隐藏暂停');
+    expect(pageTemplate).not.toContain('添加提醒');
+    expect(pageTemplate).not.toContain('/images/icons/bell-off.svg');
+    expect(pageTemplate).not.toContain('取消每日提醒');
     expect(pageStyles).toMatch(/\.home-actions\s*\{[\s\S]*?display:\s*flex;/);
   });
 

@@ -13,7 +13,7 @@ describe('详情页 UI 与数据展示约束', () => {
     expect(template).toContain('detailLoading && !current');
     expect(template).toContain('<app-loading');
     expect(template).toContain('title="加载详情中"');
-    expect(template).toContain('正在获取行情、净值与溢价数据');
+    expect(template).toContain('正在获取最新信息与溢价数据');
     expect(template).not.toContain('detail-skeleton-hero');
     expect(config.usingComponents['app-loading']).toBe('/components/app-loading/app-loading');
   });
@@ -34,7 +34,7 @@ describe('详情页 UI 与数据展示约束', () => {
 
     expect(template).toContain('class="summary-icon"');
     expect(template).toContain('class="live-icon"');
-    expect(template).toContain('class="audit-icon"');
+    expect(template).not.toContain('class="audit-icon"');
     expect(template).toContain('detail-back-top.svg');
     expect(template).not.toContain('back-top-arrow');
   });
@@ -43,7 +43,7 @@ describe('详情页 UI 与数据展示约束', () => {
     const script = read('pages/detail/detail.js');
     const styles = read('pages/detail/detail.wxss');
 
-    expect(script).toContain("note: fund.premiumNote || '暂无数据'");
+    expect(script).toContain("? '基于已公布数据' : '暂无数据'");
     expect(script).toContain("return number > 0 ? 'premium-tone-up' : 'premium-tone-down'");
     expect(styles).toContain('.premium-tone-up');
     expect(styles).toContain('.premium-tone-down');
@@ -70,6 +70,18 @@ describe('详情页 UI 与数据展示约束', () => {
     expect(script).not.toContain("label: '收盘价'");
     expect(script).not.toContain("label: '最高价'");
     expect(script).not.toContain("label: '最低价'");
+  });
+
+  it('详情移除计算公式、来源审计与来源说明', () => {
+    const script = read('pages/detail/detail.js');
+    const template = read('pages/detail/detail.wxml');
+
+    expect(template).not.toContain('计算公式');
+    expect(template).not.toContain('来源审计');
+    expect(template).not.toContain('source-audit');
+    expect(script).not.toContain('auditRows');
+    expect(script).not.toContain('sourceLabel');
+    expect(script).not.toContain('navTrace');
   });
 
   it('详情请求继续使用冻结接口且不在 1.5 秒主动中断', () => {
@@ -122,7 +134,7 @@ describe('详情页 UI 与数据展示约束', () => {
     });
 
     expect(instance.data.summaryCards).toHaveLength(4);
-    expect(instance.data.summaryCards[1]).toMatchObject({ toneClass: 'premium-tone-up', note: '基于已公布官方净值' });
+    expect(instance.data.summaryCards[1]).toMatchObject({ toneClass: 'premium-tone-up', note: '基于已公布数据' });
     expect(instance.data.summaryCards[2]).toMatchObject({ label: '连续溢价天数', value: '3天' });
     expect(instance.data.summaryCards[3]).toMatchObject({ value: '+426.5万', note: '2026-06-26' });
     expect(instance.data.trendPoints).toHaveLength(3);

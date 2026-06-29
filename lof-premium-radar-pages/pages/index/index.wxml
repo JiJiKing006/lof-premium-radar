@@ -7,15 +7,12 @@
           <text>全部</text><text class="filter-glyph">☷</text>
         </button>
         <button class="action-button favorite-action {{section === 'WATCH' ? 'active' : ''}}" hover-class="action-button-pressed" bindtap="showWatchFunds">
-          <text class="action-icon star-icon">☆</text><text>仅看自选</text>
+          <text class="action-icon star-icon">☆</text><text>仅看收藏</text>
         </button>
         <button class="action-button pause-action" hover-class="action-button-pressed" bindtap="handleExcludePausedChange" data-direct="true">
-          <text>隐藏暂停申购</text>
+          <text>隐藏暂停</text>
           <view class="inline-switch {{excludePausedPurchase ? 'active' : ''}}"><view class="inline-switch-dot"></view></view>
         </button>
-        <!-- <button class="action-button monitor-action {{reminderAdded ? 'reminder-added' : ''}}" hover-class="action-button-pressed" bindtap="handleReminderEntry">
-          <image class="action-icon bell-icon" src="{{reminderAdded ? '/images/icons/bell-off.svg' : '/images/icons/bell.svg'}}" mode="aspectFit" /><text>{{reminderAdded ? '已添加提醒' : '添加提醒'}}</text>
-        </button> -->
       </view>
     </view>
   </block>
@@ -62,39 +59,9 @@
 
   <app-loading
     visible="{{operationLoading || (initialLoading && !visibleFunds.length)}}"
-    title="{{operationLoading ? loadingTitle : '加载行情中'}}"
-    note="{{operationLoading ? loadingNote : '正在获取真实基金数据'}}"
+    title="{{operationLoading ? loadingTitle : '加载信息中'}}"
+    note="{{operationLoading ? loadingNote : '正在获取公开数据'}}"
   />
 
   <view wx:if="{{toastText}}" class="watch-toast" role="status">{{toastText}}</view>
-
-  <view wx:if="{{showMonitorModal}}" class="monitor-mask" bindtap="closeMonitorModal">
-    <view class="monitor-modal" catchtap="preventModalClose" role="dialog" aria-label="开启每日机会提醒">
-      <button class="monitor-close" aria-label="关闭" bindtap="closeMonitorModal">
-        <image class="monitor-close-icon" src="/images/icons/close.svg" mode="aspectFit" />
-      </button>
-      <view class="monitor-bell">
-        <text class="monitor-bell-icon">●</text>
-        <text class="monitor-wave left">)</text><text class="monitor-wave right">(</text>
-      </view>
-      <text class="monitor-title">开启每日机会提醒</text>
-      <view class="monitor-copy">
-        <text>订阅后，我们会在每个交易日 </text><text class="monitor-emphasis">14:30</text><text>，</text>
-        <text>自动为你筛选当日最值得关注的 </text><text class="monitor-emphasis">TOP1</text><text> 标的，</text>
-        <text>并通过消息及时提醒，帮你更高效地发现市场机会。</text>
-      </view>
-      <button class="monitor-primary" disabled="{{reminderSubmitting}}" bindtap="handleMonitorPreview">立即提醒</button>
-    </view>
-  </view>
-
-  <view wx:if="{{showCancelReminderModal}}" class="monitor-mask" bindtap="closeCancelReminderModal">
-    <view class="cancel-reminder-modal" catchtap="preventModalClose" role="dialog" aria-label="取消提醒确认">
-      <text class="cancel-reminder-title">取消每日提醒？</text>
-      <text class="cancel-reminder-copy">取消后将不再发送本次 TOP1 机会提醒。</text>
-      <view class="cancel-reminder-actions">
-        <button class="cancel-reminder-secondary" bindtap="closeCancelReminderModal">保留提醒</button>
-        <button class="cancel-reminder-primary" disabled="{{cancellingReminder}}" bindtap="confirmCancelReminder">确认取消</button>
-      </view>
-    </view>
-  </view>
 </view>

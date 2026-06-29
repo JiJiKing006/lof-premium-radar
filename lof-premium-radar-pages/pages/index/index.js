@@ -2,7 +2,6 @@ const { fetchFundsSnapshot, fetchFundDetail, normalizeFund, mergeStablePurchaseS
 const { filterAndSortFunds, settlementCycle } = require('../../utils/fund-filter');
 const { readSnapshot, writeSnapshot } = require('../../utils/cache');
 const { recordVisitor, getOrCreateDeviceId } = require('../../utils/analytics');
-const { registerSubscription, getSubscriptionStatus, cancelSubscription } = require('../../utils/subscription');
 const { allowAction } = require('../../utils/action-guard');
 
 const PAGE_SIZE = 30;
@@ -13,8 +12,6 @@ const DEFAULT_SECTION = 'ALL';
 const DEFAULT_MARKET_FILTER = 'ALL';
 const PURCHASE_STATUS_RECOVERY_DELAY_MS = 3800;
 const PURCHASE_STATUS_RECOVERY_MAX_ATTEMPTS = 1;
-const SUBSCRIBE_TEMPLATE_ID = 'nChCRD1ljtNdWE20NSZIogo5tYX5sX4xP4UPEdZVLyM';
-const SUBSCRIBE_NOTE = '仅供参考，不做投资建议';
 const MIN_REFRESH_LOADING_MS = 650;
 
 function getCurrentFunds(page) {
@@ -57,11 +54,6 @@ Page({
     manualRefreshing: false,
     showTableBackTop: false,
     showEstimatedNav: false,
-    showMonitorModal: false,
-    reminderAdded: false,
-    showCancelReminderModal: false,
-    cancellingReminder: false,
-    reminderSubmitting: false,
     operationLoading: false,
     loadingTitle: '',
     loadingNote: ''
@@ -82,7 +74,6 @@ Page({
   },
 
   onShow() {
-    this.refreshReminderStatus();
     const favoriteChanged = this.refreshFavoriteCodes();
     if (favoriteChanged && this.data.section === WATCH_SECTION) {
       this.fetchSectionSnapshot({ force: false });
@@ -148,7 +139,7 @@ Page({
       if (this.sectionRequestIds[targetSection] !== requestId) return;
       const allowsEmptyResult = targetSection === WATCH_SECTION || Boolean(String(this.data.query || '').trim());
       if (!fetchedSnapshot || !Array.isArray(fetchedSnapshot.rows) || (!fetchedSnapshot.rows.length && !allowsEmptyResult)) {
-        throw new Error('行情接口返回空数据');
+        throw new Error('信息接口返回空数据');
       }
       const snapshot = this.stabilizeSnapshotPurchaseStatuses(targetSection, fetchedSnapshot);
       writeSnapshot(this.snapshotCacheKey(targetSection), snapshot);
@@ -169,14 +160,14 @@ Page({
           stale: true,
           keepPage: true,
           skipRecovery: true,
-          errorMessage: background ? '' : error && error.message ? error.message : '行情接口加载失败'
+          errorMessage: background ? '' : error && error.message ? error.message : '信息加载失败'
         });
         return false;
       }
       if (!background && targetSection === this.data.section) {
         this.setData({
           initialLoading: false,
-          pollingError: error && error.message ? error.message : '行情接口加载失败'
+          pollingError: error && error.message ? error.message : '信息加载失败'
         });
       }
       return false;
@@ -353,7 +344,7 @@ Page({
         rowCount: rows.length,
         allCount: favoriteCodes.length,
         updateTime,
-        warn: rows.length < favoriteCodes.length ? '部分自选详情暂不可用，已保留真实可用数据' : ''
+        warn: rows.length < favoriteCodes.length ? '部分收藏详情暂不可用，已保留可用数据' : ''
       }),
       rows
     };
@@ -519,7 +510,7 @@ Page({
     this.visiblePage = 1;
     this.resetTableScroll();
     const loadingStartedAt = Date.now();
-    this.showOperationLoading('刷新数据中', '正在更新真实行情，请稍候');
+    this.showOperationLoading('刷新数据中', '正在更新公开数据，请稍候');
     this.setData({ manualRefreshing: true, pollingError: '' });
     try {
       await this.fetchSectionSnapshot({
@@ -619,136 +610,6 @@ Page({
     this.handleSectionChange({ detail: { value: WATCH_SECTION } });
   },
 
-  handleReminderEntry() {
-    if (!allowAction(this, 'reminder-entry')) return;
-    if (this.data.reminderAdded) {
-      this.setData({ showCancelReminderModal: true });
-      return;
-    }
-    this.setData({ showMonitorModal: true });
-  },
-
-  closeMonitorModal() {
-    if (!allowAction(this, 'close-monitor')) return;
-    this.setData({ showMonitorModal: false });
-  },
-
-  closeCancelReminderModal() {
-    if (!allowAction(this, 'close-cancel-reminder')) return;
-    if (!this.data.cancellingReminder) this.setData({ showCancelReminderModal: false });
-  },
-
-  async confirmCancelReminder() {
-    if (this.data.cancellingReminder) return;
-    if (!allowAction(this, 'confirm-cancel-reminder')) return;
-    this.setData({ cancellingReminder: true });
-    this.showOperationLoading('取消提醒中', '正在更新你的提醒设置');
-    try {
-      await cancelSubscription();
-      this.setData({ reminderAdded: false, showCancelReminderModal: false });
-      this.showToast('已取消提醒', 1600);
-    } catch (error) {
-      this.showToast(error && error.message ? error.message : '取消提醒失败', 1800);
-    } finally {
-      this.setData({ cancellingReminder: false });
-      this.hideOperationLoading();
-    }
-  },
-
-  async refreshReminderStatus() {
-    try {
-      const result = await getSubscriptionStatus();
-      this.setData({ reminderAdded: Boolean(result && result.added) });
-    } catch (_) {
-      // 状态查询失败不覆盖本地刚完成的提醒状态。
-    }
-  },
-
-  async handleMonitorPreview() {
-    if (!allowAction(this, 'monitor-preview')) return;
-    if (!wx.requestSubscribeMessage) {
-      this.showToast('当前微信版本暂不支持订阅消息', 1800);
-      return;
-    }
-    this.closeMonitorModal();
-    let reminderSubmitting = false;
-    try {
-      const result = await requestOneTimeSubscription(SUBSCRIBE_TEMPLATE_ID);
-      const status = result && result[SUBSCRIBE_TEMPLATE_ID];
-      if (status === 'reject') {
-        this.showToast('你已取消本次订阅', 1600);
-        return;
-      }
-      if (status === 'ban') {
-        this.showToast('订阅消息已被禁用，请在微信设置中开启', 2200);
-        return;
-      }
-      if (status !== 'accept') {
-        this.showToast('未获得订阅授权', 1600);
-        return;
-      }
-      reminderSubmitting = true;
-      this.setData({ reminderSubmitting: true });
-      this.showOperationLoading('添加提醒中', '正在保存订阅并生成真实机会数据');
-      const preview = await this.buildSubscriptionMessagePreview();
-      console.log('[订阅消息模板内容]', JSON.stringify(preview, null, 2));
-      const registration = await registerSubscription({ testMode: isDevelopmentMiniProgram() });
-      this.setData({ reminderAdded: true });
-      console.log('[每日机会提醒] 一次性订阅授权成功');
-      this.showToast(registration && registration.testScheduled
-        ? '订阅成功，测试消息将在10秒后发送'
-        : '已订阅一次机会提醒', registration && registration.testScheduled ? 3000 : 1800);
-    } catch (error) {
-      console.error('[每日机会提醒] 订阅失败', error);
-      this.showToast(error && error.message ? error.message : '订阅失败，请稍后重试', 2000);
-    } finally {
-      if (reminderSubmitting) {
-        this.setData({ reminderSubmitting: false });
-        this.hideOperationLoading();
-      }
-    }
-  },
-
-  async buildSubscriptionMessagePreview() {
-    const snapshot = await fetchFundsSnapshot({
-      section: 'ALL',
-      includeTrends: false,
-      fields: 'home',
-      page: 1,
-      pageSize: PAGE_SIZE,
-      marketFilter: 'ALL',
-      excludePausedPurchase: true,
-      sortKey: 'premiumRate',
-      sortDirection: 'desc',
-      requestMode: 'page',
-      timeoutMs: 3000,
-      timeoutMessage: '机会数据加载失败，请稍后重试',
-      showLoading: false
-    });
-    const top1 = buildSubscriptionTop1(snapshot && snapshot.rows);
-    if (!top1.length) throw new Error('暂无符合条件的真实机会数据');
-    const date = formatDateOnly(new Date());
-    const messageContent = formatSubscriptionFundLine(top1[0]);
-    return {
-      templateId: SUBSCRIBE_TEMPLATE_ID,
-      subscriptionType: '一次性订阅',
-      keywords: {
-        日期: date,
-        消息内容: messageContent,
-        备注: SUBSCRIBE_NOTE
-      },
-      top1: {
-        name: top1[0].name,
-        code: top1[0].code,
-        premiumRate: top1[0].display.premiumRate,
-        updateTime: top1[0].display.updateTime
-      }
-    };
-  },
-
-  preventModalClose() {
-  },
-
   showOperationLoading(title, note) {
     this.setData({
       operationLoading: true,
@@ -835,7 +696,7 @@ Page({
     this.setData({
       favoriteCodes,
       pulseCode: fund.code,
-      toastText: willAdd ? `已加入自选：${fund.name}` : `已移出自选：${fund.name}`
+      toastText: willAdd ? `已加入收藏：${fund.name}` : `已移出收藏：${fund.name}`
     });
     this.updateVisibleFunds();
     this.clearPulseTimer();
@@ -879,7 +740,7 @@ function buildWatchMeta(options = {}) {
   const updateTime = options.updateTime || localTimestamp();
   return {
     sourceId: WATCH_SECTION,
-    sourceTitle: '自选',
+    sourceTitle: '收藏',
     sourceProvider: 'fund-detail',
     rowCount,
     allCount: Number(options.allCount || rowCount),
@@ -897,7 +758,7 @@ function buildWatchMeta(options = {}) {
 function sectionLabel(section) {
   const map = {
     ALL: '全部',
-    WATCH: '自选',
+    WATCH: '收藏',
     'T+2': 'T+2',
     'T+3': 'T+3'
   };
@@ -928,15 +789,6 @@ function wait(duration) {
   return new Promise((resolve) => setTimeout(resolve, duration));
 }
 
-function isDevelopmentMiniProgram() {
-  try {
-    const accountInfo = wx.getAccountInfoSync && wx.getAccountInfoSync();
-    return accountInfo && accountInfo.miniProgram && accountInfo.miniProgram.envVersion === 'develop';
-  } catch (_) {
-    return false;
-  }
-}
-
 function appendUniqueFunds(existing, incoming) {
   const rows = Array.isArray(existing) ? existing.slice() : [];
   const seen = new Set(rows.map((fund) => fund.code));
@@ -949,14 +801,40 @@ function appendUniqueFunds(existing, incoming) {
 }
 
 function purchaseText(fund) {
-  const limit = fund.purchaseLimit || {};
-  const rawLabel = limit.label || limit.limitText || fund.subscriptionStatus || '';
-  const label = !rawLabel || /^(未知|--|-|N\/A)$/i.test(rawLabel) ? '暂无数据' : rawLabel;
-  const state = limit.state || fund.subscriptionState || 'unavailable';
-  if (state === 'limited' || /限|大额/.test(label)) return compactPurchaseText(fund, label);
-  if (state === 'open' && (/无限额|不限额/.test(label) || /开放/.test(label))) return '不限额';
-  if (/开放申购\s*\/\s*无限额|开放申购.*不限额/.test(label)) return '不限额';
-  return label;
+  const limit = fund && fund.purchaseLimit || {};
+  const label = String(limit.label || limit.limitText || fund && fund.subscriptionStatus || '').trim();
+  const state = String(limit.state || fund && fund.subscriptionState || '').toLowerCase();
+  const explicitAmount = purchaseLimitAmount(limit, label);
+
+  if (state === 'paused' || /暂停|停止/.test(label)) return '暂停';
+  if (state === 'open' || /不限额|无限额|不限|开放/.test(label) || explicitAmount !== null && explicitAmount >= 800_000_000) return '不限';
+  if (state === 'limited' || /限|大额/.test(label)) {
+    return explicitAmount === null ? '暂无数据' : `限 ${formatPurchaseAmount(explicitAmount)}`;
+  }
+  return '暂无数据';
+}
+
+function purchaseLimitAmount(limit, label) {
+  const value = limit.dailyLimit ?? limit.limitAmount ?? limit.amountYuan;
+  if (value !== null && value !== undefined && value !== '') {
+    const amount = Number(value);
+    if (Number.isFinite(amount) && amount > 0) return amount;
+  }
+  const match = String(label || '').match(/(\d+(?:\.\d+)?)\s*(亿|万|元)/);
+  if (!match) return null;
+  const scale = match[2] === '亿' ? 100_000_000 : match[2] === '万' ? 10_000 : 1;
+  const amount = Number(match[1]) * scale;
+  return Number.isFinite(amount) && amount > 0 ? amount : null;
+}
+
+function formatPurchaseAmount(amount) {
+  if (amount > 10_000) return `${trimPurchaseDecimal(amount / 10_000, 4)} 万`;
+  return `${trimPurchaseDecimal(amount, 2)} 元`;
+}
+
+function trimPurchaseDecimal(value, precision) {
+  if (Number.isInteger(value)) return String(value);
+  return value.toFixed(precision).replace(/(\.\d*?[1-9])0+$|\.0+$/, '$1');
 }
 
 function hasUsablePurchaseStatus(fund) {
@@ -968,24 +846,6 @@ function hasUsablePurchaseStatus(fund) {
     && !['', 'unknown', 'unavailable'].includes(state);
 }
 
-function compactPurchaseText(fund, label) {
-  const limit = fund.purchaseLimit || {};
-  const hasExplicitAmount = limit.dailyLimit !== null && limit.dailyLimit !== undefined && limit.dailyLimit !== '';
-  const explicitAmount = Number(limit.dailyLimit);
-  if (/不限额|无限额/.test(label) || (hasExplicitAmount && explicitAmount >= 800_000_000)) return '不限额';
-  if (hasExplicitAmount && Number.isFinite(explicitAmount) && explicitAmount >= 0) return `限${formatPurchaseAmount(explicitAmount)}`;
-  const match = String(label).match(/(\d+(?:\.\d+)?)\s*(亿|万|元)/);
-  if (!match) return '限额';
-  const scale = match[2] === '亿' ? 100_000_000 : match[2] === '万' ? 10_000 : 1;
-  return `限${formatPurchaseAmount(Number(match[1]) * scale)}`;
-}
-
-function formatPurchaseAmount(value) {
-  const amount = Number(value);
-  if (amount > 10_000) return `${Number((amount / 10_000).toFixed(2))}万`;
-  return `${Number(amount.toFixed(2))}元`;
-}
-
 function purchaseState(fund) {
   const state = (fund.purchaseLimit && fund.purchaseLimit.state) || fund.subscriptionState;
   return !state || state === 'unknown' ? 'unavailable' : state;
@@ -994,42 +854,4 @@ function purchaseState(fund) {
 function hasChangedField(fund, fields) {
   const changedFields = Array.isArray(fund.changedFields) ? fund.changedFields : [];
   return fields.some((field) => changedFields.includes(field));
-}
-
-function requestOneTimeSubscription(templateId) {
-  return new Promise((resolve, reject) => {
-    wx.requestSubscribeMessage({
-      tmplIds: [templateId],
-      success: resolve,
-      fail: (error) => reject(new Error(error && error.errMsg || '无法打开订阅授权'))
-    });
-  });
-}
-
-function buildSubscriptionTop1(rows) {
-  return (Array.isArray(rows) ? rows : [])
-    .filter((fund) => isEligibleSubscriptionFund(fund))
-    .sort((left, right) => Number(right.premiumRate) - Number(left.premiumRate))
-    .slice(0, 1);
-}
-
-function isEligibleSubscriptionFund(fund) {
-  if (!fund || !Number.isFinite(Number(fund.premiumRate))) return false;
-  const limit = fund.purchaseLimit || {};
-  const state = String(limit.state || fund.subscriptionState || '').toLowerCase();
-  const label = String([limit.label, limit.limitText, fund.subscriptionStatus].filter(Boolean).join(' '));
-  if (state === 'paused' || /暂停申购|停止申购/.test(label)) return false;
-  if (state === 'exchange' || /场内交易/.test(label)) return false;
-  return true;
-}
-
-function formatSubscriptionFundLine(fund) {
-  const suffix = `(${fund.code})${fund.display.premiumRate}`;
-  const nameBudget = Math.max(0, 20 - Array.from(suffix).length);
-  return `${Array.from(String(fund.name || '')).slice(0, nameBudget).join('')}${suffix}`;
-}
-
-function formatDateOnly(date) {
-  const pad = (value) => String(value).padStart(2, '0');
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
