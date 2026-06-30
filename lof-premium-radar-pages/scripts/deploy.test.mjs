@@ -5,6 +5,7 @@ const deployScript = readFileSync(new URL('./deploy.sh', import.meta.url), 'utf8
 const testDeployScript = readFileSync(new URL('./deploy-test.sh', import.meta.url), 'utf8');
 const nginxDefault = readFileSync(new URL('../nginx-default.conf', import.meta.url), 'utf8');
 const serverIndex = readFileSync(new URL('../server/index.js', import.meta.url), 'utf8');
+const fundsRoutes = readFileSync(new URL('../server/routes/funds.js', import.meta.url), 'utf8');
 const miniProgramConfig = readFileSync(new URL('../config/mp.js', import.meta.url), 'utf8');
 
 describe('deployment nginx configuration', () => {
@@ -30,10 +31,12 @@ describe('deployment nginx configuration', () => {
     expect(nginxDefault).toContain('location ^~ /lof/api/');
     expect(nginxDefault).not.toContain('/srv/lof/current/dist');
 
-    expect(serverIndex).toContain("app.use('/api', apiRouter);");
-    expect(serverIndex).toContain("apiRouter.post('/funds/quotes'");
-    expect(serverIndex).toContain("apiRouter.post('/funds/quotes/refresh'");
-    expect(serverIndex).toContain("apiRouter.post('/funds/quotes/page'");
+    expect(serverIndex).toContain("app.use('/api', createFundsRouter());");
+    expect(serverIndex).toContain("app.use('/api', createMarketRouter());");
+    expect(serverIndex).toContain("app.use('/api', createOperationsRouter({ wechatSubscriptionService }));");
+    expect(fundsRoutes).toContain("router.post('/funds/quotes'");
+    expect(fundsRoutes).toContain("router.post('/funds/quotes/refresh'");
+    expect(fundsRoutes).toContain("router.post('/funds/quotes/page'");
     expect(serverIndex).not.toContain('createViteServer');
     expect(serverIndex).not.toContain('express.static');
   });

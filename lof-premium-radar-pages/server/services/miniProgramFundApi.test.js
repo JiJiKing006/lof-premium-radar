@@ -22,6 +22,16 @@ function loadMiniProgramModule(filename, moduleCache = new Map()) {
 }
 
 describe('mini-program fund API normalization', () => {
+  it('keeps the mini-program endpoints registered by the extracted funds router', () => {
+    const routes = fs.readFileSync(path.resolve('server/routes/funds.js'), 'utf8');
+
+    expect(routes).toContain("router.post('/funds/quotes'");
+    expect(routes).toContain("router.post('/funds/quotes/refresh'");
+    expect(routes).toContain("router.post('/funds/quotes/page'");
+    expect(routes).toContain("router.get('/funds/:code/history'");
+    expect(routes).toContain("router.get('/funds/:code'");
+  });
+
   it('keeps the fund-api facade exports wired to the extracted normalizer', () => {
     const cache = new Map();
     const facade = loadMiniProgramModule(path.resolve('utils/fund-api.js'), cache);

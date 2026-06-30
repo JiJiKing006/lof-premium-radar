@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { formatFundQuoteResponse, getFundQuotePage } from './fundAggregator.js';
 import { formatFundQuoteResponse as projectFundQuoteResponse } from './fundListProjector.js';
 import { getPinnedPageSnapshot, rememberPageSnapshot } from './fundPageSnapshotStore.js';
+import { createFundsRouter } from '../routes/funds.js';
+import { createMarketRouter } from '../routes/market.js';
 
 const COMPLETE_LOF_ROW = {
   code: '160216',
@@ -30,6 +32,25 @@ const COMPLETE_LOF_ROW = {
 };
 
 describe('fund quote response contract', () => {
+  it('keeps frozen fund and market route methods after router extraction', () => {
+    const routes = [...createFundsRouter().stack, ...createMarketRouter().stack]
+      .filter((layer) => layer.route)
+      .map((layer) => ({ path: layer.route.path, methods: Object.keys(layer.route.methods).sort() }));
+
+    expect(routes).toEqual(expect.arrayContaining([
+      { path: '/funds/quotes', methods: ['get'] },
+      { path: '/funds/quotes', methods: ['post'] },
+      { path: '/funds/quotes/refresh', methods: ['get'] },
+      { path: '/funds/quotes/refresh', methods: ['post'] },
+      { path: '/funds/quotes/page', methods: ['get'] },
+      { path: '/funds/quotes/page', methods: ['post'] },
+      { path: '/funds/:code/history', methods: ['get'] },
+      { path: '/funds/:code', methods: ['get'] },
+      { path: '/market/indices', methods: ['get'] },
+      { path: '/health', methods: ['get'] },
+    ]));
+  });
+
   it('keeps page snapshot ids pinned to the same snapshot object', () => {
     const snapshot = { meta: {}, rows: [COMPLETE_LOF_ROW] };
     const snapshotId = rememberPageSnapshot(snapshot);
