@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { dedupeFundsByCodePriority, filterRenderablePremiumRows, formatFundQuoteResponse, getFundQuotePage, mergeMarketQuoteMaps, mergeStableExchangeShareFields, mergeStableFinancialFields, mergeStablePurchaseStatuses, recalculatePremiumFields, toUnifiedFund } from './fundAggregator.js';
+import { filterRenderablePremiumRows as projectedFilterRenderablePremiumRows } from './fundListProjector.js';
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -11,6 +12,10 @@ afterEach(() => {
 });
 
 describe('fundAggregator', () => {
+  it('keeps the list filter available through the aggregator facade', () => {
+    expect(filterRenderablePremiumRows).toBe(projectedFilterRenderablePremiumRows);
+  });
+
   it('keeps a verified quote purchase status when the supplemental status is unavailable', () => {
     const row = toUnifiedFund({
       quote: {
