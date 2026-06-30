@@ -1,7 +1,25 @@
 import { describe, expect, it } from 'vitest';
 import { buildLofPremiumReferenceMap, mergeHaoetfNavRow, mergeLofNavRow, isNasdaqTechnologyQuote, selectEastmoneyNavCodes, selectTiantianCodes } from './navService.js';
+import { applyOfficialNav, mergeEstimateCandidate, normalizeEstimateTimestamp } from './navEstimatePolicy.js';
 
 describe('navService', () => {
+  it('keeps estimate candidate priority and timestamp normalization unchanged', () => {
+    const merged = mergeEstimateCandidate({
+      estimatedNav: 1.01,
+      estimatedNavSource: 'lof8',
+      estimatedNavTime: '2026-06-30 10:30:00',
+    }, { value: 1.02, source: 'tiantian', time: '2026-06-30 10:30' });
+
+    expect(normalizeEstimateTimestamp('2026-06-30 10:30')).toBe('2026-06-30 10:30:00');
+    expect(merged).toMatchObject({ estimatedNav: 1.02, estimatedNavSource: 'tiantian', estimatedNavTime: '2026-06-30 10:30:00' });
+  });
+
+  it('keeps official NAV selection separate from estimated candidates', () => {
+    expect(applyOfficialNav({ estimatedNav: 1.02 }, [{
+      lastNav: 1.01, navDate: '2026-06-29', navQuoteTime: '2026-06-30 10:00:00', navSource: 'eastmoney',
+    }])).toMatchObject({ estimatedNav: 1.02, lastNav: 1.01, navDate: '2026-06-29', navSource: 'eastmoney' });
+  });
+
   it('maps the target website realtime estimate first and keeps its provenance', () => {
     const map = buildLofPremiumReferenceMap({
       scrapedAt: '2026-06-29T02:38:27.000Z',
