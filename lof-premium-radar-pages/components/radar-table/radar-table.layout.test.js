@@ -109,13 +109,14 @@ describe('首页表格滚动与页面刷新', () => {
 
   it('全部和收藏分别记忆筛选，收藏首次进入默认展示全部收藏', () => {
     const pageScript = fs.readFileSync(path.join(projectRoot, 'pages/index/index.js'), 'utf8');
+    const filterScript = fs.readFileSync(path.join(projectRoot, 'pages/index/index-filters.js'), 'utf8');
     const sectionHandler = pageScript.slice(
       pageScript.indexOf('handleSectionChange(event)'),
       pageScript.indexOf('showAllFunds()'),
     );
-    const filterDefaults = pageScript.slice(
-      pageScript.indexOf('function filterStateForSection'),
-      pageScript.indexOf('function normalizePurchaseStatusFilters'),
+    const filterDefaults = filterScript.slice(
+      filterScript.indexOf('function filterStateForSection'),
+      filterScript.indexOf('function normalizePurchaseStatusFilters'),
     );
 
     expect(pageScript).toContain('this.rememberCurrentSectionState()');
@@ -421,6 +422,7 @@ describe('首页表格滚动与页面刷新', () => {
 
   it('筛选重置清空条件、关闭弹层并立即触发筛选，角标不统计全部项', () => {
     const pageScript = fs.readFileSync(path.join(projectRoot, 'pages/index/index.js'), 'utf8');
+    const filterScript = fs.readFileSync(path.join(projectRoot, 'pages/index/index-filters.js'), 'utf8');
     const resetHandler = pageScript.slice(
       pageScript.indexOf('resetFilterDraft()'),
       pageScript.indexOf('confirmFilterPanel()'),
@@ -430,7 +432,7 @@ describe('首页表格滚动与页面刷新', () => {
     expect(resetHandler).toContain("turnoverMin: ''");
     expect(resetHandler).toContain('this.applyFilterPatch');
     expect(pageScript).toMatch(/applyFilterPatch\(patch\)[\s\S]*?showFilterPanel:\s*false[\s\S]*?fetchInteractiveSnapshot\(\)/);
-    expect(pageScript).toContain('if (normalizePurchaseStatusFilters(state.purchaseStatusFilters).length) count += 1');
+    expect(filterScript).toContain('if (normalizePurchaseStatusFilters(state.purchaseStatusFilters).length) count += 1');
   });
 
   it('搜索、排序和筛选确认共用快照交互接口', () => {

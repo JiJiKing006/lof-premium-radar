@@ -7,16 +7,27 @@ const { allowAction } = require('../../utils/action-guard');
 const { loadFavoriteCodes, storeFavoriteCodes } = require('../../utils/favorites');
 const { purchaseText, purchaseState, settlementCycleDisplay } = require('../../utils/fund-display');
 const { REVIEW_COPY_MODE, reviewCopy } = require('../../config/review-copy');
+const {
+  DEFAULT_PURCHASE_STATUS_FILTERS,
+  DEFAULT_REDEMPTION_FILTER,
+  DEFAULT_TURNOVER_MIN_WAN,
+  buildDraftState,
+  buildAppliedFilterPatch,
+  validateDraftFilters,
+  hasAdvancedFilters,
+  countActiveFilters,
+  filterStateForSection,
+  normalizePurchaseStatusFilters,
+  purchaseStatusMap,
+  effectivePageSize
+} = require('./index-filters');
+const { appendUniqueFunds, visibleFundsForPage, buildRememberedSectionState } = require('./index-pagination');
 
 const PAGE_SIZE = 30;
-const FULL_FILTER_PAGE_SIZE = 500;
 const SEARCH_DEBOUNCE_MS = 160;
 const WATCH_SECTION = 'WATCH';
 const DEFAULT_SECTION = 'ALL';
 const DEFAULT_MARKET_FILTER = 'ALL';
-const DEFAULT_PURCHASE_STATUS_FILTERS = ['OPEN', 'LIMITED'];
-const DEFAULT_REDEMPTION_FILTER = 'ALL';
-const DEFAULT_TURNOVER_MIN_WAN = '500';
 const PURCHASE_STATUS_RECOVERY_DELAY_MS = 3800;
 const PURCHASE_STATUS_RECOVERY_MAX_ATTEMPTS = 1;
 const MIN_REFRESH_LOADING_MS = 650;
@@ -270,22 +281,12 @@ Page({
   rememberCurrentSectionState() {
     const section = this.data.section;
     this.sectionStates = this.sectionStates || {};
-    this.sectionStates[section] = Object.assign({}, this.sectionStates[section] || {}, {
+    this.sectionStates[section] = Object.assign({}, this.sectionStates[section] || {}, buildRememberedSectionState({
       funds: getCurrentFunds(this),
-      meta: this.data.meta,
-      query: this.data.query,
-      marketFilter: this.data.marketFilter,
-      excludePausedPurchase: this.data.excludePausedPurchase,
-      purchaseStatusFilters: this.data.purchaseStatusFilters,
-      redemptionFilter: this.data.redemptionFilter,
-      turnoverMin: this.data.turnoverMin,
-      sortKey: this.data.sortKey,
-      sortDirection: this.data.sortDirection,
-      visiblePage: this.visiblePage || 1,
-      lastSuccessAt: this.data.lastSuccessAt,
-      abnormalCount: this.data.abnormalCount,
-      filteredFunds: this.filteredFundsCache || []
-    });
+      data: this.data,
+      visiblePage: this.visiblePage,
+      filteredFunds: this.filteredFundsCache
+    }));
   },
 
   restoreSectionState(section) {
@@ -443,7 +444,7 @@ Page({
     const pagination = options.pagination || this.data.meta && this.data.meta.pagination || null;
     const visibleFunds = pagination
       ? filteredFunds
-      : filteredFunds.slice(0, Math.max(PAGE_SIZE, (this.visiblePage || 1) * PAGE_SIZE));
+      : visibleFundsForPage(filteredFunds, this.visiblePage, PAGE_SIZE);
     const advancedFiltersActive = hasAdvancedFilters(this.data);
     const totalCount = advancedFiltersActive
       ? filteredFunds.length
@@ -979,93 +980,6 @@ function buildRedemptionOptions() {
   ];
 }
 
-function buildDraftState(state, overrides = {}) {
-  const purchaseStatusFilters = normalizePurchaseStatusFilters(state.purchaseStatusFilters);
-  return Object.assign({
-    draftPurchaseStatusFilters: purchaseStatusFilters,
-    draftPurchaseStatusMap: purchaseStatusMap(purchaseStatusFilters),
-    draftRedemptionFilter: state.redemptionFilter || DEFAULT_REDEMPTION_FILTER,
-    draftTurnoverMin: state.turnoverMin === undefined ? DEFAULT_TURNOVER_MIN_WAN : state.turnoverMin
-  }, overrides);
-}
-
-function buildAppliedFilterPatch(state) {
-  return {
-    excludePausedPurchase: false,
-    purchaseStatusFilters: normalizePurchaseStatusFilters(state.draftPurchaseStatusFilters),
-    redemptionFilter: state.draftRedemptionFilter || DEFAULT_REDEMPTION_FILTER,
-    turnoverMin: String(state.draftTurnoverMin || '').trim()
-  };
-}
-
-function validateDraftFilters(state) {
-  const turnoverMin = normalizeRangeText(state.draftTurnoverMin);
-  if (turnoverMin !== null && turnoverMin < 0) return '成交额不能小于0万元';
-  return '';
-}
-
-function normalizeRangeText(value) {
-  const text = String(value || '').trim();
-  if (!text) return null;
-  const number = Number(text.replace(/,/g, ''));
-  return Number.isFinite(number) ? number : null;
-}
-
-function hasAdvancedFilters(state) {
-  return countActiveFilters(state) > 0;
-}
-
-function countActiveFilters(state) {
-  let count = 0;
-  if (normalizePurchaseStatusFilters(state.purchaseStatusFilters).length) count += 1;
-  if ((state.redemptionFilter || DEFAULT_REDEMPTION_FILTER) !== DEFAULT_REDEMPTION_FILTER) count += 1;
-  if (String(state.turnoverMin || '').trim()) count += 1;
-  return count;
-}
-
-function filterStateForSection(section, rememberedState) {
-  const defaults = section === WATCH_SECTION
-    ? {
-        purchaseStatusFilters: [],
-        redemptionFilter: DEFAULT_REDEMPTION_FILTER,
-        turnoverMin: ''
-      }
-    : {
-        purchaseStatusFilters: DEFAULT_PURCHASE_STATUS_FILTERS.slice(),
-        redemptionFilter: DEFAULT_REDEMPTION_FILTER,
-        turnoverMin: DEFAULT_TURNOVER_MIN_WAN
-      };
-  if (!rememberedState) return defaults;
-  return {
-    purchaseStatusFilters: Array.isArray(rememberedState.purchaseStatusFilters)
-      ? normalizePurchaseStatusFilters(rememberedState.purchaseStatusFilters)
-      : defaults.purchaseStatusFilters,
-    redemptionFilter: rememberedState.redemptionFilter || defaults.redemptionFilter,
-    turnoverMin: rememberedState.turnoverMin === undefined
-      ? defaults.turnoverMin
-      : rememberedState.turnoverMin
-  };
-}
-
-function normalizePurchaseStatusFilters(filters) {
-  if (!Array.isArray(filters)) return DEFAULT_PURCHASE_STATUS_FILTERS.slice();
-  return filters.filter((key, index, list) =>
-    key !== 'ALL' && ['PAUSED', 'OPEN', 'LIMITED'].includes(key) && list.indexOf(key) === index
-  );
-}
-
-function purchaseStatusMap(filters) {
-  return normalizePurchaseStatusFilters(filters).reduce((result, key) => {
-    result[key] = true;
-    return result;
-  }, {});
-}
-
-function effectivePageSize(state, section) {
-  if (section === WATCH_SECTION) return PAGE_SIZE;
-  return hasAdvancedFilters(state) ? FULL_FILTER_PAGE_SIZE : PAGE_SIZE;
-}
-
 function formatUpdateTime(value) {
   const text = String(value || '').trim();
   if (!text) return '';
@@ -1083,17 +997,6 @@ function localTimestamp() {
 
 function wait(duration) {
   return new Promise((resolve) => setTimeout(resolve, duration));
-}
-
-function appendUniqueFunds(existing, incoming) {
-  const rows = Array.isArray(existing) ? existing.slice() : [];
-  const seen = new Set(rows.map((fund) => fund.code));
-  (Array.isArray(incoming) ? incoming : []).forEach((fund) => {
-    if (!fund || !fund.code || seen.has(fund.code)) return;
-    rows.push(fund);
-    seen.add(fund.code);
-  });
-  return rows;
 }
 
 function hasUsablePurchaseStatus(fund) {
