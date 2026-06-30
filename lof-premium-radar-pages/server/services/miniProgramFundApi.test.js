@@ -22,6 +22,16 @@ function loadMiniProgramModule(filename, moduleCache = new Map()) {
 }
 
 describe('mini-program fund API normalization', () => {
+  it('keeps the fund-api facade exports wired to the extracted normalizer', () => {
+    const cache = new Map();
+    const facade = loadMiniProgramModule(path.resolve('utils/fund-api.js'), cache);
+    const normalizer = loadMiniProgramModule(path.resolve('utils/fund-normalizer.js'), cache);
+
+    expect(facade.normalizeFund).toBe(normalizer.normalizeFund);
+    expect(facade.normalizeMeta).toBe(normalizer.normalizeMeta);
+    expect(facade.mergeStablePurchaseStatuses).toBe(normalizer.mergeStablePurchaseStatuses);
+  });
+
   it('sends table queries as POST JSON so filters and snapshot ids are not encoded into the URL', async () => {
     const originalWx = globalThis.wx;
     const request = vi.fn((options) => options.success({
