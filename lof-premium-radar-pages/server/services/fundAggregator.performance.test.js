@@ -693,4 +693,15 @@ describe('fundAggregator performance', () => {
     expect(mocks.getQuotes).toHaveBeenCalledTimes(2);
     expect(snapshot.rows[0]).toMatchObject({ marketPrice: 0.95, turnover: 0 });
   });
+
+  it('returns a reusable complete cached snapshot inside the first-screen budget', async () => {
+    await getFundQuotes({ category: 'LOF', includeTrends: false });
+    const startedAt = performance.now();
+    const snapshot = await getFundQuotes({ category: 'LOF', includeTrends: false });
+    const elapsedMs = performance.now() - startedAt;
+
+    expect(snapshot.rows).toHaveLength(1);
+    expect(elapsedMs).toBeLessThan(1_500);
+    expect(mocks.getQuotes).toHaveBeenCalledTimes(1);
+  });
 });

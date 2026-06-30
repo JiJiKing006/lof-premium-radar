@@ -650,6 +650,20 @@ describe('fundAggregator', () => {
     expect(response.rows.map((row) => row.code)).toEqual(['160001', '160002', '501225']);
   });
 
+  it('保留首页响应中的价格与净值字段别名', () => {
+    const response = formatFundQuoteResponse({
+      meta: { updateTime: '2026-06-30 10:00:00' },
+      rows: [{
+        code: '160216', fundCode: '160216', name: '国泰大宗商品LOF', fundName: '国泰大宗商品LOF', category: 'LOF',
+        marketPrice: 1.2, price: 1.2, lastNav: 1.1, nav: 1.1, estimatedNav: 1.18,
+        estimatedNavSource: 'palmmicro', estimatedNavTime: '2026-06-30 10:00:00', premiumRate: 1.69,
+        source: 'sina', quoteTime: '2026-06-30 10:00:00', updateTime: '2026-06-30 10:00:00',
+      }],
+    }, { fields: 'home' });
+
+    expect(response.rows[0]).toMatchObject({ marketPrice: 1.2, price: 1.2, lastNav: 1.1, nav: 1.1 });
+  });
+
   it('无数据的排序项始终放在真实数值之后', () => {
     const response = formatFundQuoteResponse({
       meta: {},

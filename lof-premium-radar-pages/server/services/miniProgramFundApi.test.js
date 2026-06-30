@@ -53,6 +53,30 @@ describe('mini-program fund API normalization', () => {
     }
   });
 
+  it('keeps refresh requests on the frozen refresh endpoint and preserves filter parameters', async () => {
+    const originalWx = globalThis.wx;
+    const request = vi.fn((options) => options.success({ statusCode: 200, data: { meta: {}, rows: [] } }));
+    globalThis.wx = { getStorageSync: () => '', request };
+
+    try {
+      const { fetchFundsSnapshot } = loadMiniProgramModule(path.resolve('utils/fund-api.js'));
+      await fetchFundsSnapshot({
+        requestMode: 'refresh', section: 'LOF', force: true, marketFilter: 'T+3',
+        sortKey: 'premiumRate', sortDirection: 'desc', includeTrends: false,
+      });
+
+      expect(request.mock.calls[0][0]).toMatchObject({
+        method: 'POST',
+        url: expect.stringContaining('/api/funds/quotes/refresh'),
+        data: expect.objectContaining({
+          category: 'LOF', force: '1', marketFilter: 'T+3', sortKey: 'premiumRate', sortDirection: 'desc', trends: '0',
+        }),
+      });
+    } finally {
+      globalThis.wx = originalWx;
+    }
+  });
+
   it('keeps the last verified purchase status when refresh only returns unavailable', () => {
     const { normalizeFund, mergeStablePurchaseStatuses } = loadMiniProgramModule(path.resolve('utils/fund-api.js'));
     const meta = { sourceProvider: 'eastmoney', updateTime: '2026-06-27 15:00:00' };
