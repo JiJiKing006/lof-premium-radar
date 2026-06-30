@@ -1,0 +1,222 @@
+<svg width="1242" height="2688" viewBox="0 0 1242 2688" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="136" y1="96" x2="1120" y2="2480" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F7FAFF"/>
+      <stop offset="1" stop-color="#EEF4FF"/>
+    </linearGradient>
+    <linearGradient id="hero" x1="144" y1="178" x2="1098" y2="560" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0F62FE"/>
+      <stop offset="1" stop-color="#2F8CFF"/>
+    </linearGradient>
+    <linearGradient id="phoneGlass" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#FFFFFF" stop-opacity="0.98"/>
+      <stop offset="1" stop-color="#F6F9FF" stop-opacity="0.94"/>
+    </linearGradient>
+    <filter id="shadow" x="0" y="0" width="1400" height="3000" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="20" stdDeviation="30" flood-color="#1E4E9A" flood-opacity="0.14"/>
+    </filter>
+    <style>
+      .title { font: 700 56px 'PingFang SC','Microsoft YaHei',sans-serif; fill: #0C1A38; }
+      .h1 { font: 700 50px 'PingFang SC','Microsoft YaHei',sans-serif; fill: #FFFFFF; }
+      .h2 { font: 700 30px 'PingFang SC','Microsoft YaHei',sans-serif; fill: #102448; }
+      .h3 { font: 700 24px 'PingFang SC','Microsoft YaHei',sans-serif; fill: #102448; }
+      .body { font: 500 22px 'PingFang SC','Microsoft YaHei',sans-serif; fill: #34506F; }
+      .body-dark { font: 600 22px 'PingFang SC','Microsoft YaHei',sans-serif; fill: #17345E; }
+      .body-sm { font: 500 18px 'PingFang SC','Microsoft YaHei',sans-serif; fill: #5F7693; }
+      .body-xs { font: 500 16px 'PingFang SC','Microsoft YaHei',sans-serif; fill: #6F86A5; }
+      .mono { font-family: 'SFMono-Regular','Menlo','Consolas',monospace; }
+      .blue { fill: #0F62FE; }
+      .red { fill: #E14949; }
+      .green { fill: #17945A; }
+      .white80 { fill: rgba(255,255,255,0.82); }
+      .chip { font: 600 18px 'PingFang SC','Microsoft YaHei',sans-serif; fill: #0F62FE; }
+      .metric { font: 700 30px 'SFMono-Regular','Menlo','Consolas',monospace; fill: #102448; }
+      .metric-red { font: 700 30px 'SFMono-Regular','Menlo','Consolas',monospace; fill: #E14949; }
+      .metric-green { font: 700 30px 'SFMono-Regular','Menlo','Consolas',monospace; fill: #17945A; }
+    </style>
+  </defs>
+
+  <rect width="1242" height="2688" fill="url(#bg)"/>
+  <circle cx="1088" cy="240" r="188" fill="#DCEBFF"/>
+  <circle cx="120" cy="2100" r="204" fill="#E5EEFF"/>
+
+  <g filter="url(#shadow)">
+    <rect x="72" y="88" width="1098" height="360" rx="44" fill="url(#hero)"/>
+  </g>
+  <text x="138" y="184" class="white80 body">LOF 溢价雷达 · 小程序介绍图</text>
+  <text x="138" y="264" class="h1">这款小程序到底怎么看？</text>
+  <text x="138" y="326" class="white80 body">按你现在页面结构，整理成一张通俗教程图。左边讲怎么用，右边讲字段是什么意思。</text>
+
+  <rect x="138" y="358" width="174" height="46" rx="23" fill="#FFFFFF"/>
+  <text x="182" y="389" class="chip">先看首页</text>
+  <rect x="326" y="358" width="204" height="46" rx="23" fill="#FFFFFF"/>
+  <text x="364" y="389" class="chip">再看详情页</text>
+  <rect x="544" y="358" width="252" height="46" rx="23" fill="#FFFFFF"/>
+  <text x="582" y="389" class="chip">最后看字段对照</text>
+
+  <text x="144" y="520" class="title">1. 上手顺序</text>
+  <text x="144" y="566" class="body">如果你第一次打开，最简单的顺序是：首页扫一遍 → 点进详情 → 再对照差值、净值和到账周期。</text>
+
+  <g filter="url(#shadow)">
+    <rect x="96" y="620" width="482" height="920" rx="44" fill="url(#phoneGlass)"/>
+    <rect x="664" y="620" width="482" height="920" rx="44" fill="url(#phoneGlass)"/>
+  </g>
+
+  <text x="138" y="682" class="h2">首页怎么用</text>
+  <text x="706" y="682" class="h2">详情页怎么用</text>
+
+  <rect x="134" y="720" width="404" height="68" rx="24" fill="#F4F8FF" stroke="#D9E8FF"/>
+  <circle cx="176" cy="754" r="12" fill="#0F62FE" fill-opacity="0.16"/>
+  <path d="M173 754h6" stroke="#0F62FE" stroke-width="3" stroke-linecap="round"/>
+  <path d="M179 760l6-6" stroke="#0F62FE" stroke-width="3" stroke-linecap="round"/>
+  <text x="206" y="762" class="body-sm">先搜代码，不用记基金全名</text>
+
+  <rect x="134" y="814" width="118" height="44" rx="22" fill="#0F62FE"/>
+  <text x="172" y="844" class="body-sm" fill="#FFFFFF">全部</text>
+  <rect x="268" y="814" width="152" height="44" rx="22" fill="#EAF2FF"/>
+  <text x="314" y="844" class="body-sm blue">仅看收藏</text>
+  <rect x="436" y="814" width="92" height="44" rx="22" fill="#EEF7F1"/>
+  <text x="462" y="844" class="body-sm green">隐藏暂停</text>
+
+  <rect x="134" y="888" width="404" height="540" rx="28" fill="#FFFFFF" stroke="#E2EDFF"/>
+  <rect x="134" y="888" width="404" height="72" rx="28" fill="#F6F9FF"/>
+  <text x="164" y="933" class="body-dark">收藏</text>
+  <text x="252" y="933" class="body-dark">代码</text>
+  <text x="386" y="933" class="body-dark">实时差值</text>
+  <text x="490" y="933" class="body-dark">当前值</text>
+
+  <line x1="154" y1="988" x2="518" y2="988" stroke="#EDF3FF"/>
+  <text x="164" y="1034" class="body">☆</text>
+  <text x="240" y="1034" class="metric mono">501225</text>
+  <rect x="240" y="1048" width="88" height="32" rx="16" fill="#FFF0EF"/>
+  <text x="264" y="1070" class="body-xs red">暂停</text>
+  <rect x="336" y="1048" width="92" height="32" rx="16" fill="#EEF7F1"/>
+  <text x="358" y="1070" class="body-xs green">延3天</text>
+  <text x="388" y="1034" class="metric-red mono">30.65%</text>
+  <text x="486" y="1034" class="metric-green mono">4.604</text>
+
+  <line x1="154" y1="1102" x2="518" y2="1102" stroke="#EDF3FF"/>
+  <text x="164" y="1148" class="body">☆</text>
+  <text x="240" y="1148" class="metric mono">160216</text>
+  <rect x="240" y="1162" width="116" height="32" rx="16" fill="#EDF4FF"/>
+  <text x="260" y="1184" class="body-xs blue">限 100 元</text>
+  <rect x="366" y="1162" width="92" height="32" rx="16" fill="#EAF2FF"/>
+  <text x="388" y="1184" class="body-xs blue">延2天</text>
+  <text x="388" y="1148" class="metric-red mono">12.43%</text>
+  <text x="486" y="1148" class="metric mono">1.287</text>
+
+  <line x1="154" y1="1216" x2="518" y2="1216" stroke="#EDF3FF"/>
+  <text x="164" y="1262" class="body">☆</text>
+  <text x="240" y="1262" class="metric mono">161129</text>
+  <rect x="240" y="1276" width="88" height="32" rx="16" fill="#EEF7F1"/>
+  <text x="262" y="1298" class="body-xs green">不限</text>
+  <rect x="336" y="1276" width="92" height="32" rx="16" fill="#EAF2FF"/>
+  <text x="358" y="1298" class="body-xs blue">延2天</text>
+  <text x="388" y="1262" class="metric-green mono">-3.18%</text>
+  <text x="486" y="1262" class="metric mono">0.932</text>
+
+  <rect x="154" y="1334" width="344" height="66" rx="18" fill="#F4F8FF"/>
+  <text x="176" y="1374" class="body-sm">首页看法很简单：先按差值高低扫，谁偏离大，谁就先点进去。</text>
+
+  <rect x="706" y="720" width="398" height="140" rx="28" fill="#FFFFFF" stroke="#E3EDFF"/>
+  <text x="736" y="770" class="h3">501225</text>
+  <rect x="838" y="736" width="92" height="30" rx="15" fill="#EEF7F1"/>
+  <text x="860" y="757" class="body-xs green">延3天</text>
+  <text x="736" y="814" class="body-sm">更新于 2026-06-28 21:47:55</text>
+
+  <rect x="706" y="884" width="190" height="164" rx="26" fill="#FFFFFF" stroke="#E3EDFF"/>
+  <text x="736" y="930" class="body-dark">当前值</text>
+  <text x="736" y="990" class="metric-green mono">4.604</text>
+  <text x="736" y="1024" class="body-xs">旁边会放较上日变化</text>
+
+  <rect x="914" y="884" width="190" height="164" rx="26" fill="#FFF6F5" stroke="#F5D8D5"/>
+  <text x="944" y="930" class="body-dark">实时差值</text>
+  <text x="944" y="990" class="metric-red mono">30.65%</text>
+  <text x="944" y="1024" class="body-xs">本质上就是实时溢价率</text>
+
+  <rect x="706" y="1066" width="190" height="164" rx="26" fill="#FFFFFF" stroke="#E3EDFF"/>
+  <text x="736" y="1112" class="body-dark">连续正天数</text>
+  <text x="736" y="1172" class="metric-red mono">6 天</text>
+  <text x="736" y="1206" class="body-xs">差值连续为正的天数</text>
+
+  <rect x="914" y="1066" width="190" height="164" rx="26" fill="#FFFFFF" stroke="#E3EDFF"/>
+  <text x="944" y="1112" class="body-dark">日金额变化</text>
+  <text x="944" y="1172" class="metric-red mono">+426.5万</text>
+  <text x="944" y="1206" class="body-xs">下方小字是对比日期</text>
+
+  <rect x="706" y="1252" width="398" height="176" rx="28" fill="#FFFFFF" stroke="#E3EDFF"/>
+  <text x="736" y="1298" class="body-dark">差值走势</text>
+  <text x="994" y="1298" class="body-sm">近 6 日</text>
+  <line x1="748" y1="1370" x2="1070" y2="1370" stroke="#E8CB75" stroke-width="3" stroke-dasharray="10 8"/>
+  <polyline points="770,1350 840,1378 916,1398 986,1370 1054,1388" fill="none" stroke="#0F62FE" stroke-width="4"/>
+  <circle cx="770" cy="1350" r="8" fill="#FFFFFF" stroke="#0F62FE" stroke-width="4"/>
+  <circle cx="840" cy="1378" r="8" fill="#FFFFFF" stroke="#0F62FE" stroke-width="4"/>
+  <circle cx="916" cy="1398" r="8" fill="#FFFFFF" stroke="#0F62FE" stroke-width="4"/>
+  <circle cx="986" cy="1370" r="8" fill="#FFFFFF" stroke="#0F62FE" stroke-width="4"/>
+  <circle cx="1054" cy="1388" r="10" fill="#FFFFFF" stroke="#0F62FE" stroke-width="5"/>
+  <rect x="1010" y="1324" width="78" height="34" rx="17" fill="#0F62FE"/>
+  <text x="1026" y="1347" class="body-xs" fill="#FFFFFF">31.85%</text>
+  <text x="748" y="1418" class="body-xs">看走势时，先分清有没有长期站在 0% 上方。</text>
+
+  <text x="144" y="1618" class="title">2. 字段怎么翻译</text>
+  <text x="144" y="1664" class="body">现在页面为了更通俗，部分字段用了口语化名字。下面这张对照表，帮第一次用的人快速理解。</text>
+
+  <g filter="url(#shadow)">
+    <rect x="96" y="1712" width="1050" height="540" rx="40" fill="#FFFFFF"/>
+  </g>
+  <rect x="132" y="1754" width="978" height="72" rx="24" fill="#F6F9FF"/>
+  <text x="176" y="1799" class="body-dark">页面里的说法</text>
+  <text x="538" y="1799" class="body-dark">常规金融说法</text>
+  <text x="870" y="1799" class="body-dark">你可以怎么理解</text>
+
+  <line x1="152" y1="1850" x2="1090" y2="1850" stroke="#EAF1FF"/>
+  <text x="176" y="1898" class="body-dark">当前值</text>
+  <text x="520" y="1898" class="body-dark">场内现价</text>
+  <text x="804" y="1898" class="body">就是交易时刻屏幕上看到的最新成交价</text>
+
+  <line x1="152" y1="1936" x2="1090" y2="1936" stroke="#EAF1FF"/>
+  <text x="176" y="1984" class="body-dark">实时差值</text>
+  <text x="520" y="1984" class="body-dark">实时溢价率 / 折价率</text>
+  <text x="804" y="1984" class="body">正数多半代表溢价，负数多半代表折价</text>
+
+  <line x1="152" y1="2022" x2="1090" y2="2022" stroke="#EAF1FF"/>
+  <text x="176" y="2070" class="body-dark">公布值</text>
+  <text x="520" y="2070" class="body-dark">最新官方净值</text>
+  <text x="804" y="2070" class="body">这是基金公司公布出来的净值口径</text>
+
+  <line x1="152" y1="2108" x2="1090" y2="2108" stroke="#EAF1FF"/>
+  <text x="176" y="2156" class="body-dark">参考值</text>
+  <text x="520" y="2156" class="body-dark">盘中估算净值 / IOPV 参考</text>
+  <text x="804" y="2156" class="body">更适合盘中看方向，不替代官方净值</text>
+
+  <line x1="152" y1="2194" x2="1090" y2="2194" stroke="#EAF1FF"/>
+  <text x="176" y="2242" class="body-dark">连续正天数 / 负天数</text>
+  <text x="520" y="2242" class="body-dark">连续溢价天数 / 连续折价天数</text>
+  <text x="804" y="2242" class="body">用于看这种偏离是偶发，还是已经连着几天</text>
+
+  <line x1="152" y1="2280" x2="1090" y2="2280" stroke="#EAF1FF"/>
+  <text x="176" y="2328" class="body-dark">延2天 / 延3天</text>
+  <text x="520" y="2328" class="body-dark">T+2 / T+3 赎回到账周期</text>
+  <text x="804" y="2328" class="body">不是收益天数，而是资金到账的大致节奏</text>
+
+  <text x="144" y="2418" class="title">3. 这款小程序的亮点</text>
+  <g filter="url(#shadow)">
+    <rect x="96" y="2462" width="328" height="150" rx="34" fill="#FFFFFF"/>
+    <rect x="456" y="2462" width="328" height="150" rx="34" fill="#FFFFFF"/>
+    <rect x="816" y="2462" width="328" height="150" rx="34" fill="#FFFFFF"/>
+  </g>
+
+  <text x="130" y="2520" class="h3">亮点 1</text>
+  <text x="130" y="2556" class="body-dark">先筛后看，节奏很快</text>
+  <text x="130" y="2594" class="body-sm">首页直接按差值排序，适合先扫“今天谁偏离得更明显”。</text>
+
+  <text x="490" y="2520" class="h3">亮点 2</text>
+  <text x="490" y="2556" class="body-dark">详情页信息集中</text>
+  <text x="490" y="2594" class="body-sm">当前值、净值、参考值、走势、历史数据放在一屏逻辑里，不用来回切。</text>
+
+  <text x="850" y="2520" class="h3">亮点 3</text>
+  <text x="850" y="2556" class="body-dark">对盘中观察更友好</text>
+  <text x="850" y="2594" class="body-sm">暂停/限额/到账周期都做成标签，盘中做观察决策时更直观。</text>
+
+  <text x="96" y="2658" class="body-xs">提示：这张图是使用教程，不构成投资建议。真正判断时，仍建议把官方净值、盘中估算和成交变化放在一起看。</text>
+</svg>

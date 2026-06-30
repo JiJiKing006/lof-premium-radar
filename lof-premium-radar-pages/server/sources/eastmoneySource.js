@@ -58,6 +58,7 @@ function normalizeRow(cell) {
     marketPrice,
     changeRate: toNumber(cell.f3),
     volume: toNumber(cell.f5),
+    volumeUnit: 'lot',
     turnover: toNumber(cell.f6),
     source: 'eastmoney',
     sourceStatus: 'primary',

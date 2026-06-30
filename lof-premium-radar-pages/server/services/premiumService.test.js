@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { calculatePremium } from './premiumService.js';
 
+const NOW = new Date('2026-06-29T06:00:00Z');
+
 describe('premiumService', () => {
   it('prefers a fresh exchange IOPV over every estimated or official NAV basis', () => {
     const result = calculatePremium({
@@ -13,6 +15,7 @@ describe('premiumService', () => {
       realtimeReferenceDate: '2026-06-28',
       lastNav: 1.1,
       navDate: '2026-06-27',
+      now: NOW,
     });
 
     expect(result.premiumRate).toBeCloseTo(0.80645, 5);
@@ -29,6 +32,7 @@ describe('premiumService', () => {
       realtimeReferenceDate: '2026-06-26',
       lastNav: 3.6406,
       navDate: '2026-06-25',
+      now: NOW,
     });
 
     expect(result.premiumRate).toBeCloseTo(30.0832, 4);
@@ -47,27 +51,60 @@ describe('premiumService', () => {
       realtimeReferenceStale: true,
       lastNav: 3.6406,
       navDate: '2026-06-25',
+      now: NOW,
     });
 
-    expect(result.premiumRate).toBeCloseTo(24.5948, 4);
-    expect(result.basis).toBe('lastNav');
-    expect(result.note).toBe('基于已公布官方净值');
+    expect(result.premiumRate).toBeNull();
+    expect(result.officialPremiumRate).toBeCloseTo(24.5948, 4);
+    expect(result.basis).toBe('none');
+    expect(result.note).toBe('今日估算净值暂无数据');
   });
 
-  it('uses only official nav when calculating premium', () => {
-    const result = calculatePremium({ marketPrice: 1.25, estimatedNav: 1.2, lastNav: 1.1 });
+  it('keeps official premium separate when no current estimate exists', () => {
+    const result = calculatePremium({ marketPrice: 1.25, estimatedNav: 1.2, lastNav: 1.1, now: NOW });
 
-    expect(result.premiumRate).toBeCloseTo(13.6364, 4);
-    expect(result.basis).toBe('lastNav');
-    expect(result.note).toBe('基于已公布官方净值');
+    expect(result.premiumRate).toBeNull();
+    expect(result.officialPremiumRate).toBeCloseTo(13.6364, 4);
+    expect(result.basis).toBe('none');
   });
 
-  it('falls back to official nav and marks the result as non realtime estimate', () => {
-    const result = calculatePremium({ marketPrice: 1.25, estimatedNav: null, lastNav: 1.2 });
+  it('does not call yesterday official nav realtime premium', () => {
+    const result = calculatePremium({ marketPrice: 1.25, estimatedNav: null, lastNav: 1.2, now: NOW });
+
+    expect(result.premiumRate).toBeNull();
+    expect(result.officialPremiumRate).toBeCloseTo(4.1667, 4);
+    expect(result.basis).toBe('none');
+  });
+
+  it('keeps the last trading-day estimate valid after midnight before a new quote appears', () => {
+    const result = calculatePremium({
+      marketPrice: 1.25,
+      estimatedNav: 1.2,
+      estimatedNavSource: 'tiantian',
+      estimatedNavTime: '2026-06-30 15:00:00',
+      quoteTime: '2026-06-30 15:00:00',
+      lastNav: 1.1,
+      now: new Date('2026-06-30T16:30:00Z'),
+    });
 
     expect(result.premiumRate).toBeCloseTo(4.1667, 4);
-    expect(result.basis).toBe('lastNav');
-    expect(result.note).toBe('基于已公布官方净值');
+    expect(result.basis).toBe('estimatedNav');
+  });
+
+  it('rejects the previous trading-day estimate after a new-day quote appears', () => {
+    const result = calculatePremium({
+      marketPrice: 1.25,
+      estimatedNav: 1.2,
+      estimatedNavSource: 'tiantian',
+      estimatedNavTime: '2026-06-30 15:00:00',
+      quoteTime: '2026-07-01 09:31:00',
+      lastNav: 1.1,
+      now: new Date('2026-07-01T01:31:00Z'),
+    });
+
+    expect(result.premiumRate).toBeNull();
+    expect(result.officialPremiumRate).toBeCloseTo(13.6364, 4);
+    expect(result.basis).toBe('none');
   });
 
   it('keeps the preferred supplemental estimate separate from official premium', () => {
@@ -80,9 +117,11 @@ describe('premiumService', () => {
       supplementalNavSource: 'tiantian',
       supplementalNavTime: '2026-05-29 15:00:00',
       lastNav: 1.1,
+      now: new Date('2026-05-29T08:00:00Z'),
     });
 
-    expect(result.premiumRate).toBeCloseTo(13.6364, 4);
+    expect(result.premiumRate).toBeCloseTo(5.9322, 4);
+    expect(result.officialPremiumRate).toBeCloseTo(13.6364, 4);
     expect(result.estimatedNav).toBe(1.18);
     expect(result.selectedNavSource).toBe('tiantian');
     expect(result.estimateConfidence).toBe('low');
@@ -96,10 +135,13 @@ describe('premiumService', () => {
       estimatedNavSource: 'haoetf',
       supplementalEstimatedNav: 1.201,
       supplementalNavSource: 'jisilu',
+      estimatedNavTime: '2026-05-29 15:00:00',
+      supplementalNavTime: '2026-05-29 15:00:00',
       lastNav: 1.1,
+      now: new Date('2026-05-29T08:00:00Z'),
     });
 
-    expect(result.premiumRate).toBeCloseTo(13.6364, 4);
+    expect(result.premiumRate).toBeCloseTo(4.0799, 4);
     expect(result.estimatedNav).toBe(1.201);
     expect(result.estimateConfidence).toBe('high');
     expect(result.estimateWarning).toBe('');
@@ -115,6 +157,7 @@ describe('premiumService', () => {
       supplementalNavSource: 'sina',
       supplementalNavTime: '2026-05-29 15:00:00',
       lastNav: 1.1,
+      now: new Date('2026-05-29T08:00:00Z'),
     });
 
     expect(result.estimatedNav).toBe(1.19);
@@ -131,6 +174,7 @@ describe('premiumService', () => {
       supplementalNavSource: 'eastmoney',
       supplementalNavTime: '2026-05-29 15:00:00',
       lastNav: 1.1,
+      now: new Date('2026-05-29T08:00:00Z'),
     });
 
     expect(result.estimatedNav).toBe(1.18);
@@ -143,11 +187,14 @@ describe('premiumService', () => {
       estimatedNav: null,
       supplementalEstimatedNav: 98.17,
       supplementalNavSource: 'jisilu',
+      supplementalNavTime: '2026-05-29 15:00:00',
       lastNav: 0.9409,
+      now: new Date('2026-05-29T08:00:00Z'),
     });
 
-    expect(result.premiumRate).toBeCloseTo(-0.5208, 4);
-    expect(result.basis).toBe('lastNav');
+    expect(result.premiumRate).toBeNull();
+    expect(result.officialPremiumRate).toBeCloseTo(-0.5208, 4);
+    expect(result.basis).toBe('none');
     expect(result.estimatedNav).toBeNull();
     expect(result.estimateWarning).toContain('估算净值量级异常');
   });

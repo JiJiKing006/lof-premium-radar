@@ -20,7 +20,7 @@ export function recordSourceFailure(source, error, latency = null) {
 }
 
 export function getDataSourceHealth() {
-  const names = ['palmmicro', 'haoetf', 'eastmoney', 'eastmoney-index', 'eastmoney-trend', 'eastmoney-history-nav', 'eastmoney-history-price', 'sohu-history-price', 'sina-history-price', 'tiantian-subscription', 'sse-share', 'szse-share', 'sina', 'akshare', 'tiantian', 'jisilu', 'lof', 'cache'];
+  const names = ['palmmicro', 'haoetf', 'lof8-estimate', 'akshare-estimate', 'eastmoney', 'eastmoney-index', 'eastmoney-trend', 'eastmoney-history-nav', 'eastmoney-history-price', 'sohu-history-price', 'sina-history-price', 'sina-fund-scale', 'tiantian-subscription', 'sse-share', 'szse-share', 'sina', 'akshare', 'tiantian', 'jisilu', 'lof', 'cache'];
   return Object.fromEntries(names.map((name) => [name, health.get(name) || { ok: false, latency: null, lastSuccessTime: '', error: '尚未请求' }]));
 }
 

@@ -6,8 +6,8 @@ Component({
   data: {
     filters: [
       { key: 'WATCH', label: '收藏' },
-      { key: 'T+2', label: 'T+2' },
-      { key: 'T+3', label: 'T+3' }
+      { key: 'T+2', label: '延2天' },
+      { key: 'T+3', label: '延3天' }
     ]
   },
 

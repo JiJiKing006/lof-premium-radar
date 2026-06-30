@@ -1,7 +1,7 @@
 import express from 'express';
 import dns from 'node:dns';
 import { getDataSourceHealth } from './services/sourceHealth.js';
-import { formatFundQuoteResponse, getFundDetail, getFundList, getFundQuotePage, getFundQuotes, hydratePersistentFundSnapshots } from './services/fundAggregator.js';
+import { formatFundQuoteResponse, getFundDetail, getFundList, getFundQuotePage, getFundQuotes, hydratePersistentFundSnapshots, startFundSnapshotScheduler } from './services/fundAggregator.js';
 import { getFundHistory } from './services/fundHistoryService.js';
 import { getHotArbitrageList } from './services/hotArbitrageService.js';
 import { fetchMarketIndices } from './sources/marketIndexSource.js';
@@ -15,12 +15,7 @@ dns.setDefaultResultOrder('ipv4first');
 
 const app = express();
 const apiRouter = express.Router();
-const wechatSubscriptionService = createWechatSubscriptionService({
-  getRows: async () => {
-    const snapshot = await getFundQuotes({ category: 'ALL', force: true, waitForFresh: true, includeTrends: false });
-    return snapshot.rows || [];
-  },
-});
+const wechatSubscriptionService = createWechatSubscriptionService();
 
 hydratePersistentFundSnapshots();
 
@@ -52,7 +47,7 @@ async function handleFundQuotes(request, response) {
       category: String(input.category || ''),
       force: isTrueFlag(input.force),
       includeTrends: includeTrends(input),
-      waitForFresh: String(input.fields || '').toLowerCase() === 'home',
+      waitForFresh: false,
     });
     response.setHeader('Cache-Control', 'no-store');
     response.json(formatFundQuoteResponse(snapshot, quoteResponseOptions(input)));
@@ -73,7 +68,7 @@ async function handleFundQuotesRefresh(request, response) {
     const snapshot = await getFundQuotes({
       category: String(input.category || ''),
       force: true,
-      waitForFresh: true,
+      waitForFresh: false,
       includeTrends: includeTrends(input),
     });
     response.setHeader('Cache-Control', 'no-store');
@@ -219,9 +214,7 @@ apiRouter.post('/analytics/visit', async (request, response) => {
 
 apiRouter.post('/subscriptions/register', async (request, response) => {
   try {
-    const result = await wechatSubscriptionService.registerByLoginCode(request.body?.code, {
-      testMode: request.body?.testMode === 'develop',
-    });
+    const result = await wechatSubscriptionService.registerByLoginCode(request.body?.code);
     response.setHeader('Cache-Control', 'no-store');
     response.json(result);
   } catch (error) {
@@ -270,15 +263,25 @@ app.use('/api', apiRouter);
 
 app.listen(port, () => {
   console.log(`LOF radar API running at http://127.0.0.1:${port}`);
-  setTimeout(() => {
-    warmQuoteCaches()
-      .then(() => getFundQuotes({ category: 'ALL', force: true, waitForFresh: true, includeTrends: false }))
-      .catch(() => {});
-  }, 200);
-  startWechatSubscriptionScheduler({
-    service: wechatSubscriptionService,
-    getRows: () => getFundQuotes({ category: 'ALL', force: true, waitForFresh: true, includeTrends: false }),
-  });
+  let snapshotScheduler = null;
+  if (process.env.DISABLE_FUND_SNAPSHOT_SCHEDULER !== '1') {
+    snapshotScheduler = startFundSnapshotScheduler({ categories: ['ALL'], includeTrends: false, runImmediately: false });
+  }
+  if (process.env.DISABLE_STARTUP_CACHE_WARMUP !== '1') {
+    setTimeout(() => {
+      warmQuoteCaches()
+        .then(() => snapshotScheduler?.refresh())
+        .catch(() => {});
+    }, 200);
+  } else if (snapshotScheduler) {
+    snapshotScheduler.refresh().catch(() => {});
+  }
+  if (process.env.DISABLE_WECHAT_SUBSCRIPTION_SCHEDULER !== '1') {
+    startWechatSubscriptionScheduler({
+      service: wechatSubscriptionService,
+      getRows: () => getFundQuotes({ category: 'ALL', includeTrends: false }),
+    });
+  }
 });
 
 function quoteRequestInput(request) {

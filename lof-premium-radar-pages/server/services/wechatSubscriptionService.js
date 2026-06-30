@@ -8,7 +8,7 @@ const DEFAULT_FILE = path.join(root, 'data', 'wechat-subscriptions.json');
 const DEFAULT_APP_ID = 'wxd827a0e78b5ce07a';
 const DEFAULT_TEMPLATE_ID = 'nChCRD1ljtNdWE20NSZIogo5tYX5sX4xP4UPEdZVLyM';
 const NOTE = '仅供参考，不做投资建议';
-const DEVELOPMENT_TEST_NOTE = '开发测试，仅验证送达';
+const DEFAULT_REMINDER_MIN_TURNOVER_YUAN = 5_000_000;
 
 export function createWechatSubscriptionService(options = {}) {
   const config = {
@@ -17,15 +17,12 @@ export function createWechatSubscriptionService(options = {}) {
     templateId: options.templateId || process.env.WX_SUBSCRIBE_TEMPLATE_ID || DEFAULT_TEMPLATE_ID,
     filePath: options.filePath || process.env.WX_SUBSCRIPTION_FILE || DEFAULT_FILE,
     fetchImpl: options.fetchImpl || fetch,
-    getRows: typeof options.getRows === 'function' ? options.getRows : null,
-    testDelayMs: Number(options.testDelayMs) > 0 ? Number(options.testDelayMs) : 10_000,
   };
   let accessToken = null;
   let templateKeys = null;
   let writeChain = Promise.resolve();
-  const testTimers = new Map();
 
-  async function registerByLoginCode(code, registerOptions = {}) {
+  async function registerByLoginCode(code) {
     assertConfigured(config);
     const openid = await exchangeLoginCode(String(code || '').trim());
     if (!openid) throw new Error('微信登录未返回 openid');
@@ -38,9 +35,7 @@ export function createWechatSubscriptionService(options = {}) {
     store.updatedAt = formatShanghaiDateTime(new Date());
     writeChain = writeChain.then(() => writeStore(config.filePath, store));
     await writeChain;
-    const testScheduled = Boolean(registerOptions.testMode && config.getRows);
-    if (testScheduled) scheduleDevelopmentTest(openid);
-    return { ok: true, pendingCount: store.subscribers[openid].pendingCount, testScheduled };
+    return { ok: true, pendingCount: store.subscribers[openid].pendingCount, testScheduled: false };
   }
 
   async function getStatusByLoginCode(code) {
@@ -121,41 +116,6 @@ export function createWechatSubscriptionService(options = {}) {
     return { sent, message };
   }
 
-  function scheduleDevelopmentTest(openid) {
-    const existing = testTimers.get(openid);
-    if (existing) clearTimeout(existing);
-    const timer = setTimeout(async () => {
-      testTimers.delete(openid);
-      try {
-        const rows = await config.getRows();
-        await sendDevelopmentTest(openid, rows, new Date());
-      } catch (error) {
-        console.error('[订阅消息] 10秒测试推送失败', error.message);
-      }
-    }, config.testDelayMs);
-    timer.unref?.();
-    testTimers.set(openid, timer);
-  }
-
-  async function sendDevelopmentTest(openid, rows, now) {
-    const top1 = buildSubscriptionTop1(rows);
-    if (!top1.length) throw new Error('没有可用于测试推送的真实 LOF 溢价数据');
-    const message = { ...buildTemplateMessage(top1, now), note: DEVELOPMENT_TEST_NOTE };
-    const keys = await resolveTemplateKeys();
-    validateTemplateValue(keys.content, message.content);
-    const store = await readStore(config.filePath);
-    const entry = store.subscribers[openid];
-    if (Number(entry?.pendingCount || 0) < 1) throw new Error('当前用户没有可用的一次性订阅额度');
-    const token = await getAccessToken();
-    await sendSubscribeMessage(openid, message, keys, token, 'developer');
-    entry.pendingCount -= 1;
-    entry.lastSentAt = formatShanghaiDateTime(now);
-    entry.lastTestSentAt = entry.lastSentAt;
-    store.updatedAt = entry.lastSentAt;
-    await writeStore(config.filePath, store);
-    return { sent: 1, message };
-  }
-
   function sendSubscribeMessage(openid, message, keys, token, miniprogramState) {
     return fetchWechatJson(`https://api.weixin.qq.com/cgi-bin/message/subscribe/send?access_token=${encodeURIComponent(token)}`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -184,7 +144,14 @@ export function createWechatSubscriptionService(options = {}) {
 }
 
 export function buildSubscriptionTop1(rows) {
-  return (Array.isArray(rows) ? rows : []).filter(isEligible).sort((a, b) => Number(b.premiumRate) - Number(a.premiumRate)).slice(0, 1);
+  return (Array.isArray(rows) ? rows : [])
+    .filter(isDefaultReminderEligible)
+    .sort((left, right) => {
+      const premiumDelta = Number(right.premiumRate) - Number(left.premiumRate);
+      if (premiumDelta !== 0) return premiumDelta;
+      return String(left.code || '').localeCompare(String(right.code || ''));
+    })
+    .slice(0, 1);
 }
 
 export function buildTemplateMessage(top1, now = new Date()) {
@@ -203,13 +170,26 @@ function compactTop1Content(fund) {
   return Array.from(`${compactName}${suffix}`).slice(0, 20).join('');
 }
 
-function isEligible(row) {
-  if (!row || !Number.isFinite(Number(row.premiumRate))) return false;
+function isDefaultReminderEligible(row) {
+  if (!row) return false;
   const category = String(row.category || row.fundType || '').toUpperCase();
-  if (category && category !== 'LOF') return false;
+  if (category !== 'LOF') return false;
+  const price = Number(row.marketPrice ?? row.price);
+  const nav = Number(row.lastNav ?? row.nav);
+  const premiumRate = Number(row.premiumRate);
+  const turnover = Number(row.turnover ?? row.amount);
+  if (!Number.isFinite(price) || price <= 0) return false;
+  if (!Number.isFinite(nav) || nav <= 0) return false;
+  if (!Number.isFinite(premiumRate)) return false;
+  if (!Number.isFinite(turnover) || turnover <= DEFAULT_REMINDER_MIN_TURNOVER_YUAN) return false;
+  return !isPausedPurchase(row);
+}
+
+function isPausedPurchase(row) {
   const limit = row.purchaseLimit || {};
-  const text = String([limit.state, limit.label, limit.limitText, row.subscriptionStatus].filter(Boolean).join(' '));
-  return !/paused|暂停申购|停止申购|exchange|场内交易/i.test(text);
+  const state = String(limit.state || row.subscriptionState || '').toLowerCase();
+  const label = String([limit.label, limit.limitText, row.subscriptionStatus].filter(Boolean).join(' '));
+  return state === 'paused' || /暂停申购|停止申购/.test(label);
 }
 
 function hasCurrentTradingDate(rows, now) {

@@ -168,6 +168,7 @@ function normalizeQuote(cell) {
     marketPrice,
     changeRate: toNumber(cell.f3),
     volume: toNumber(cell.f5),
+    volumeUnit: 'lot',
     turnover: toNumber(cell.f6),
     quoteTime: epochToShanghaiTime(cell.f124),
     tradeDate: normalizeTradeDate(cell.f297),

@@ -78,6 +78,7 @@ function normalizeSinaLine(line, fundBySymbol) {
     marketPrice,
     changeRate,
     volume: toNumber(values[8]),
+    volumeUnit: 'share',
     turnover: toNumber(values[9]),
     source: 'sina',
     sourceStatus: 'fallback',

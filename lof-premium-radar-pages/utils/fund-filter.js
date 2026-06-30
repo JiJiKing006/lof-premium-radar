@@ -11,6 +11,10 @@ function filterAndSortFunds(funds, state) {
     if (!hasCompletePremiumDisplaySet(fund)) return false;
     if (state.marketFilter && state.marketFilter !== 'ALL' && settlementCycle(fund) !== state.marketFilter) return false;
     if (state.excludePausedPurchase && isPausedPurchase(fund)) return false;
+    if (!matchesPurchaseStatusFilters(fund, state.purchaseStatusFilters, state.purchaseStatusFilter)) return false;
+    if (state.redemptionFilter && state.redemptionFilter !== 'ALL' && settlementCycle(fund) !== state.redemptionFilter) return false;
+    if (!withinRange(displayPremiumRateValue(fund), state.premiumMin, state.premiumMax)) return false;
+    if (!meetsTurnoverMinimumWan(turnoverValue(fund), state.turnoverMin)) return false;
     return true;
   });
 
@@ -69,6 +73,83 @@ function isPausedPurchase(fund) {
   const state = String(limit.state || fund.subscriptionState || 'unknown');
   const label = String(limit.label || limit.limitText || fund.subscriptionStatus || '');
   return state === 'paused' || /暂停申购|停止申购/.test(label);
+}
+
+function matchesPurchaseStatusFilter(fund, filter) {
+  if (filter === 'PAUSED') return isPausedPurchase(fund);
+  if (filter === 'OPEN') return isOpenPurchase(fund);
+  if (filter === 'LIMITED') return isLimitedPurchase(fund);
+  return true;
+}
+
+function matchesPurchaseStatusFilters(fund, filters, legacyFilter) {
+  const selected = Array.isArray(filters)
+    ? filters.filter((filter) => filter && filter !== 'ALL')
+    : legacyFilter && legacyFilter !== 'ALL' ? [legacyFilter] : [];
+  if (!selected.length) return true;
+  return selected.some((filter) => matchesPurchaseStatusFilter(fund, filter));
+}
+
+function isOpenPurchase(fund) {
+  const limit = fund.purchaseLimit || {};
+  const state = String(limit.state || fund.subscriptionState || '').toLowerCase();
+  const label = String(limit.label || limit.limitText || fund.subscriptionStatus || '');
+  const explicitAmount = purchaseLimitAmount(limit, label);
+  return state === 'open'
+    || /不限额|无限额|不限|开放/.test(label)
+    || explicitAmount !== null && explicitAmount >= 800_000_000;
+}
+
+function isLimitedPurchase(fund) {
+  const limit = fund.purchaseLimit || {};
+  const state = String(limit.state || fund.subscriptionState || '').toLowerCase();
+  const label = String(limit.label || limit.limitText || fund.subscriptionStatus || '');
+  return !isPausedPurchase(fund)
+    && !isOpenPurchase(fund)
+    && (state === 'limited' || /限|大额/.test(label));
+}
+
+function purchaseLimitAmount(limit, label) {
+  const value = limit.dailyLimit ?? limit.limitAmount ?? limit.amountYuan;
+  if (value !== null && value !== undefined && value !== '') {
+    const amount = Number(value);
+    if (Number.isFinite(amount) && amount > 0) return amount;
+  }
+  const match = String(label || '').match(/(\d+(?:\.\d+)?)\s*(亿|万|元)/);
+  if (!match) return null;
+  const scale = match[2] === '亿' ? 100_000_000 : match[2] === '万' ? 10_000 : 1;
+  const amount = Number(match[1]) * scale;
+  return Number.isFinite(amount) && amount > 0 ? amount : null;
+}
+
+function withinRange(value, minValue, maxValue) {
+  const min = normalizeRangeNumber(minValue);
+  const max = normalizeRangeNumber(maxValue);
+  if (min === null && max === null) return true;
+  const number = Number(value);
+  if (!Number.isFinite(number)) return false;
+  if (min !== null && number < min) return false;
+  if (max !== null && number > max) return false;
+  return true;
+}
+
+function normalizeRangeNumber(value) {
+  if (value === null || value === undefined || value === '') return null;
+  const number = Number(String(value).replace(/,/g, '').trim());
+  return Number.isFinite(number) ? number : null;
+}
+
+function turnoverValue(fund) {
+  const raw = fund.raw || {};
+  const value = fund.turnover ?? fund.amount ?? raw.turnover ?? raw.amount;
+  return Number.isFinite(Number(value)) ? Number(value) : null;
+}
+
+function meetsTurnoverMinimumWan(value, minimumWan) {
+  const minimum = normalizeRangeNumber(minimumWan);
+  if (minimum === null) return true;
+  const number = Number(value);
+  return Number.isFinite(number) && number > minimum * 10_000;
 }
 
 function marketRegion(fund) {

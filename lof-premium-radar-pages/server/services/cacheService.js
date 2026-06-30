@@ -36,7 +36,6 @@ export class MemoryCache {
 
   setTransient(key, value, ttlMs) {
     const now = Date.now();
-    this.items.set(key, { value, expiresAt: now + ttlMs });
     this.lastObserved.set(key, { value, storedAt: now });
     return value;
   }
@@ -50,6 +49,7 @@ export const cacheTtl = {
   trends: 15_000,
   nav: 60_000,
   exchangeShares: 10 * 60_000,
+  fundScale: 6 * 60 * 60_000,
   history: 5 * 60_000,
   fundList: 10 * 60_000,
 };

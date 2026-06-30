@@ -2,17 +2,30 @@ const { fetchFundsSnapshot, fetchFundDetail, normalizeFund, mergeStablePurchaseS
 const { filterAndSortFunds, settlementCycle } = require('../../utils/fund-filter');
 const { readSnapshot, writeSnapshot } = require('../../utils/cache');
 const { recordVisitor, getOrCreateDeviceId } = require('../../utils/analytics');
+const { registerSubscription, getSubscriptionStatus, cancelSubscription } = require('../../utils/subscription');
 const { allowAction } = require('../../utils/action-guard');
+const { REVIEW_COPY_MODE, reviewCopy } = require('../../config/review-copy');
 
 const PAGE_SIZE = 30;
+const FULL_FILTER_PAGE_SIZE = 500;
 const SEARCH_DEBOUNCE_MS = 160;
 const WATCH_STORAGE_KEY = 'fund-watchlist';
 const WATCH_SECTION = 'WATCH';
 const DEFAULT_SECTION = 'ALL';
 const DEFAULT_MARKET_FILTER = 'ALL';
+const DEFAULT_PURCHASE_STATUS_FILTERS = ['OPEN', 'LIMITED'];
+const DEFAULT_REDEMPTION_FILTER = 'ALL';
+const DEFAULT_TURNOVER_MIN_WAN = '500';
 const PURCHASE_STATUS_RECOVERY_DELAY_MS = 3800;
 const PURCHASE_STATUS_RECOVERY_MAX_ATTEMPTS = 1;
 const MIN_REFRESH_LOADING_MS = 650;
+const SUBSCRIBE_TEMPLATE_ID = 'nChCRD1ljtNdWE20NSZIogo5tYX5sX4xP4UPEdZVLyM';
+const PURCHASE_STATUS_OPTIONS = [
+  { key: 'ALL', label: '全部', tone: 'all' },
+  { key: 'PAUSED', label: '暂停', tone: 'paused' },
+  { key: 'OPEN', label: '不限', tone: 'open' },
+  { key: 'LIMITED', label: '限额', tone: 'limited' }
+];
 
 function getCurrentFunds(page) {
   return page && Array.isArray(page.currentFunds) ? page.currentFunds : [];
@@ -30,7 +43,10 @@ Page({
     activeTypeLabel: DEFAULT_SECTION,
     query: '',
     marketFilter: DEFAULT_MARKET_FILTER,
-    excludePausedPurchase: true,
+    excludePausedPurchase: false,
+    purchaseStatusFilters: DEFAULT_PURCHASE_STATUS_FILTERS,
+    redemptionFilter: DEFAULT_REDEMPTION_FILTER,
+    turnoverMin: DEFAULT_TURNOVER_MIN_WAN,
     sortKey: 'premiumRate',
     sortDirection: 'desc',
     activeSortKey: 'premiumRate',
@@ -54,6 +70,22 @@ Page({
     manualRefreshing: false,
     showTableBackTop: false,
     showEstimatedNav: false,
+    showFilterPanel: false,
+    filterBadgeCount: DEFAULT_PURCHASE_STATUS_FILTERS.length + 1,
+    draftPurchaseStatusFilters: DEFAULT_PURCHASE_STATUS_FILTERS,
+    draftPurchaseStatusMap: purchaseStatusMap(DEFAULT_PURCHASE_STATUS_FILTERS),
+    draftRedemptionFilter: DEFAULT_REDEMPTION_FILTER,
+    draftTurnoverMin: DEFAULT_TURNOVER_MIN_WAN,
+    purchaseStatusOptions: PURCHASE_STATUS_OPTIONS,
+    redemptionOptions: buildRedemptionOptions(),
+    purchaseFilterTitle: reviewCopy('状态', '申购状态'),
+    redemptionFilterTitle: reviewCopy('处理时间', '赎回时间'),
+    turnoverFilterTitle: reviewCopy('金额', '成交额'),
+    showMonitorModal: false,
+    reminderAdded: false,
+    showCancelReminderModal: false,
+    cancellingReminder: false,
+    reminderSubmitting: false,
     operationLoading: false,
     loadingTitle: '',
     loadingNote: ''
@@ -74,6 +106,7 @@ Page({
   },
 
   onShow() {
+    this.refreshReminderStatus();
     const favoriteChanged = this.refreshFavoriteCodes();
     if (favoriteChanged && this.data.section === WATCH_SECTION) {
       this.fetchSectionSnapshot({ force: false });
@@ -242,6 +275,9 @@ Page({
       query: this.data.query,
       marketFilter: this.data.marketFilter,
       excludePausedPurchase: this.data.excludePausedPurchase,
+      purchaseStatusFilters: this.data.purchaseStatusFilters,
+      redemptionFilter: this.data.redemptionFilter,
+      turnoverMin: this.data.turnoverMin,
       sortKey: this.data.sortKey,
       sortDirection: this.data.sortDirection,
       visiblePage: this.visiblePage || 1,
@@ -255,6 +291,7 @@ Page({
     const state = this.sectionStates && this.sectionStates[section];
     if (!state || !Array.isArray(state.funds)) return false;
     if (String(state.query || '').trim()) return false;
+    const filters = filterStateForSection(section, state);
     setCurrentFunds(this, state.funds);
     this.filteredFundsCache = Array.isArray(state.filteredFunds) ? state.filteredFunds : [];
     this.visiblePage = state.visiblePage || 1;
@@ -264,7 +301,10 @@ Page({
       selectedFund: null,
       query: '',
       marketFilter: marketFilterForSection(section),
-      excludePausedPurchase: Boolean(state.excludePausedPurchase),
+      excludePausedPurchase: false,
+      purchaseStatusFilters: filters.purchaseStatusFilters,
+      redemptionFilter: filters.redemptionFilter,
+      turnoverMin: filters.turnoverMin,
       sortKey: 'premiumRate',
       sortDirection: 'desc',
       activeSortKey: 'premiumRate',
@@ -273,7 +313,13 @@ Page({
       initialLoading: false,
       pollingError: '',
       lastSuccessAt: state.lastSuccessAt || '',
-      abnormalCount: state.abnormalCount || 0
+      abnormalCount: state.abnormalCount || 0,
+      filterBadgeCount: countActiveFilters(filters),
+      showFilterPanel: false,
+      draftPurchaseStatusFilters: filters.purchaseStatusFilters,
+      draftPurchaseStatusMap: purchaseStatusMap(filters.purchaseStatusFilters),
+      draftRedemptionFilter: filters.redemptionFilter,
+      draftTurnoverMin: filters.turnoverMin
     });
     this.updateVisibleFunds({ keepPage: true });
     return true;
@@ -285,7 +331,7 @@ Page({
     }
     const marketFilter = marketFilterForSection(section);
     const page = options.page || 1;
-    const pageSize = options.pageSize || PAGE_SIZE;
+    const pageSize = options.pageSize || effectivePageSize(this.data, section);
     return fetchFundsSnapshot({
       section: 'ALL',
       force: options.force,
@@ -361,13 +407,16 @@ Page({
       query: this.data.query,
       marketFilter,
       excludePausedPurchase: this.data.excludePausedPurchase,
+      purchaseStatusFilters: this.data.purchaseStatusFilters,
+      redemptionFilter: this.data.redemptionFilter,
+      turnoverMin: this.data.turnoverMin,
       sortKey: this.data.sortKey,
       sortDirection: this.data.sortDirection
     }).map((fund) => Object.assign({}, fund, {
       isFavorite: favoriteSet.has(fund.code),
       purchaseText: purchaseText(fund),
       purchaseState: purchaseState(fund),
-      settlementCycle: settlementCycle(fund),
+      settlementCycle: settlementCycleDisplay(settlementCycle(fund)),
       settlementState: settlementCycle(fund) === 'T+2' ? 'short' : 'long',
       changedPremiumRate: hasChangedField(fund, ['premiumRate', 'realtimePremium']),
       changedMarketPrice: hasChangedField(fund, ['marketPrice', 'price']),
@@ -394,7 +443,10 @@ Page({
     const visibleFunds = pagination
       ? filteredFunds
       : filteredFunds.slice(0, Math.max(PAGE_SIZE, (this.visiblePage || 1) * PAGE_SIZE));
-    const totalCount = pagination && Number(pagination.total) || this.data.meta && (Number(this.data.meta.totalCount) || Number(this.data.meta.filteredCount)) || filteredFunds.length;
+    const advancedFiltersActive = hasAdvancedFilters(this.data);
+    const totalCount = advancedFiltersActive
+      ? filteredFunds.length
+      : pagination && Number(pagination.total) || this.data.meta && (Number(this.data.meta.totalCount) || Number(this.data.meta.filteredCount)) || filteredFunds.length;
     if (this.sectionStates && this.sectionStates[section]) {
       this.sectionStates[section] = Object.assign({}, this.sectionStates[section], {
         filteredFunds,
@@ -402,6 +454,9 @@ Page({
         query: this.data.query,
         marketFilter: this.data.marketFilter,
         excludePausedPurchase: this.data.excludePausedPurchase,
+        purchaseStatusFilters: this.data.purchaseStatusFilters,
+        redemptionFilter: this.data.redemptionFilter,
+        turnoverMin: this.data.turnoverMin,
         sortKey: this.data.sortKey,
         sortDirection: this.data.sortDirection
       });
@@ -409,7 +464,7 @@ Page({
     this.setData({
       visibleFunds,
       visibleTotalCount: totalCount,
-      hasMoreFunds: pagination ? Boolean(pagination.hasMore) : visibleFunds.length < filteredFunds.length,
+      hasMoreFunds: advancedFiltersActive ? false : (pagination ? Boolean(pagination.hasMore) : visibleFunds.length < filteredFunds.length),
       showEstimatedNav: false,
       dataVersion: `${this.data.meta && (this.data.meta.updateTime || this.data.meta.latestQuoteTime) || 'initial'}:${filteredFunds.length}:${visibleFunds.map((fund) => [fund.code, fund.marketPrice, fund.premiumRate, fund.lastNav, fund.estimatedNav].join(':')).join('|')}`
     });
@@ -457,7 +512,7 @@ Page({
         const snapshot = await this.fetchSnapshotForSection(targetSection, {
           force: false,
           page: targetPage,
-          pageSize: PAGE_SIZE,
+          pageSize: effectivePageSize(this.data, targetSection),
           snapshotId,
           requestMode: 'page',
           timeoutMs: 5000,
@@ -488,7 +543,7 @@ Page({
     const snapshot = await this.fetchSnapshotForSection(this.data.section, {
       force: false,
       page: 1,
-      pageSize: PAGE_SIZE,
+      pageSize: effectivePageSize(this.data, this.data.section),
       requestMode: 'page',
       timeoutMs: 5000,
       timeoutMessage: '分页快照初始化超时，请重试'
@@ -504,11 +559,12 @@ Page({
 
   async handleManualRefresh() {
     if (this.data.manualRefreshing) return;
-    if (!allowAction(this, 'manual-refresh')) return;
+    if (!allowAction(this, 'manual-refresh', 1000)) return;
     this.clearPurchaseStatusRecoveryTimer();
     this.purchaseStatusRecoveryAttempts = 0;
     this.visiblePage = 1;
     this.resetTableScroll();
+    this.setData({ showFilterPanel: false });
     const loadingStartedAt = Date.now();
     this.showOperationLoading('刷新数据中', '正在更新公开数据，请稍候');
     this.setData({ manualRefreshing: true, pollingError: '' });
@@ -571,15 +627,15 @@ Page({
     this.clearSearchTimer();
     const section = event.detail.value;
     if (!section || section === this.data.section) return;
-    if (!allowAction(this, `section:${section}`)) return;
     this.rememberCurrentSectionState();
     this.refreshFavoriteCodes();
-    this.setData({ query: '' });
+    this.setData({ query: '', showFilterPanel: false });
     this.resetTableScroll();
     if (this.restoreSectionState(section)) {
       this.fetchSectionSnapshot({ section, force: true });
       return;
     }
+    const filters = filterStateForSection(section, this.sectionStates && this.sectionStates[section]);
     setCurrentFunds(this, []);
     this.setData({
       section,
@@ -588,6 +644,9 @@ Page({
       query: '',
       marketFilter: marketFilterForSection(section),
       excludePausedPurchase: false,
+      purchaseStatusFilters: filters.purchaseStatusFilters,
+      redemptionFilter: filters.redemptionFilter,
+      turnoverMin: filters.turnoverMin,
       sortKey: 'premiumRate',
       sortDirection: 'desc',
       activeSortKey: 'premiumRate',
@@ -596,7 +655,13 @@ Page({
       visibleTotalCount: 0,
       hasMoreFunds: false,
       meta: null,
-      initialLoading: true
+      initialLoading: true,
+      filterBadgeCount: countActiveFilters(filters),
+      showFilterPanel: false,
+      draftPurchaseStatusFilters: filters.purchaseStatusFilters,
+      draftPurchaseStatusMap: purchaseStatusMap(filters.purchaseStatusFilters),
+      draftRedemptionFilter: filters.redemptionFilter,
+      draftTurnoverMin: filters.turnoverMin
     });
     this.hydrateSectionSnapshot({ section, allowStale: true });
     this.fetchSectionSnapshot({ section, force: true });
@@ -608,6 +673,166 @@ Page({
 
   showWatchFunds() {
     this.handleSectionChange({ detail: { value: WATCH_SECTION } });
+  },
+
+  handleFilterEntry() {
+    if (this.data.showFilterPanel) {
+      this.setData({ showFilterPanel: false });
+      return;
+    }
+    this.setData(buildDraftState(this.data, { showFilterPanel: true }));
+  },
+
+  closeFilterPanel() {
+    this.setData({ showFilterPanel: false });
+  },
+
+  preventModalClose() {
+  },
+
+  handleDraftPurchaseStatusChange(event) {
+    const key = event && event.currentTarget && event.currentTarget.dataset.key;
+    if (!key || !allowAction(this, `draft-purchase:${key}`)) return;
+    const current = normalizePurchaseStatusFilters(this.data.draftPurchaseStatusFilters);
+    const next = key === 'ALL'
+      ? []
+      : current.includes(key)
+        ? current.filter((item) => item !== key)
+        : current.concat(key);
+    this.setData({
+      draftPurchaseStatusFilters: next,
+      draftPurchaseStatusMap: purchaseStatusMap(next)
+    });
+  },
+
+  handleDraftRedemptionChange(event) {
+    const key = event && event.currentTarget && event.currentTarget.dataset.key;
+    if (!key || !allowAction(this, `draft-redemption:${key}`)) return;
+    this.setData({ draftRedemptionFilter: key });
+  },
+
+  handleDraftRangeInput(event) {
+    const field = event && event.currentTarget && event.currentTarget.dataset.field;
+    if (!field) return;
+    this.setData({ [field]: String(event.detail && event.detail.value || '').trim() });
+  },
+
+  resetFilterDraft() {
+    if (!allowAction(this, 'filter-reset')) return;
+    this.applyFilterPatch({
+      excludePausedPurchase: false,
+      purchaseStatusFilters: [],
+      redemptionFilter: DEFAULT_REDEMPTION_FILTER,
+      turnoverMin: ''
+    });
+  },
+
+  confirmFilterPanel() {
+    if (!allowAction(this, 'filter-confirm')) return;
+    const validationError = validateDraftFilters(this.data);
+    if (validationError) {
+      this.showToast(validationError, 1800);
+      return;
+    }
+    this.applyFilterPatch(buildAppliedFilterPatch(this.data));
+  },
+
+  applyFilterPatch(patch) {
+    this.clearSearchTimer();
+    this.visiblePage = 1;
+    this.resetTableScroll();
+    this.setData(
+      Object.assign({}, patch, buildDraftState(patch), {
+        filterBadgeCount: countActiveFilters(patch),
+        showFilterPanel: false
+      }),
+      () => {
+        if (this.data.section === WATCH_SECTION) this.updateVisibleFunds();
+        else this.fetchInteractiveSnapshot();
+      }
+    );
+  },
+
+  handleReminderEntry() {
+    if (this.data.showFilterPanel) this.setData({ showFilterPanel: false });
+    if (this.data.reminderAdded) {
+      this.setData({ showCancelReminderModal: true });
+      return;
+    }
+    this.setData({ showMonitorModal: true });
+  },
+
+  closeMonitorModal() {
+    this.setData({ showMonitorModal: false });
+  },
+
+  closeCancelReminderModal() {
+    if (!this.data.cancellingReminder) this.setData({ showCancelReminderModal: false });
+  },
+
+  async confirmCancelReminder() {
+    if (this.data.cancellingReminder) return;
+    if (!allowAction(this, 'confirm-cancel-reminder')) return;
+    this.setData({ cancellingReminder: true });
+    this.showOperationLoading('取消提醒中', '正在更新你的提醒设置');
+    try {
+      await cancelSubscription();
+      this.setData({ reminderAdded: false, showCancelReminderModal: false });
+      this.showToast('已取消提醒', 1600);
+    } catch (error) {
+      this.showToast(error && error.message ? error.message : '取消提醒失败', 1800);
+    } finally {
+      this.setData({ cancellingReminder: false });
+      this.hideOperationLoading();
+    }
+  },
+
+  async refreshReminderStatus() {
+    try {
+      const result = await getSubscriptionStatus();
+      this.setData({ reminderAdded: Boolean(result && result.added) });
+    } catch (_) {
+      // 状态查询失败时保持本地当前状态。
+    }
+  },
+
+  async handleMonitorPreview() {
+    if (!allowAction(this, 'monitor-preview')) return;
+    if (!wx.requestSubscribeMessage) {
+      this.showToast('当前微信版本暂不支持订阅消息', 1800);
+      return;
+    }
+    this.closeMonitorModal();
+    let reminderSubmitting = false;
+    try {
+      const result = await requestOneTimeSubscription(SUBSCRIBE_TEMPLATE_ID);
+      const status = result && result[SUBSCRIBE_TEMPLATE_ID];
+      if (status === 'reject') {
+        this.showToast('你已取消本次订阅', 1600);
+        return;
+      }
+      if (status === 'ban') {
+        this.showToast('订阅消息已被禁用，请在微信设置中开启', 2200);
+        return;
+      }
+      if (status !== 'accept') {
+        this.showToast('未获得订阅授权', 1600);
+        return;
+      }
+      reminderSubmitting = true;
+      this.setData({ reminderSubmitting: true });
+      this.showOperationLoading('添加提醒中', '正在保存提醒设置');
+      await registerSubscription();
+      this.setData({ reminderAdded: true });
+      this.showToast('已开启每日提醒', 1800);
+    } catch (error) {
+      this.showToast(error && error.message ? error.message : '订阅失败，请稍后重试', 2000);
+    } finally {
+      if (reminderSubmitting) {
+        this.setData({ reminderSubmitting: false });
+        this.hideOperationLoading();
+      }
+    }
   },
 
   showOperationLoading(title, note) {
@@ -637,18 +862,6 @@ Page({
       this.data.query ? `q:${this.data.query}` : 'q:'
     ];
     return parts.join(':');
-  },
-
-  handleExcludePausedChange(event) {
-    this.clearSearchTimer();
-    if (!allowAction(this, 'exclude-paused')) return;
-    const nextValue = event && event.currentTarget && event.currentTarget.dataset.direct
-      ? !this.data.excludePausedPurchase
-      : Boolean(event.detail.value);
-    this.setData({ excludePausedPurchase: nextValue });
-    this.resetTableScroll();
-    if (this.data.section === WATCH_SECTION) this.updateVisibleFunds();
-    else this.fetchInteractiveSnapshot();
   },
 
   handleTableSort(event) {
@@ -696,7 +909,7 @@ Page({
     this.setData({
       favoriteCodes,
       pulseCode: fund.code,
-      toastText: willAdd ? `已加入收藏：${fund.name}` : `已移出收藏：${fund.name}`
+      toastText: willAdd ? `已加入收藏：${fund.code}` : `已移出收藏：${fund.code}`
     });
     this.updateVisibleFunds();
     this.clearPulseTimer();
@@ -759,15 +972,116 @@ function sectionLabel(section) {
   const map = {
     ALL: '全部',
     WATCH: '收藏',
-    'T+2': 'T+2',
-    'T+3': 'T+3'
+    'T+2': REVIEW_COPY_MODE ? '延2天' : 'T+2',
+    'T+3': REVIEW_COPY_MODE ? '延3天' : 'T+3'
   };
   return map[section] || DEFAULT_SECTION;
+}
+
+function settlementCycleDisplay(value) {
+  if (value === 'T+2') return REVIEW_COPY_MODE ? '延2天' : value;
+  if (value === 'T+3') return REVIEW_COPY_MODE ? '延3天' : value;
+  return value || '暂无数据';
 }
 
 function marketFilterForSection(section) {
   if (section === 'T+2' || section === 'T+3') return section;
   return 'ALL';
+}
+
+function buildRedemptionOptions() {
+  return [
+    { key: DEFAULT_REDEMPTION_FILTER, label: '全部' },
+    { key: 'T+2', label: settlementCycleDisplay('T+2') },
+    { key: 'T+3', label: settlementCycleDisplay('T+3') }
+  ];
+}
+
+function buildDraftState(state, overrides = {}) {
+  const purchaseStatusFilters = normalizePurchaseStatusFilters(state.purchaseStatusFilters);
+  return Object.assign({
+    draftPurchaseStatusFilters: purchaseStatusFilters,
+    draftPurchaseStatusMap: purchaseStatusMap(purchaseStatusFilters),
+    draftRedemptionFilter: state.redemptionFilter || DEFAULT_REDEMPTION_FILTER,
+    draftTurnoverMin: state.turnoverMin === undefined ? DEFAULT_TURNOVER_MIN_WAN : state.turnoverMin
+  }, overrides);
+}
+
+function buildAppliedFilterPatch(state) {
+  return {
+    excludePausedPurchase: false,
+    purchaseStatusFilters: normalizePurchaseStatusFilters(state.draftPurchaseStatusFilters),
+    redemptionFilter: state.draftRedemptionFilter || DEFAULT_REDEMPTION_FILTER,
+    turnoverMin: String(state.draftTurnoverMin || '').trim()
+  };
+}
+
+function validateDraftFilters(state) {
+  const turnoverMin = normalizeRangeText(state.draftTurnoverMin);
+  if (turnoverMin !== null && turnoverMin < 0) return '成交额不能小于0万元';
+  return '';
+}
+
+function normalizeRangeText(value) {
+  const text = String(value || '').trim();
+  if (!text) return null;
+  const number = Number(text.replace(/,/g, ''));
+  return Number.isFinite(number) ? number : null;
+}
+
+function hasAdvancedFilters(state) {
+  return countActiveFilters(state) > 0;
+}
+
+function countActiveFilters(state) {
+  let count = 0;
+  if (normalizePurchaseStatusFilters(state.purchaseStatusFilters).length) count += 1;
+  if ((state.redemptionFilter || DEFAULT_REDEMPTION_FILTER) !== DEFAULT_REDEMPTION_FILTER) count += 1;
+  if (String(state.turnoverMin || '').trim()) count += 1;
+  return count;
+}
+
+function filterStateForSection(section, rememberedState) {
+  const defaults = section === WATCH_SECTION
+    ? {
+        purchaseStatusFilters: [],
+        redemptionFilter: DEFAULT_REDEMPTION_FILTER,
+        turnoverMin: ''
+      }
+    : {
+        purchaseStatusFilters: DEFAULT_PURCHASE_STATUS_FILTERS.slice(),
+        redemptionFilter: DEFAULT_REDEMPTION_FILTER,
+        turnoverMin: DEFAULT_TURNOVER_MIN_WAN
+      };
+  if (!rememberedState) return defaults;
+  return {
+    purchaseStatusFilters: Array.isArray(rememberedState.purchaseStatusFilters)
+      ? normalizePurchaseStatusFilters(rememberedState.purchaseStatusFilters)
+      : defaults.purchaseStatusFilters,
+    redemptionFilter: rememberedState.redemptionFilter || defaults.redemptionFilter,
+    turnoverMin: rememberedState.turnoverMin === undefined
+      ? defaults.turnoverMin
+      : rememberedState.turnoverMin
+  };
+}
+
+function normalizePurchaseStatusFilters(filters) {
+  if (!Array.isArray(filters)) return DEFAULT_PURCHASE_STATUS_FILTERS.slice();
+  return filters.filter((key, index, list) =>
+    key !== 'ALL' && ['PAUSED', 'OPEN', 'LIMITED'].includes(key) && list.indexOf(key) === index
+  );
+}
+
+function purchaseStatusMap(filters) {
+  return normalizePurchaseStatusFilters(filters).reduce((result, key) => {
+    result[key] = true;
+    return result;
+  }, {});
+}
+
+function effectivePageSize(state, section) {
+  if (section === WATCH_SECTION) return PAGE_SIZE;
+  return hasAdvancedFilters(state) ? FULL_FILTER_PAGE_SIZE : PAGE_SIZE;
 }
 
 function formatUpdateTime(value) {
@@ -849,6 +1163,16 @@ function hasUsablePurchaseStatus(fund) {
 function purchaseState(fund) {
   const state = (fund.purchaseLimit && fund.purchaseLimit.state) || fund.subscriptionState;
   return !state || state === 'unknown' ? 'unavailable' : state;
+}
+
+function requestOneTimeSubscription(templateId) {
+  return new Promise((resolve, reject) => {
+    wx.requestSubscribeMessage({
+      tmplIds: [templateId],
+      success: resolve,
+      fail: (error) => reject(new Error(error && error.errMsg || '无法打开订阅授权'))
+    });
+  });
 }
 
 function hasChangedField(fund, fields) {

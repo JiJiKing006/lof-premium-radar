@@ -6,7 +6,7 @@
       value="{{value}}"
       type="text"
       confirm-type="search"
-      placeholder="名称/代码"
+      placeholder="代码"
       bindinput="handleInput"
     />
   </view>

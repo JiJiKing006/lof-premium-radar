@@ -67,6 +67,7 @@ function parseSinaQuoteLine(line) {
     marketPrice,
     changeRate: previousClose ? ((marketPrice / previousClose) - 1) * 100 : null,
     volume: toNumber(values[8]),
+    volumeUnit: 'share',
     turnover: toNumber(values[9]),
     quoteTime: normalizeQuoteTime(values[30], values[31]),
     source: 'sina',

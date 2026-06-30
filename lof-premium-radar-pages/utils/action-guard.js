@@ -1,4 +1,4 @@
-const DEFAULT_GUARD_MS = 2000;
+const DEFAULT_GUARD_MS = 500;
 
 function allowAction(context, key, waitMs = DEFAULT_GUARD_MS) {
   if (!context || !key) return true;

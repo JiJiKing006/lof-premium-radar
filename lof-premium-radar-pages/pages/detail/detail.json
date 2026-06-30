@@ -1,7 +1,4 @@
 {
   "navigationBarTitleText": "数据详情",
-  "enablePullDownRefresh": false,
-  "usingComponents": {
-    "app-loading": "/components/app-loading/app-loading"
-  }
+  "enablePullDownRefresh": false
 }

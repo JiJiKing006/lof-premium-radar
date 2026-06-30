@@ -2,8 +2,10 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 const deployScript = readFileSync(new URL('./deploy.sh', import.meta.url), 'utf8');
+const testDeployScript = readFileSync(new URL('./deploy-test.sh', import.meta.url), 'utf8');
 const nginxDefault = readFileSync(new URL('../nginx-default.conf', import.meta.url), 'utf8');
 const serverIndex = readFileSync(new URL('../server/index.js', import.meta.url), 'utf8');
+const miniProgramConfig = readFileSync(new URL('../config/mp.js', import.meta.url), 'utf8');
 
 describe('deployment nginx configuration', () => {
   it('serves the personal homepage at the root and the LOF API under /api and /lof/api', () => {
@@ -152,6 +154,12 @@ describe('deployment nginx configuration', () => {
     expect(nginxDefault).toContain('include /etc/nginx/includes/static-projects/*.conf;');
   });
 
+  it('keeps an nginx include slot for independently deployed API environments', () => {
+    expect(deployScript).toContain('DEPLOY_API_INCLUDE_DIR="${DEPLOY_API_INCLUDE_DIR:-/etc/nginx/includes/lof-api}"');
+    expect(deployScript).toContain('include ${API_INCLUDE_DIR}/*.conf;');
+    expect(nginxDefault).toContain('include /etc/nginx/includes/lof-api/*.conf;');
+  });
+
   it('migrates the old /person-website homepage to the root and removes the old route', () => {
     expect(deployScript).toContain('DEPLOY_LEGACY_STATIC_PROJECTS="${DEPLOY_LEGACY_STATIC_PROJECTS:-person-website}"');
     expect(deployScript).toContain("DEPLOY_HOME_ROOT='$DEPLOY_HOME_ROOT'");
@@ -173,5 +181,76 @@ describe('deployment nginx configuration', () => {
     expect(deployScript).toContain('project: project');
     expect(deployScript).toContain('<script defer src="/lof-analytics.js" data-project="personal"></script>');
     expect(deployScript).toContain("html.includes('/lof-analytics.js')");
+  });
+});
+
+describe('isolated test API deployment', () => {
+  it('uses separate service, port, release path, and persistent files', () => {
+    expect(testDeployScript).toContain('TEST_DEPLOY_PATH="${TEST_DEPLOY_PATH:-/srv/lof-test}"');
+    expect(testDeployScript).toContain('TEST_DEPLOY_SERVICE="${TEST_DEPLOY_SERVICE:-lof-premium-radar-test}"');
+    expect(testDeployScript).toContain('TEST_APP_PORT="${TEST_APP_PORT:-4174}"');
+    expect(testDeployScript).toContain('TEST_PUBLIC_PATH="${TEST_PUBLIC_PATH:-/dev}"');
+    expect(testDeployScript).toContain('TEST_DEPLOY_PATH matches production');
+    expect(testDeployScript).toContain('TEST_DEPLOY_SERVICE matches production');
+    expect(testDeployScript).toContain('TEST_APP_PORT matches production');
+    expect(testDeployScript).toContain('Environment=FUND_SNAPSHOT_FILE=${TEST_DEPLOY_PATH}/shared/fund-snapshots.json');
+    expect(testDeployScript).toContain('Environment=VISITOR_ANALYTICS_FILE=${TEST_DEPLOY_PATH}/shared/visitor-analytics.json');
+    expect(testDeployScript).toContain('Environment=WX_SUBSCRIPTION_FILE=${TEST_DEPLOY_PATH}/shared/wechat-subscriptions.json');
+    expect(testDeployScript).toContain('fund-quotes:snapshot:${category}:trends:0');
+  });
+
+  it('publishes only the /dev/api route and labels test responses', () => {
+    expect(testDeployScript).toContain('location ^~ ${TEST_PUBLIC_PATH}/api/');
+    expect(testDeployScript).toContain('proxy_pass http://127.0.0.1:${TEST_APP_PORT}/api/;');
+    expect(testDeployScript).toContain('add_header X-API-Environment "test" always;');
+    expect(testDeployScript).toContain('^x-api-environment: test');
+    expect(testDeployScript).not.toContain('location /api/');
+    expect(testDeployScript).toContain("grep -Eq 'listen[[:space:]]+.*443'");
+    expect(testDeployScript).toContain('routing_nginx_conf="$candidate"');
+  });
+
+  it('does not run production notification side effects in the test process', () => {
+    expect(testDeployScript).toContain('Environment=API_ENV=test');
+    expect(testDeployScript).toContain('Environment=DISABLE_STARTUP_CACHE_WARMUP=1');
+    expect(testDeployScript).toContain('Environment=DISABLE_WECHAT_SUBSCRIPTION_SCHEDULER=1');
+    expect(testDeployScript).toContain('Environment=WX_MINIPROGRAM_STATE=developer');
+    expect(serverIndex).toContain("process.env.DISABLE_WECHAT_SUBSCRIPTION_SCHEDULER !== '1'");
+    expect(serverIndex).toContain("process.env.DISABLE_STARTUP_CACHE_WARMUP !== '1'");
+  });
+
+  it('gates detail deployment on traceable Sina scale and exchange turnover rate', () => {
+    expect(testDeployScript).toContain('local detail_code="501225"');
+    expect(testDeployScript).toContain('fundScaleSource === "sina"');
+    expect(testDeployScript).toContain('row.turnoverRateBasis === "volumeShares/exchangeShare"');
+    expect(testDeployScript).toContain('["share", "lot"].includes(row.turnoverRateVolumeUnit)');
+    expect(testDeployScript).toContain('!fundScaleValid');
+    expect(testDeployScript).toContain('!turnoverRateValid');
+  });
+
+  it('points non-release mini program builds at the test API base', () => {
+    expect(miniProgramConfig).toContain("devApiBaseUrl: 'https://jijiking.top/dev'");
+    expect(miniProgramConfig).toContain("apiBaseUrl: 'https://jijiking.top'");
+  });
+
+  it('smoke tests complete, traceable financial rows before accepting the test release', () => {
+    expect(testDeployScript).toContain('/api/funds/quotes');
+    expect(testDeployScript).toContain('"category":"ALL"');
+    expect(testDeployScript).toContain('Number(row.marketPrice) > 0');
+    expect(testDeployScript).toContain('Number(row.lastNav) > 0');
+    expect(testDeployScript).toContain('Number(row.estimatedNav) > 0');
+    expect(testDeployScript).toContain('Number.isFinite(Number(row.premiumRate))');
+    expect(testDeployScript).toContain('row.estimatedNavSource');
+    expect(testDeployScript).toContain('row.estimatedNavTime');
+    expect(testDeployScript).toContain('--max-time 1.5');
+    expect(testDeployScript).toContain('verify_test_detail_data');
+    expect(testDeployScript).toContain('row.marketValueBasis === "marketPrice*exchangeShare"');
+    expect(testDeployScript).toContain('Test API detail smoke test retrying');
+    expect(testDeployScript).toContain('verify_test_home_stability');
+    expect(testDeployScript).toContain('Test API homepage stability failed');
+    expect(testDeployScript).toContain('Test API homepage stability retrying');
+    expect(testDeployScript).toContain('row.source');
+    expect(testDeployScript).toContain('row.updateTime || row.quoteTime');
+    expect(testDeployScript).toContain('for attempt in $(seq 1 12)');
+    expect(testDeployScript).toContain('Test API financial-data smoke test retrying');
   });
 });

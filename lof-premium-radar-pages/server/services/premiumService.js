@@ -3,23 +3,41 @@ export function calculatePremium({ marketPrice, estimatedNav, lastNav }) {
   const price = toPositiveNumber(marketPrice);
   const estimateResult = resolveEstimatedNav(input);
   const nav = toPositiveNumber(lastNav);
+  const officialPremiumRate = price && nav ? ((price / nav) - 1) * 100 : null;
 
-  if (!price) return { premiumRate: null, basis: 'none', note: 'price 缺失' };
+  if (!price) return {
+    ...estimateResult,
+    premiumRate: null,
+    realtimePremiumRate: null,
+    officialPremiumRate: null,
+    basis: 'none',
+    note: 'price 缺失',
+  };
 
   const iopv = toPositiveNumber(input.iopv);
-  if (iopv && input.iopvStale !== true && String(input.iopvSource || '').trim()) {
+  if (iopv && input.iopvStale !== true && String(input.iopvSource || '').trim()
+    && isEstimateCurrentForQuote(input.iopvTime, { now: input.now, quoteTime: input.quoteTime })) {
+    const realtimePremiumRate = ((price / iopv) - 1) * 100;
     return {
-      premiumRate: ((price / iopv) - 1) * 100,
-      basis: 'iopv',
       ...estimateResult,
+      premiumRate: realtimePremiumRate,
+      realtimePremiumRate,
+      officialPremiumRate,
+      basis: 'iopv',
+      estimatedNav: iopv,
+      selectedNavSource: String(input.iopvSource || ''),
+      selectedNavTime: String(input.iopvTime || ''),
       note: '基于交易所IOPV',
     };
   }
 
   const realtimeReferenceNav = toPositiveNumber(input.realtimeReferenceNav);
   if (isEligibleRealtimeReference(realtimeReferenceNav, input)) {
+    const realtimePremiumRate = ((price / realtimeReferenceNav) - 1) * 100;
     return {
-      premiumRate: ((price / realtimeReferenceNav) - 1) * 100,
+      premiumRate: realtimePremiumRate,
+      realtimePremiumRate,
+      officialPremiumRate,
       basis: 'estimatedNav',
       ...estimateResult,
       estimatedNav: realtimeReferenceNav,
@@ -37,31 +55,35 @@ export function calculatePremium({ marketPrice, estimatedNav, lastNav }) {
     };
   }
 
-  if (nav) {
+  if (estimateResult.estimatedNav && estimateResult.selectedIsCurrent) {
+    const realtimePremiumRate = ((price / estimateResult.estimatedNav) - 1) * 100;
     return {
-      premiumRate: ((price / nav) - 1) * 100,
-      basis: 'lastNav',
       ...estimateResult,
-      note: '基于已公布官方净值',
+      premiumRate: realtimePremiumRate,
+      realtimePremiumRate,
+      officialPremiumRate,
+      basis: 'estimatedNav',
+      note: estimateResult.note || '基于今日估算净值（非官方净值）',
     };
   }
 
-  return { premiumRate: null, basis: 'none', note: 'nav 缺失' };
+  return {
+    ...estimateResult,
+    premiumRate: null,
+    realtimePremiumRate: null,
+    officialPremiumRate,
+    basis: 'none',
+    note: '今日估算净值暂无数据',
+  };
 }
 
 function isEligibleRealtimeReference(value, input) {
   if (!value || input.realtimeReferenceStale === true) return false;
   if (!String(input.realtimeReferenceSource || '').trim()) return false;
+  if (!isEstimateCurrentForQuote(input.realtimeReferenceTime, { now: input.now, quoteTime: input.quoteTime })) return false;
   if (!isPlausibleEstimatedNav(value, input)) return false;
 
-  const estimateDate = normalizeDate(input.realtimeReferenceDate);
-  const officialNavDate = normalizeDate(input.navDate);
-  return !(estimateDate && officialNavDate && estimateDate < officialNavDate);
-}
-
-function normalizeDate(value) {
-  const match = String(value || '').match(/^(\d{4}-\d{2}-\d{2})/);
-  return match ? match[1] : '';
+  return true;
 }
 
 function resolveEstimatedNav(input) {
@@ -83,13 +105,24 @@ function resolveEstimatedNav(input) {
       input,
       rejected,
     }),
+    ...(Array.isArray(input.estimateCandidates) ? input.estimateCandidates.map((candidate, index) => buildCandidate({
+      value: candidate?.value ?? candidate?.estimatedNav,
+      source: candidate?.source ?? candidate?.estimatedNavSource,
+      time: candidate?.time ?? candidate?.estimatedNavTime,
+      role: candidate?.role || `source-${index + 1}`,
+      input,
+      rejected,
+    })) : []),
   ].filter(Boolean);
 
-  if (!candidates.length) {
+  const dedupedCandidates = dedupeCandidates(candidates);
+
+  if (!dedupedCandidates.length) {
     return {
       estimatedNav: null,
       selectedNavSource: '',
       selectedNavTime: '',
+      selectedIsCurrent: false,
       estimateConfidence: 'none',
       estimateDeviationRate: null,
       estimateWarning: rejected.length ? '估算净值量级异常，已改用官方净值' : '',
@@ -98,20 +131,23 @@ function resolveEstimatedNav(input) {
     };
   }
 
-  const selected = candidates.slice().sort(compareCandidateQuality)[0];
-  const deviation = maxDeviationRate(candidates);
-  const confidence = estimateConfidence(deviation, candidates.length);
+  const selected = dedupedCandidates.slice().sort(compareCandidateQuality)[0];
+  const currentCandidates = dedupedCandidates.filter((candidate) => candidate.isCurrent);
+  const comparisonCandidates = currentCandidates.length ? currentCandidates : dedupedCandidates;
+  const deviation = maxDeviationRate(comparisonCandidates);
+  const confidence = estimateConfidence(deviation, comparisonCandidates.length);
   const warning = confidence === 'low' ? `估算净值多源偏差 ${deviation.toFixed(2)}%` : '';
 
   return {
     estimatedNav: selected.value,
     selectedNavSource: selected.source,
     selectedNavTime: selected.time,
+    selectedIsCurrent: selected.isCurrent,
     estimateConfidence: confidence,
     estimateDeviationRate: deviation,
     estimateWarning: warning,
-    estimateSources: candidates.map(({ role, source, value, time }) => ({ role, source, value, time })),
-    note: warning || (candidates.length > 1 ? '基于多源估算净值' : '基于估算净值'),
+    estimateSources: dedupedCandidates.map(({ role, source, value, time, isCurrent }) => ({ role, source, value, time, isCurrent })),
+    note: warning || (comparisonCandidates.length > 1 ? '基于多源今日估算净值（非官方净值）' : '基于今日估算净值（非官方净值）'),
   };
 }
 
@@ -127,6 +163,7 @@ function buildCandidate({ value, source, time, role, input, rejected }) {
     source: String(source || ''),
     time: String(time || ''),
     role,
+    isCurrent: isEstimateCurrentForQuote(time, { now: input.now, quoteTime: input.quoteTime }),
     sourcePriority: sourcePriority(source),
     timestamp: parseShanghaiTime(time),
   };
@@ -141,6 +178,7 @@ function isPlausibleEstimatedNav(value, input = {}) {
 }
 
 function compareCandidateQuality(left, right) {
+  if (right.isCurrent !== left.isCurrent) return Number(right.isCurrent) - Number(left.isCurrent);
   if (right.sourcePriority !== left.sourcePriority) return right.sourcePriority - left.sourcePriority;
   if (right.timestamp !== left.timestamp) return right.timestamp - left.timestamp;
   return left.role === 'primary' ? -1 : 1;
@@ -148,7 +186,9 @@ function compareCandidateQuality(left, right) {
 
 function sourcePriority(source) {
   const text = String(source || '').toLowerCase();
+  if (text.includes('akshare-eastmoney')) return 99;
   if (text.includes('tiantian')) return 100;
+  if (text.includes('lof8')) return 98;
   if (text.includes('eastmoney')) return 96;
   if (text.includes('sina')) return 94;
   if (text.includes('jisilu')) return 82;
@@ -157,6 +197,38 @@ function sourcePriority(source) {
   if (text.includes('palmmicro')) return 75;
   if (text === 'lof') return 72;
   return 70;
+}
+
+function dedupeCandidates(candidates) {
+  const byObservation = new Map();
+  for (const candidate of candidates) {
+    // LOF8 explicitly republishes Tiantian estimates. Treat both as one source
+    // family so a mirrored value cannot falsely become "multi-source" evidence.
+    const family = /lof8|tiantian|akshare-eastmoney/i.test(candidate.source) ? 'eastmoney-estimate-family' : candidate.source;
+    const key = `${family}:${candidate.time}:${candidate.value}`;
+    const previous = byObservation.get(key);
+    if (!previous || candidate.sourcePriority > previous.sourcePriority) {
+      byObservation.set(key, candidate);
+    }
+  }
+  return [...byObservation.values()];
+}
+
+export function isEstimateCurrentForQuote(value, { now = new Date(), quoteTime = '' } = {}) {
+  const match = String(value || '').match(/^(\d{4}-\d{2}-\d{2}) \d{2}:\d{2}(:\d{2})?$/);
+  if (!match) return false;
+  const current = now instanceof Date ? now : new Date(now || Date.now());
+  const today = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(current);
+  if (match[1] > today) return false;
+  const quoteDate = timestampDate(quoteTime);
+  return quoteDate ? match[1] >= quoteDate : match[1] === today;
+}
+
+function timestampDate(value) {
+  const match = String(value || '').match(/^(\d{4}-\d{2}-\d{2}) \d{2}:\d{2}(:\d{2})?$/);
+  return match ? match[1] : '';
 }
 
 function maxDeviationRate(candidates) {

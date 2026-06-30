@@ -11,9 +11,9 @@ const { allowAction } = commonJsModule.exports;
 describe('action guard', () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it('同一点击入口两秒内只执行一次，两秒后恢复', () => {
+  it('同一普通点击入口0.5秒内只执行一次，0.5秒后恢复', () => {
     const context = {};
-    vi.spyOn(Date, 'now').mockReturnValueOnce(10_000).mockReturnValueOnce(11_999).mockReturnValueOnce(12_000);
+    vi.spyOn(Date, 'now').mockReturnValueOnce(10_000).mockReturnValueOnce(10_499).mockReturnValueOnce(10_500);
 
     expect(allowAction(context, 'refresh')).toBe(true);
     expect(allowAction(context, 'refresh')).toBe(false);

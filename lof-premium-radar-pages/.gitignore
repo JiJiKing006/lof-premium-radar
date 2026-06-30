@@ -2,6 +2,7 @@ node_modules/
 dist/
 .cache/
 .env.deploy
+.env.test.deploy
 .DS_Store
 npm-debug.log*
 project.private.config.json

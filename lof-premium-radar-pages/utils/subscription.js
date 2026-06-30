@@ -1,9 +1,8 @@
 const { postJson } = require('./request');
 
-function registerSubscription(options = {}) {
+function registerSubscription() {
   return login().then((code) => postJson('/api/subscriptions/register', {
-    code,
-    testMode: options.testMode ? 'develop' : ''
+    code
   }, {
     timeoutMs: 10000
   }));

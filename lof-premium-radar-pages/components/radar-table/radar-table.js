@@ -1,4 +1,5 @@
 const { allowAction } = require('../../utils/action-guard');
+const { REVIEW_COPY_MODE } = require('../../config/review-copy');
 
 const COLUMN_RULES = {
   favorite: { percent: 11, priority: 'high' },
@@ -11,8 +12,8 @@ const COLUMN_RULES = {
 function buildColumns() {
   return [
     buildColumn('favorite', '收藏', { disabled: true }),
-    buildColumn('security', '名称/代码', { disabled: true }),
-    buildColumn('premiumRate', '实时溢价率'),
+    buildColumn('security', REVIEW_COPY_MODE ? '代码' : '名称/代码', { disabled: true }),
+    buildColumn('premiumRate', REVIEW_COPY_MODE ? '实时差值' : '实时溢价率'),
     buildColumn('price', '当前值'),
     buildColumn('turnover', '金额')
   ];
@@ -125,7 +126,7 @@ Component({
     },
 
     handleRefresh() {
-      if (this.data.refreshing || !allowAction(this, 'refresh')) return;
+      if (this.data.refreshing || !allowAction(this, 'refresh', 1000)) return;
       this.resetInlineScroll();
       this.triggerEvent('refresh');
     },

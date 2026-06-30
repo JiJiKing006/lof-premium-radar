@@ -1,15 +1,30 @@
 <view class="detail-panel market-detail">
-  <app-loading visible="{{detailLoading && !current}}" title="加载详情中" note="正在获取最新信息与溢价数据" />
   <view class="detail-scroll">
-    <view wx:if="{{current}}" class="detail-hero">
+    <view wx:if="{{detailLoading && !current}}" class="detail-hero detail-hero-skeleton" aria-label="详情数据加载中">
+      <view class="skeleton-line skeleton-title"></view>
+      <view class="skeleton-line skeleton-meta"></view>
+      <view class="detail-summary-grid">
+        <view wx:for="{{summarySkeletonCards}}" wx:key="*this" class="summary-card summary-card-skeleton">
+          <view class="skeleton-line skeleton-card-label"></view>
+          <view class="skeleton-line skeleton-card-value"></view>
+          <view class="skeleton-line skeleton-card-note"></view>
+        </view>
+      </view>
+    </view>
+
+    <view wx:elif="{{current}}" class="detail-hero">
       <view class="detail-title-row">
-        <text class="detail-name">{{current.titleText}}</text>
-        <text class="cycle-pill cycle-{{current.settlementState}}">{{current.settlementCycleText}}</text>
+        <view class="code-copy-group code-copy-group-hero">
+          <text class="detail-name detail-code-title">{{current.titleText}}</text>
+          <button class="copy-code-button" type="button" size="mini" bindtap="copyFundCode" aria-label="复制基金代码">
+            <image class="copy-code-icon" src="/images/icons/detail-copy.svg" mode="aspectFit" />
+          </button>
+        </view>
+        <text wx:if="{{current.settlementCycleText}}" class="cycle-pill cycle-{{current.settlementState}}">{{current.settlementCycleText}}</text>
       </view>
       <view class="detail-meta-line">
-        <text class="detail-code">{{current.code}}</text>
-        <text class="detail-status-pill limit-{{current.purchaseState}}">{{current.purchaseText}}</text>
-        <text class="detail-update-time">更新于 {{current.updateTime || current.quoteTime || '暂无数据'}}</text>
+        <text wx:if="{{current.showPurchase}}" class="detail-status-pill limit-{{current.purchaseState}}">{{current.purchaseText}}</text>
+        <text wx:if="{{current.showUpdateTime}}" class="detail-update-time">更新于 {{current.updateTime || current.quoteTime}}</text>
       </view>
 
       <view class="detail-summary-grid">
@@ -25,14 +40,15 @@
             </view>
           </view>
           <text class="summary-value {{item.className}}">{{item.value}}</text>
-          <text wx:if="{{item.note}}" class="summary-note">{{item.note}}</text>
+          <view wx:if="{{item.noteLoading}}" class="skeleton-line summary-note-skeleton"></view>
+          <text wx:if="{{item.note}}" class="summary-note {{item.noteClass}}">{{item.note}}</text>
         </view>
       </view>
     </view>
 
     <view wx:if="{{error}}" class="detail-warning">{{error}}</view>
 
-    <view wx:if="{{current}}" class="detail-section trend-section">
+    <view wx:if="{{historyLoading || trendPoints.length}}" class="detail-section trend-section">
       <view class="detail-section-header">
         <view class="section-title-wrap">
           <text class="section-mark"></text>
@@ -40,7 +56,10 @@
         </view>
         <text>{{trendRangeText}}</text>
       </view>
-      <view wx:if="{{trendPoints.length}}" class="premium-chart" aria-label="最近交易日溢价率走势">
+      <view wx:if="{{historyLoading}}" class="premium-chart chart-skeleton" aria-label="溢价率走势加载中">
+        <view class="skeleton-chart-line"></view>
+      </view>
+      <view wx:elif="{{trendPoints.length}}" class="premium-chart" aria-label="最近交易日溢价率走势">
         <view class="chart-area" style="{{trendAreaStyle}}"></view>
         <view wx:for="{{trendAxis}}" wx:key="label" class="chart-grid-line" style="{{item.style}}">
           <text class="chart-axis-label">{{item.label}}</text>
@@ -60,42 +79,40 @@
         </view>
         <text wx:for="{{trendPoints}}" wx:key="key" class="chart-axis-date" style="{{item.dateStyle}}">{{item.date}}</text>
       </view>
-      <view wx:else class="empty-state compact">暂无溢价率走势数据</view>
     </view>
 
-    <view wx:if="{{current}}" class="detail-section live-section">
+    <view wx:if="{{(detailLoading && !current) || liveFields.length}}" class="detail-section live-section">
       <view class="detail-section-header">
         <view class="section-title-wrap">
           <text class="section-mark"></text>
           <text class="section-title">最新信息</text>
         </view>
-        <text>数值、变化、金额、份额</text>
+        <text>行情、净值、份额与成交</text>
       </view>
-      <view class="live-columns">
-        <view class="live-column">
-          <view wx:for="{{leftFields}}" wx:key="label" class="live-field">
-            <image class="live-icon" src="{{item.icon}}" mode="aspectFit" />
-            <text class="field-label">{{item.label}}</text>
-            <view class="field-value">
-              <text class="field-main {{item.className}}">{{item.value}}</text>
-              <text wx:if="{{item.note}}" class="field-note">{{item.note}}</text>
-            </view>
+      <view wx:if="{{detailLoading && !current}}" class="live-fields">
+        <view wx:for="{{liveSkeletonFields}}" wx:key="*this" class="live-field live-field-skeleton">
+          <view class="field-identity">
+            <view class="skeleton-line skeleton-field-icon"></view>
+            <view class="skeleton-line skeleton-field-label"></view>
           </view>
+          <view class="field-value"><view class="skeleton-line skeleton-field-value"></view></view>
         </view>
-        <view class="live-column">
-          <view wx:for="{{rightFields}}" wx:key="label" class="live-field">
+      </view>
+      <view wx:else class="live-fields">
+        <view wx:for="{{liveFields}}" wx:key="label" class="live-field">
+          <view class="field-identity">
             <image class="live-icon" src="{{item.icon}}" mode="aspectFit" />
             <text class="field-label">{{item.label}}</text>
-            <view class="field-value">
-              <text class="field-main {{item.className}}">{{item.value}}</text>
-              <text wx:if="{{item.note}}" class="field-note">{{item.note}}</text>
-            </view>
+          </view>
+          <view class="field-value">
+            <text class="field-main {{item.className}}">{{item.value}}</text>
+            <text wx:if="{{item.note}}" class="field-note">{{item.note}}</text>
           </view>
         </view>
       </view>
     </view>
 
-    <view class="detail-section history-section">
+    <view wx:if="{{historyLoading || historyRows.length}}" class="detail-section history-section">
       <view class="detail-section-header">
         <view class="section-title-wrap">
           <text class="section-mark"></text>
@@ -120,9 +137,21 @@
               <view wx:for="{{item.cells}}" wx:key="key" class="history-cell {{item.className}}" style="{{item.style}}">{{item.text}}</view>
             </view>
           </block>
-          <view wx:else class="empty-state">{{historyError || '暂无历史数据'}}</view>
         </view>
       </scroll-view>
+    </view>
+
+    <view wx:if="{{estimateExplanation}}" class="detail-section estimate-explanation-section">
+      <view class="detail-section-header">
+        <view class="section-title-wrap">
+          <text class="section-mark"></text>
+          <text class="section-title">估算净值说明</text>
+        </view>
+      </view>
+      <view class="estimate-explanation-body">
+        <text class="estimate-explanation-text">{{estimateExplanation.text}}</text>
+        <text wx:if="{{estimateExplanation.time}}" class="estimate-explanation-time">{{estimateExplanation.time}}</text>
+      </view>
     </view>
 
   </view>

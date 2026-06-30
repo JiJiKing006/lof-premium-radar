@@ -9,13 +9,72 @@
         <button class="action-button favorite-action {{section === 'WATCH' ? 'active' : ''}}" hover-class="action-button-pressed" bindtap="showWatchFunds">
           <text class="action-icon star-icon">☆</text><text>仅看收藏</text>
         </button>
-        <button class="action-button pause-action" hover-class="action-button-pressed" bindtap="handleExcludePausedChange" data-direct="true">
-          <text>隐藏暂停</text>
-          <view class="inline-switch {{excludePausedPurchase ? 'active' : ''}}"><view class="inline-switch-dot"></view></view>
+        <button class="action-button filter-action {{showFilterPanel || filterBadgeCount ? 'active' : ''}}" hover-class="action-button-pressed" bindtap="handleFilterEntry">
+          <image class="action-image-icon filter-icon" src="/images/icons/filter-sliders.svg" mode="aspectFit" />
+          <text>筛选</text>
+          <view wx:if="{{filterBadgeCount}}" class="filter-badge">{{filterBadgeCount}}</view>
+          <image class="action-image-icon chevron-icon" src="{{showFilterPanel ? '/images/icons/chevron-up.svg' : '/images/icons/chevron-down.svg'}}" mode="aspectFit" />
         </button>
+        <button class="action-button monitor-action {{reminderAdded ? 'reminder-added' : ''}}" hover-class="action-button-pressed" bindtap="handleReminderEntry">
+          <image class="action-image-icon bell-icon" src="{{reminderAdded ? '/images/icons/bell-off.svg' : '/images/icons/bell.svg'}}" mode="aspectFit" />
+          <text>{{reminderAdded ? '已提醒' : '提醒'}}</text>
+        </button>
+      </view>
+
+      <view wx:if="{{showFilterPanel}}" class="filter-panel" catchtap="preventModalClose" role="dialog" aria-label="更多筛选">
+        <view class="filter-panel-pointer"></view>
+        <view class="filter-section filter-section-first">
+          <view class="filter-section-heading">
+            <text class="filter-section-label">{{purchaseFilterTitle}}</text>
+            <text class="filter-section-hint">可多选</text>
+          </view>
+          <view class="filter-chip-grid purchase-status-grid">
+            <button
+              wx:for="{{purchaseStatusOptions}}"
+              wx:key="key"
+              class="filter-chip status-filter-chip status-{{item.tone}} {{item.key === 'ALL' ? (draftPurchaseStatusFilters.length === 0 ? 'active' : '') : (draftPurchaseStatusMap[item.key] ? 'active' : '')}}"
+              bindtap="handleDraftPurchaseStatusChange"
+              data-key="{{item.key}}"
+            >
+              {{item.label}}
+            </button>
+          </view>
+        </view>
+
+        <view class="filter-section">
+          <text class="filter-section-label">{{redemptionFilterTitle}}</text>
+          <view class="filter-chip-grid redemption-grid">
+            <button
+              wx:for="{{redemptionOptions}}"
+              wx:key="key"
+              class="filter-chip {{draftRedemptionFilter === item.key ? 'active' : ''}}"
+              bindtap="handleDraftRedemptionChange"
+              data-key="{{item.key}}"
+            >
+              {{item.label}}
+            </button>
+            <view class="filter-chip-spacer" aria-hidden="true"></view>
+          </view>
+        </view>
+
+        <view class="filter-section">
+          <text class="filter-section-label">{{turnoverFilterTitle}}</text>
+          <view class="filter-range-row turnover-min-row">
+            <text class="filter-range-prefix">大于</text>
+            <input class="filter-range-input turnover-min-input" type="digit" placeholder="不限" value="{{draftTurnoverMin}}" data-field="draftTurnoverMin" bindinput="handleDraftRangeInput" />
+            <text class="filter-range-unit">万元</text>
+          </view>
+        </view>
+
+        <view class="filter-footer">
+          <button class="filter-footer-button secondary" bindtap="resetFilterDraft">重置</button>
+          <button class="filter-footer-button primary" bindtap="confirmFilterPanel">确定</button>
+        </view>
       </view>
     </view>
   </block>
+
+  <view wx:if="{{showFilterPanel}}" class="filter-mask" bindtap="closeFilterPanel"></view>
 
   <view class="home-table-frame">
     <radar-table
@@ -44,17 +103,6 @@
     />
   </view>
 
-  <view class="author-mark" aria-label="网站底部信息">
-    <view class="author-line">
-      <text>作者</text>
-      <text class="author-name">jijiking</text>
-    </view>
-    <view class="icp-record">
-      <text class="icp-badge-icon">备</text>
-      <text>赣ICP备2026012689号-1</text>
-    </view>
-  </view>
-
   <view class="bottom-safe-area"></view>
 
   <app-loading
@@ -64,4 +112,32 @@
   />
 
   <view wx:if="{{toastText}}" class="watch-toast" role="status">{{toastText}}</view>
+
+  <view wx:if="{{showMonitorModal}}" class="monitor-mask" bindtap="closeMonitorModal">
+    <view class="monitor-modal" catchtap="preventModalClose" role="dialog" aria-label="开启每日提醒">
+      <button class="monitor-close" aria-label="关闭" bindtap="closeMonitorModal">
+        <image class="monitor-close-icon" src="/images/icons/close.svg" mode="aspectFit" />
+      </button>
+      <view class="monitor-bell">
+        <text class="monitor-bell-icon">●</text>
+        <text class="monitor-wave left">)</text><text class="monitor-wave right">(</text>
+      </view>
+      <text class="monitor-title">开启每日提醒</text>
+      <view class="monitor-copy">
+        <text>在每个工作日 14:30 给您发送一次</text><text class="monitor-emphasis">最佳标的</text><text>信息</text>
+      </view>
+      <button class="monitor-primary" disabled="{{reminderSubmitting}}" bindtap="handleMonitorPreview">开启提醒</button>
+    </view>
+  </view>
+
+  <view wx:if="{{showCancelReminderModal}}" class="monitor-mask" bindtap="closeCancelReminderModal">
+    <view class="cancel-reminder-modal" catchtap="preventModalClose" role="dialog" aria-label="取消提醒确认">
+      <text class="cancel-reminder-title">取消每日提醒？</text>
+      <text class="cancel-reminder-copy">取消后将不再接收本次提醒通知。</text>
+      <view class="cancel-reminder-actions">
+        <button class="cancel-reminder-secondary" bindtap="closeCancelReminderModal">保留提醒</button>
+        <button class="cancel-reminder-primary" disabled="{{cancellingReminder}}" bindtap="confirmCancelReminder">确认取消</button>
+      </view>
+    </view>
+  </view>
 </view>

@@ -1,11 +1,12 @@
 const { fetchFundsSnapshot, normalizeFund, mergeStablePurchaseStatuses } = require('../../utils/fund-api');
-const { filterAndSortFunds } = require('../../utils/fund-filter');
+const { filterAndSortFunds, settlementCycle } = require('../../utils/fund-filter');
 const { readSnapshot, writeSnapshot } = require('../../utils/cache');
 
 const PAGE_SIZE = 30;
 const SEARCH_DEBOUNCE_MS = 160;
 const WATCH_STORAGE_KEY = 'fund-watchlist';
 const HOME_SECTION = 'HOME';
+const { REVIEW_COPY_MODE } = require('../../config/review-copy');
 
 Page({
   data: {
@@ -127,7 +128,9 @@ Page({
     }).map((fund) => Object.assign({}, fund, {
       isFavorite: favoriteSet.has(fund.code),
       purchaseText: purchaseText(fund),
-      purchaseState: purchaseState(fund)
+      purchaseState: purchaseState(fund),
+      settlementCycle: settlementCycleDisplay(settlementCycle(fund)),
+      settlementState: settlementCycle(fund) === 'T+2' ? 'short' : 'long'
     }));
     this.filteredFundsCache = filteredFunds;
     this.visiblePage = options.keepPage
@@ -226,7 +229,7 @@ Page({
     this.setData({
       favoriteCodes,
       pulseCode: fund.code,
-      toastText: willAdd ? `已加入收藏：${fund.name}` : `已移出收藏：${fund.name}`
+      toastText: willAdd ? `已加入收藏：${fund.code}` : `已移出收藏：${fund.code}`
     });
     this.updateVisibleFunds();
     this.clearPulseTimer();
@@ -308,4 +311,10 @@ function trimPurchaseDecimal(value, precision) {
 function purchaseState(fund) {
   const state = (fund.purchaseLimit && fund.purchaseLimit.state) || fund.subscriptionState;
   return !state || state === 'unknown' ? 'unavailable' : state;
+}
+
+function settlementCycleDisplay(value) {
+  if (value === 'T+2') return REVIEW_COPY_MODE ? '延2天' : value;
+  if (value === 'T+3') return REVIEW_COPY_MODE ? '延3天' : value;
+  return value || '暂无数据';
 }

@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { calculatePremium } from './premiumService.js';
+import { calculatePremium, isEstimateCurrentForQuote } from './premiumService.js';
 import { cache } from './cacheService.js';
 import { getLofPremiumReferenceMap, getNavMap, getSingleNav } from './navService.js';
 import { getQuotes } from './quoteService.js';
@@ -11,16 +11,23 @@ import { fetchEastmoneyQuoteMap, fetchEastmoneyTrendMap } from '../sources/eastm
 import { fetchExchangeShareMap } from '../sources/exchangeShareSource.js';
 import { fetchSubscriptionLimitMap } from '../sources/subscriptionLimitSource.js';
 import { fetchSinaQuoteMap } from '../sources/sinaSupplementSource.js';
+import { fetchSinaFundScale } from '../sources/sinaFundScaleSource.js';
 
 const SUPPLEMENT_TIMEOUT_MS = 180;
 const SNAPSHOT_RESPONSE_BUDGET_MS = 900;
 const NAV_SUPPLEMENT_TIMEOUT_MS = 300;
 const SNAPSHOT_CACHE_TTL_MS = 30_000;
 const PARTIAL_SNAPSHOT_CACHE_TTL_MS = 5_000;
-const COMPLETE_SNAPSHOT_MAX_STALE_MS = 5 * 60_000;
+// Same-day complete snapshots remain a truthful fallback throughout the day.
+// hasCurrentEstimate() still rejects them automatically after Shanghai midnight.
+const COMPLETE_SNAPSHOT_MAX_STALE_MS = 24 * 60 * 60_000;
 const PAGE_SNAPSHOT_MAX_AGE_MS = 30 * 60_000;
 const HOME_CATEGORIES = ['LOF', 'QDII', 'ETF'];
-const MIN_COMPLETE_ROWS = { ALL: 120, LOF: 80, QDII: 20, ETF: 10 };
+const MIN_COMPLETE_ROWS = process.env.NODE_ENV === 'test'
+  ? { ALL: 1, LOF: 1, QDII: 1, ETF: 1 }
+  : { ALL: 120, LOF: 80, QDII: 20, ETF: 10 };
+const VERIFIED_SNAPSHOT_PREFIX = 'fund-quotes:verified';
+const DEFAULT_BACKGROUND_REFRESH_MS = 30_000;
 const snapshotInFlight = new Map();
 const pageSnapshots = new Map();
 const pageSnapshotIds = new WeakMap();
@@ -54,6 +61,9 @@ const HOME_LIST_FIELDS = [
   'navQuoteTime',
   'estimatedNav',
   'premiumRate',
+  'realtimePremiumRate',
+  'officialPremiumRate',
+  'officialDiscountRate',
   'discountRate',
   'premiumBasis',
   'premiumNote',
@@ -91,15 +101,12 @@ const HOME_LIST_FIELDS = [
 export async function getFundQuotes({ category = '', force = false, includeTrends = true, waitForFresh = false } = {}) {
   const normalizedCategory = normalizeSnapshotCategory(category);
   const snapshotCacheKey = snapshotKey(normalizedCategory, includeTrends);
-  const cached = cache.get(snapshotCacheKey);
+  const cached = getServingSnapshot(normalizedCategory, snapshotCacheKey);
   if (!force && cached) return cached;
   const staleCompleteSnapshot = cache.getStale(snapshotCacheKey, { maxAgeMs: COMPLETE_SNAPSHOT_MAX_STALE_MS });
-  const observedSnapshot = cache.getObserved(snapshotCacheKey, { maxAgeMs: COMPLETE_SNAPSHOT_MAX_STALE_MS });
   const reusableSnapshot = isDisplayStableSnapshot(staleCompleteSnapshot, normalizedCategory)
     ? staleCompleteSnapshot
-    : isReusableObservedSnapshot(observedSnapshot, normalizedCategory)
-      ? observedSnapshot
-      : null;
+    : getVerifiedSnapshot(normalizedCategory);
   if (!force && reusableSnapshot) {
     refreshSnapshotInBackground({ normalizedCategory, includeTrends, snapshotCacheKey });
     return markSnapshotRefreshing(reusableSnapshot);
@@ -127,12 +134,44 @@ export async function getFundQuotes({ category = '', force = false, includeTrend
   return promise;
 }
 
+export async function refreshFundSnapshots({ categories = ['ALL'], includeTrends = false } = {}) {
+  const normalizedCategories = [...new Set(categories.map(normalizeSnapshotCategory))];
+  return Promise.allSettled(normalizedCategories.map((category) => getFundQuotes({
+    category,
+    force: true,
+    waitForFresh: true,
+    includeTrends,
+  })));
+}
+
+export function startFundSnapshotScheduler({
+  intervalMs = Number(process.env.FUND_SNAPSHOT_REFRESH_MS || DEFAULT_BACKGROUND_REFRESH_MS),
+  categories = ['ALL'],
+  includeTrends = false,
+  runImmediately = true,
+} = {}) {
+  let running = false;
+  const refresh = async () => {
+    if (running) return;
+    running = true;
+    try {
+      await refreshFundSnapshots({ categories, includeTrends });
+    } finally {
+      running = false;
+    }
+  };
+  if (runImmediately) queueMicrotask(() => refresh().catch(() => {}));
+  const timer = setInterval(() => refresh().catch(() => {}), Math.max(5_000, intervalMs));
+  timer.unref?.();
+  return { refresh, stop: () => clearInterval(timer) };
+}
+
 function refreshSnapshotInBackground({ normalizedCategory, includeTrends, snapshotCacheKey }) {
   if (snapshotInFlight.has(snapshotCacheKey)) return;
-  const promise = buildFundQuotes({ normalizedCategory, force: true, includeTrends, snapshotCacheKey, waitForFresh: false }).finally(() => {
+  const promise = buildFundQuotes({ normalizedCategory, force: true, includeTrends, snapshotCacheKey, waitForFresh: true }).finally(() => {
     if (snapshotInFlight.get(snapshotCacheKey)?.promise === promise) snapshotInFlight.delete(snapshotCacheKey);
   });
-  snapshotInFlight.set(snapshotCacheKey, { promise, waitForFresh: false });
+  snapshotInFlight.set(snapshotCacheKey, { promise, waitForFresh: true });
   promise.catch(() => {});
 }
 
@@ -145,6 +184,19 @@ function markSnapshotRefreshing(snapshot) {
       sourceStatus: snapshot.meta.sourceStatus || 'cache',
       status: 'refreshing',
       warn: [snapshot.meta.warn, '后台刷新中，先返回上一份已展示快照'].filter(Boolean).join('；'),
+    },
+  };
+}
+
+function markSnapshotPending(snapshot) {
+  return {
+    ...snapshot,
+    meta: {
+      ...(snapshot.meta || {}),
+      stale: true,
+      status: 'refreshing',
+      sourceStatus: snapshot.meta?.sourceStatus || 'fallback',
+      warn: [snapshot.meta?.warn, '当前构建未通过完整性校验，尚未替换最后有效快照'].filter(Boolean).join('；'),
     },
   };
 }
@@ -167,6 +219,7 @@ async function buildFundQuotes({ normalizedCategory, force, includeTrends, snaps
   const codes = quotePayload.rows.map((quote) => quote.code);
   const navPromise = getNavMap(quotePayload.rows, { force });
   const subscriptionLimitPromise = fetchSubscriptionLimitMap(codes, { force });
+  const exchangeSharePromise = fetchExchangeShareMap(codes, { force });
   const remainingMs = Math.max(0, responseBudgetMs - (Date.now() - startedAt));
   const supplementTimeoutMs = Math.min(baseSupplementTimeoutMs, remainingMs);
   const navTimeoutMs = Math.min(baseNavTimeoutMs, remainingMs);
@@ -177,7 +230,7 @@ async function buildFundQuotes({ normalizedCategory, force, includeTrends, snaps
     withMapTimeout(fetchSinaQuoteMap(codes, { force }), supplementTimeoutMs, 'sina-quote'),
     withMapTimeout(subscriptionLimitPromise, supplementTimeoutMs, 'subscription-limit'),
     includeTrends ? withMapTimeout(fetchEastmoneyTrendMap(codes, { force }), supplementTimeoutMs, 'trend') : Promise.resolve(mapResult(new Map(), 'trend')),
-    withMapTimeout(fetchExchangeShareMap(codes, { force }), supplementTimeoutMs, 'exchange-share'),
+    withMapTimeout(exchangeSharePromise, supplementTimeoutMs, 'exchange-share'),
   ]);
   let navMap = navResult.map;
   const premiumReferenceMap = premiumReferenceResult.map;
@@ -213,6 +266,7 @@ async function buildFundQuotes({ normalizedCategory, force, includeTrends, snaps
     exchangeShareMap,
   });
   rows = mergeStableFinancialFields(previousSnapshot?.rows, rows);
+  rows = mergeStableExchangeShareFields(previousSnapshot?.rows, rows);
   let dedupedRows = dedupeFundsByCodePriority(rows);
   let filtered = filterDisplayRows(dedupedRows, normalizedCategory);
 
@@ -246,14 +300,16 @@ async function buildFundQuotes({ normalizedCategory, force, includeTrends, snaps
   const isStable = isDisplayStableSnapshot(guardedSnapshot, normalizedCategory);
   const cacheTtl = isStable ? SNAPSHOT_CACHE_TTL_MS : PARTIAL_SNAPSHOT_CACHE_TTL_MS;
   const storedSnapshot = isStable
-    ? cache.set(snapshotCacheKey, guardedSnapshot, cacheTtl)
-    : cache.setTransient(snapshotCacheKey, guardedSnapshot, cacheTtl);
-  if (isStable) persistFundSnapshot(snapshotCacheKey, storedSnapshot);
+    ? commitVerifiedSnapshot(snapshotCacheKey, normalizedCategory, guardedSnapshot, cacheTtl)
+    : cache.setTransient(snapshotCacheKey, markSnapshotPending(guardedSnapshot), cacheTtl);
   if (subscriptionLimitResult.timedOut) {
     completePurchaseStatusesInBackground(subscriptionLimitPromise, snapshotCacheKey, cacheTtl, normalizedCategory);
   }
   if (navResult.timedOut) {
     completeNavInBackground(navPromise, snapshotCacheKey, cacheTtl, normalizedCategory);
+  }
+  if (exchangeShareResult.timedOut) {
+    completeExchangeSharesInBackground(exchangeSharePromise, snapshotCacheKey, cacheTtl, normalizedCategory);
   }
   return storedSnapshot;
 }
@@ -261,7 +317,9 @@ async function buildFundQuotes({ normalizedCategory, force, includeTrends, snaps
 function completeNavInBackground(promise, snapshotCacheKey, ttlMs, category) {
   promise.then((navMap) => {
     if (!(navMap instanceof Map) || !navMap.size) return;
-    const current = cache.get(snapshotCacheKey) || cache.getStale(snapshotCacheKey, { maxAgeMs: COMPLETE_SNAPSHOT_MAX_STALE_MS });
+    const current = cache.get(snapshotCacheKey)
+      || cache.getStale(snapshotCacheKey, { maxAgeMs: COMPLETE_SNAPSHOT_MAX_STALE_MS })
+      || cache.getObserved(snapshotCacheKey, { maxAgeMs: COMPLETE_SNAPSHOT_MAX_STALE_MS });
     if (!current?.rows?.length) return;
     const updateTime = formatShanghaiTime();
     const rows = current.rows.map((row) => {
@@ -286,17 +344,19 @@ function completeNavInBackground(promise, snapshotCacheKey, ttlMs, category) {
       },
       rows,
     }, current);
-    if (isDisplayStableSnapshot(completed, category)) {
-      cache.set(snapshotCacheKey, completed, ttlMs);
-      persistFundSnapshot(snapshotCacheKey, completed);
-    } else cache.setTransient(snapshotCacheKey, completed, ttlMs);
+    const guarded = protectSnapshotConsistency(completed, category, snapshotCacheKey);
+    if (isDisplayStableSnapshot(guarded, category)) {
+      commitVerifiedSnapshot(snapshotCacheKey, category, guarded, ttlMs);
+    } else cache.setTransient(snapshotCacheKey, guarded, ttlMs);
   }).catch(() => {});
 }
 
 function completePurchaseStatusesInBackground(promise, snapshotCacheKey, ttlMs, category) {
   promise.then((purchaseMap) => {
     if (!(purchaseMap instanceof Map) || !purchaseMap.size) return;
-    const current = cache.get(snapshotCacheKey) || cache.getStale(snapshotCacheKey, { maxAgeMs: COMPLETE_SNAPSHOT_MAX_STALE_MS });
+    const current = cache.get(snapshotCacheKey)
+      || cache.getStale(snapshotCacheKey, { maxAgeMs: COMPLETE_SNAPSHOT_MAX_STALE_MS })
+      || cache.getObserved(snapshotCacheKey, { maxAgeMs: COMPLETE_SNAPSHOT_MAX_STALE_MS });
     if (!current?.rows?.length) return;
     let changed = 0;
     const rows = current.rows.map((row) => {
@@ -322,10 +382,54 @@ function completePurchaseStatusesInBackground(promise, snapshotCacheKey, ttlMs, 
       },
       rows,
     };
-    if (isDisplayStableSnapshot(completed, category)) {
-      cache.set(snapshotCacheKey, completed, ttlMs);
-      persistFundSnapshot(snapshotCacheKey, completed);
-    } else cache.setTransient(snapshotCacheKey, completed, ttlMs);
+    const guarded = protectSnapshotConsistency(completed, category, snapshotCacheKey);
+    if (isDisplayStableSnapshot(guarded, category)) {
+      commitVerifiedSnapshot(snapshotCacheKey, category, guarded, ttlMs);
+    } else cache.setTransient(snapshotCacheKey, guarded, ttlMs);
+  }).catch(() => {});
+}
+
+function completeExchangeSharesInBackground(promise, snapshotCacheKey, ttlMs, category) {
+  promise.then((shareMap) => {
+    if (!(shareMap instanceof Map) || !shareMap.size) return;
+    const current = cache.get(snapshotCacheKey)
+      || cache.getStale(snapshotCacheKey, { maxAgeMs: COMPLETE_SNAPSHOT_MAX_STALE_MS })
+      || cache.getObserved(snapshotCacheKey, { maxAgeMs: COMPLETE_SNAPSHOT_MAX_STALE_MS });
+    if (!current?.rows?.length) return;
+    let changed = 0;
+    const rows = current.rows.map((row) => {
+      const share = shareMap.get(normalizeFundCode(row.code));
+      if (!hasVerifiedExchangeShare(share)) return row;
+      changed += 1;
+      return {
+        ...row,
+        shareAmount: share.shareAmount || '',
+        shareValueWan: share.shareValueWan,
+        shareChange: share.shareChange || '',
+        shareSource: share.shareSource,
+        shareTime: share.shareTime,
+        ...buildExchangeMarketValue({
+          marketPrice: row.marketPrice,
+          quoteSource: row.quoteSource || row.source,
+          quoteTime: row.quoteTime,
+          share,
+        }),
+        shareDataCarriedForward: false,
+      };
+    });
+    if (!changed) return;
+    const completed = {
+      ...current,
+      meta: {
+        ...(current.meta || {}),
+        warn: [current.meta?.warn, `${changed} 条交易所份额及场内市值已异步补齐`].filter(Boolean).join('；'),
+      },
+      rows,
+    };
+    const guarded = protectSnapshotConsistency(completed, category, snapshotCacheKey);
+    if (isDisplayStableSnapshot(guarded, category)) {
+      commitVerifiedSnapshot(snapshotCacheKey, category, guarded, ttlMs);
+    } else cache.setTransient(snapshotCacheKey, guarded, ttlMs);
   }).catch(() => {});
 }
 
@@ -350,6 +454,7 @@ export function hydratePersistentFundSnapshots() {
 }
 
 function markPersistentSnapshot(snapshot) {
+  const now = new Date();
   return {
     ...snapshot,
     meta: {
@@ -360,11 +465,50 @@ function markPersistentSnapshot(snapshot) {
       warn: [snapshot.meta?.warn, '服务重启后先返回上一份已验证快照，后台刷新中'].filter(Boolean).join('；'),
     },
     rows: snapshot.rows.map((row) => ({
-      ...row,
+      ...recalculatePremiumFields(row, now),
       sourceStatus: 'cache',
       isRealtime: false,
       snapshotCarriedForward: true,
     })),
+  };
+}
+
+export function recalculatePremiumFields(row, now = new Date()) {
+  const premium = calculatePremium({
+    marketPrice: row.marketPrice ?? row.price,
+    quoteTime: row.quoteTime || '',
+    iopv: row.iopv,
+    iopvSource: row.iopvSource,
+    iopvTime: row.iopvTime,
+    iopvStale: row.iopvStale,
+    estimatedNav: row.estimatedNav,
+    estimatedNavSource: row.estimatedNavSource,
+    estimatedNavTime: row.estimatedNavTime,
+    estimateCandidates: row.estimateSources,
+    lastNav: row.lastNav ?? row.nav,
+    navDate: row.navDate,
+    now,
+  });
+  return {
+    ...row,
+    estimatedNav: premium.estimatedNav ?? row.estimatedNav ?? null,
+    premiumRate: premium.premiumRate,
+    realtimePremiumRate: premium.realtimePremiumRate,
+    officialPremiumRate: premium.officialPremiumRate,
+    officialDiscountRate: hasFiniteNumericValue(premium.officialPremiumRate) && Number(premium.officialPremiumRate) < 0
+      ? Math.abs(Number(premium.officialPremiumRate))
+      : null,
+    discountRate: hasFiniteNumericValue(premium.premiumRate) && Number(premium.premiumRate) < 0
+      ? Math.abs(Number(premium.premiumRate))
+      : null,
+    premiumBasis: premium.basis,
+    premiumNote: premium.note,
+    estimatedNavSource: premium.selectedNavSource || row.estimatedNavSource || '',
+    estimatedNavTime: premium.selectedNavTime || row.estimatedNavTime || '',
+    estimateConfidence: premium.estimateConfidence,
+    estimateDeviationRate: premium.estimateDeviationRate,
+    estimateWarning: premium.estimateWarning,
+    estimateSources: premium.estimateSources,
   };
 }
 
@@ -385,6 +529,44 @@ function persistFundSnapshot(key, snapshot) {
     await fs.promises.writeFile(temporary, JSON.stringify(persistentSnapshotPayload), 'utf8');
     await fs.promises.rename(temporary, persistentSnapshotFile);
   }).catch(() => {});
+}
+
+function verifiedSnapshotKey(category) {
+  return `${VERIFIED_SNAPSHOT_PREFIX}:${normalizeSnapshotCategory(category)}`;
+}
+
+function getVerifiedSnapshot(category) {
+  const key = verifiedSnapshotKey(category);
+  const snapshot = cache.get(key)
+    || cache.getStale(key, { maxAgeMs: COMPLETE_SNAPSHOT_MAX_STALE_MS });
+  return isDisplayStableSnapshot(snapshot, normalizeSnapshotCategory(category)) ? snapshot : null;
+}
+
+function getServingSnapshot(category, snapshotCacheKey) {
+  const exact = cache.get(snapshotCacheKey);
+  if (isDisplayStableSnapshot(exact, category)) return exact;
+  const canonical = cache.get(verifiedSnapshotKey(category));
+  return isDisplayStableSnapshot(canonical, category) ? canonical : null;
+}
+
+function commitVerifiedSnapshot(snapshotCacheKey, category, snapshot, ttlMs) {
+  const normalizedCategory = normalizeSnapshotCategory(category);
+  const canonicalKey = verifiedSnapshotKey(normalizedCategory);
+  const verified = snapshot.meta?.status === 'refreshing'
+    ? {
+        ...snapshot,
+        meta: {
+          ...(snapshot.meta || {}),
+          status: 'ok',
+          stale: ['cache', 'error'].includes(String(snapshot.meta?.sourceStatus || '')),
+        },
+      }
+    : snapshot;
+  cache.set(snapshotCacheKey, verified, ttlMs);
+  cache.set(canonicalKey, verified, ttlMs);
+  persistFundSnapshot(snapshotCacheKey, verified);
+  persistFundSnapshot(canonicalKey, verified);
+  return verified;
 }
 
 async function getQuotePayload({ category, force }) {
@@ -484,7 +666,7 @@ export function mergeMarketQuoteMaps(primaryMap = new Map(), fallbackMap = new M
 }
 
 export async function getFundList({ category = '', force = false } = {}) {
-  const snapshot = await getFundQuotes({ category, force });
+  const snapshot = await getFundQuotes({ category, force, includeTrends: false });
   return {
     meta: snapshot.meta,
     rows: snapshot.rows.map(({ code, name, category, source, sourceStatus, quoteTime, updateTime, isAbnormal, abnormalReason }) => ({
@@ -512,8 +694,8 @@ export function getFundQuotePage({ category = '', includeTrends = false, snapsho
   const normalizedCategory = normalizeSnapshotCategory(category);
   const key = snapshotKey(normalizedCategory, includeTrends);
   const snapshot = cache.get(key)
-    || cache.getObserved(key, { maxAgeMs: COMPLETE_SNAPSHOT_MAX_STALE_MS })
-    || cache.getStale(key, { maxAgeMs: COMPLETE_SNAPSHOT_MAX_STALE_MS });
+    || cache.getStale(key, { maxAgeMs: COMPLETE_SNAPSHOT_MAX_STALE_MS })
+    || getVerifiedSnapshot(normalizedCategory);
   if (!snapshot) {
     const error = new Error('分页快照尚未就绪，请先刷新首页数据');
     error.code = 'PAGE_SNAPSHOT_NOT_READY';
@@ -556,11 +738,29 @@ export function formatFundQuoteResponse(snapshot, options = {}) {
 export async function getFundDetail(code, options = {}) {
   const normalizedCode = String(code).replace(/^(SZ|SH)/i, '');
   const cachedFund = findFundInCachedSnapshots(normalizedCode, options.category);
+  let fund;
   if (cachedFund) {
     if (options.force) refreshFundDetailInBackground(normalizedCode, options);
-    return cachedFund;
+    fund = cachedFund;
+  } else {
+    fund = await loadFundDetail(normalizedCode, options);
   }
-  return loadFundDetail(normalizedCode, options);
+  if (!fund) return null;
+  return enrichFundDetail(fund, { force: options.force });
+}
+
+async function enrichFundDetail(fund, { force = false } = {}) {
+  const scale = await fetchSinaFundScale(fund.code, { force });
+  return {
+    ...fund,
+    ...buildExchangeTurnoverRate(fund),
+    fundScale: scale?.fundScale ?? null,
+    fundScaleSource: scale?.fundScaleSource || '',
+    fundScaleDate: scale?.fundScaleDate || '',
+    fundScaleTime: scale?.fundScaleTime || '',
+    fundScaleStatus: scale?.fundScaleStatus || 'missing',
+    fundScaleStale: Boolean(scale?.fundScaleStale),
+  };
 }
 
 async function loadFundDetail(normalizedCode, options = {}) {
@@ -610,15 +810,46 @@ function findFundInCachedSnapshots(code, category = '') {
   const categories = requestedCategory === 'ALL'
     ? ['ALL', ...HOME_CATEGORIES]
     : [requestedCategory, 'ALL', ...HOME_CATEGORIES.filter((item) => item !== requestedCategory)];
+  const candidates = [];
   for (const item of categories) {
+    const verified = getVerifiedSnapshot(item);
+    const verifiedFund = verified?.rows?.find((row) => normalizeFundCode(row.code) === code);
+    if (verifiedFund) candidates.push(verifiedFund);
     for (const includeTrends of [false, true]) {
       const key = snapshotKey(item, includeTrends);
       const snapshot = cache.get(key) || cache.getStale(key, { maxAgeMs: COMPLETE_SNAPSHOT_MAX_STALE_MS });
       const fund = snapshot?.rows?.find((row) => normalizeFundCode(row.code) === code);
-      if (fund) return fund;
+      if (fund) candidates.push(fund);
     }
   }
-  return null;
+  if (!candidates.length) return null;
+  const preferred = candidates.slice().sort(compareDetailCandidate)[0];
+  return candidates.filter((row) => row !== preferred).reduce((selected, alternate) => {
+    const withPurchase = mergeComplementaryFundFields(selected, alternate);
+    return mergeStableExchangeShareFields([alternate], [withPurchase])[0];
+  }, preferred);
+}
+
+function compareDetailCandidate(left, right) {
+  const scoreDelta = detailCandidateScore(right) - detailCandidateScore(left);
+  if (scoreDelta !== 0) return scoreDelta;
+  return latestRowTime(right) - latestRowTime(left);
+}
+
+function detailCandidateScore(row) {
+  let score = 0;
+  if (hasUsableMarketPrice(row)) score += 20;
+  if (hasUsableNav(row)) score += 20;
+  if (hasCurrentEstimate(row)) score += 30;
+  if (hasFiniteNumericValue(row?.premiumRate)) score += 30;
+  if (hasVerifiedExchangeShare(row)) score += 3;
+  if (hasUsablePurchaseLimit(row?.purchaseLimit)) score += 2;
+  if (row?.sourceStatus === 'missing' || row?.dataStatus === 'missing_quote') score -= 100;
+  return score;
+}
+
+function latestRowTime(row) {
+  return parseShanghaiTimestamp(row?.updateTime || row?.quoteTime || row?.estimatedNavTime || '')?.getTime() || 0;
 }
 
 function refreshFundDetailInBackground(code, options) {
@@ -630,6 +861,7 @@ export function toUnifiedFund({ quote, nav, premiumReference, updateTime, market
   const marketPrice = firstPositiveNumber(marketQuote?.marketPrice, quote.marketPrice);
   const changeRate = marketQuote?.changeRate ?? quote.changeRate;
   const volume = marketQuote?.volume ?? quote.volume;
+  const volumeUnit = normalizeVolumeUnit(marketQuote?.volumeUnit || quote.volumeUnit, marketQuote?.source || quote.source);
   const turnover = marketQuote?.turnover ?? quote.turnover;
   const quoteTime = marketQuote?.quoteTime || quote.quoteTime || nav?.navQuoteTime || '';
   const quoteSource = marketQuote?.source || quote.source;
@@ -663,6 +895,7 @@ export function toUnifiedFund({ quote, nav, premiumReference, updateTime, market
     : null);
   const premium = calculatePremium({
     marketPrice,
+    quoteTime,
     iopv: marketQuote?.iopv ?? quote.iopv,
     iopvSource: marketQuote?.iopvSource || quote.iopvSource || '',
     iopvTime: marketQuote?.iopvTime || quote.iopvTime || '',
@@ -674,13 +907,15 @@ export function toUnifiedFund({ quote, nav, premiumReference, updateTime, market
     realtimeReferenceKind: selectedPremiumReference?.kind || '',
     realtimeReferenceStale: selectedPremiumReference?.stale,
     estimatedNav: quote.estimatedNav,
-    estimatedNavSource: quote.navSource || quote.source,
-    estimatedNavTime: quote.navQuoteTime || quote.quoteTime || '',
+    estimatedNavSource: quote.estimatedNavSource || quote.navSource || quote.source,
+    estimatedNavTime: quote.estimatedNavTime || quote.navQuoteTime || quote.quoteTime || '',
     supplementalEstimatedNav: nav?.estimatedNav,
     supplementalNavSource: nav?.estimatedNavSource || nav?.navSource || '',
-    supplementalNavTime: nav?.navQuoteTime || '',
+    supplementalNavTime: nav?.estimatedNavTime || nav?.navQuoteTime || '',
+    estimateCandidates: nav?.estimateCandidates || [],
     lastNav: officialNav?.lastNav,
     navDate: officialNav?.navDate,
+    now: parseShanghaiTimestamp(updateTime),
   });
   const record = {
     code: quote.code,
@@ -695,7 +930,12 @@ export function toUnifiedFund({ quote, nav, premiumReference, updateTime, market
     nav: officialNav?.lastNav ?? null,
     estimatedNav: premium.estimatedNav ?? null,
     premiumRate: premium.premiumRate,
-    discountRate: Number.isFinite(Number(premium.premiumRate)) && Number(premium.premiumRate) < 0 ? Math.abs(Number(premium.premiumRate)) : null,
+    realtimePremiumRate: premium.realtimePremiumRate,
+    officialPremiumRate: premium.officialPremiumRate,
+    officialDiscountRate: hasFiniteNumericValue(premium.officialPremiumRate) && Number(premium.officialPremiumRate) < 0
+      ? Math.abs(Number(premium.officialPremiumRate))
+      : null,
+    discountRate: hasFiniteNumericValue(premium.premiumRate) && Number(premium.premiumRate) < 0 ? Math.abs(Number(premium.premiumRate)) : null,
     premiumBasis: premium.basis,
     premiumNote: premium.note,
     estimatedNavSource: premium.selectedNavSource,
@@ -706,11 +946,19 @@ export function toUnifiedFund({ quote, nav, premiumReference, updateTime, market
     estimateSources: premium.estimateSources,
     changeRate,
     volume,
+    volumeUnit,
     turnover,
     shareAmount: verifiedShare?.shareAmount || '',
+    shareValueWan: finiteNonNegativeNumber(verifiedShare?.shareValueWan),
     shareChange: verifiedShare?.shareChange || '',
     shareSource: verifiedShare?.shareSource || '',
     shareTime: verifiedShare?.shareTime || '',
+    ...buildExchangeMarketValue({
+      marketPrice,
+      quoteSource,
+      quoteTime,
+      share: verifiedShare,
+    }),
     purchaseLimit: selectedPurchaseLimit,
     source: displaySource,
     quoteSource,
@@ -737,6 +985,76 @@ export function toUnifiedFund({ quote, nav, premiumReference, updateTime, market
   };
   const validation = validateFundRecord(record);
   return { ...record, ...validation };
+}
+
+function buildExchangeMarketValue({ marketPrice, quoteSource, quoteTime, share }) {
+  const price = Number(marketPrice);
+  const rawShareValueWan = share?.shareValueWan;
+  const shareValueWan = rawShareValueWan === null || rawShareValueWan === undefined || rawShareValueWan === ''
+    ? Number.NaN
+    : Number(rawShareValueWan);
+  const normalizedQuoteSource = String(quoteSource || '').trim();
+  const normalizedQuoteTime = String(quoteTime || '').trim();
+  const shareSource = String(share?.shareSource || '').trim();
+  const shareTime = String(share?.shareTime || '').trim();
+  if (!Number.isFinite(price) || price <= 0 || !Number.isFinite(shareValueWan) || shareValueWan < 0
+    || !normalizedQuoteSource || !/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(normalizedQuoteTime)
+    || !shareSource || !shareTime) {
+    return {
+      marketValue: null,
+      marketValueSource: '',
+      marketValueTime: '',
+      marketValueBasis: '',
+    };
+  }
+  return {
+    marketValue: price * shareValueWan * 10_000,
+    marketValueSource: `${normalizedQuoteSource}+${shareSource}`,
+    marketValueTime: normalizedQuoteTime,
+    marketValueBasis: 'marketPrice*exchangeShare',
+  };
+}
+
+function buildExchangeTurnoverRate(fund = {}) {
+  const volume = Number(fund.volume);
+  const shareValueWan = Number(fund.shareValueWan);
+  const quoteSource = String(fund.quoteSource || fund.source || '').trim();
+  const shareSource = String(fund.shareSource || '').trim();
+  const quoteTime = String(fund.quoteTime || '').trim();
+  const volumeUnit = normalizeVolumeUnit(fund.volumeUnit, quoteSource);
+  const volumeShares = volumeUnit === 'lot' ? volume * 100 : volumeUnit === 'share' ? volume : Number.NaN;
+  if (!Number.isFinite(volume) || volume < 0 || !Number.isFinite(shareValueWan) || shareValueWan <= 0
+    || !Number.isFinite(volumeShares) || !quoteSource || !shareSource || !/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(quoteTime)) {
+    return {
+      turnoverRate: null,
+      turnoverRateSource: '',
+      turnoverRateTime: '',
+      turnoverRateBasis: '',
+      turnoverRateVolumeUnit: '',
+    };
+  }
+  return {
+    turnoverRate: (volumeShares / (shareValueWan * 10_000)) * 100,
+    turnoverRateSource: `${quoteSource}+${shareSource}`,
+    turnoverRateTime: quoteTime,
+    turnoverRateBasis: 'volumeShares/exchangeShare',
+    turnoverRateVolumeUnit: volumeUnit,
+  };
+}
+
+function normalizeVolumeUnit(value, source) {
+  const explicit = String(value || '').toLowerCase();
+  if (explicit === 'share' || explicit === 'lot') return explicit;
+  const sourceText = String(source || '').toLowerCase();
+  if (sourceText.includes('sina')) return 'share';
+  if (sourceText.includes('eastmoney')) return 'lot';
+  return '';
+}
+
+function finiteNonNegativeNumber(value) {
+  if (value === null || value === undefined || value === '') return null;
+  const number = Number(value);
+  return Number.isFinite(number) && number >= 0 ? number : null;
 }
 
 function selectPurchaseLimit(...candidates) {
@@ -815,7 +1133,7 @@ export function mergeStableFinancialFields(previousRows, incomingRows) {
     const previous = previousByCode.get(normalizeFundCode(row.code || row.fundCode));
     const officialNav = selectLatestOfficialNav([row, previous]);
     const carriedNav = Boolean(previous && officialNav?.candidateIndex === 1);
-    if (!previous || (!carriedNav && hasUsableNav(row) && Number.isFinite(Number(row.premiumRate)))) return row;
+    if (!previous || (!carriedNav && hasUsableNav(row) && hasCurrentEstimate(row) && hasFiniteNumericValue(row.premiumRate))) return row;
 
     const carriedQuote = !hasUsableMarketPrice(row);
     const marketPrice = carriedQuote ? Number(previous.marketPrice) : Number(row.marketPrice);
@@ -823,11 +1141,11 @@ export function mergeStableFinancialFields(previousRows, incomingRows) {
     const hasPrice = Number.isFinite(marketPrice) && marketPrice > 0;
     const hasNav = Number.isFinite(lastNav) && lastNav > 0;
     const hasRealtimeReferencePremium = ['iopv', 'estimatedNav'].includes(String(row.premiumBasis || ''))
-      && Number.isFinite(Number(row.premiumRate));
+      && hasCurrentEstimate(row)
+      && hasFiniteNumericValue(row.premiumRate);
     if (!hasPrice && !hasNav) return row;
-    const premiumRate = hasRealtimeReferencePremium
-      ? Number(row.premiumRate)
-      : hasPrice && hasNav ? ((marketPrice / lastNav) - 1) * 100 : null;
+    const premiumRate = hasRealtimeReferencePremium ? Number(row.premiumRate) : null;
+    const officialPremiumRate = hasPrice && hasNav ? ((marketPrice / lastNav) - 1) * 100 : null;
     const merged = {
       ...row,
       marketPrice: hasPrice ? marketPrice : row.marketPrice,
@@ -835,9 +1153,12 @@ export function mergeStableFinancialFields(previousRows, incomingRows) {
       lastNav: hasNav ? lastNav : row.lastNav,
       nav: hasNav ? lastNav : row.nav,
       premiumRate,
+      realtimePremiumRate: premiumRate,
+      officialPremiumRate,
+      officialDiscountRate: officialPremiumRate !== null && officialPremiumRate < 0 ? Math.abs(officialPremiumRate) : null,
       discountRate: premiumRate !== null && premiumRate < 0 ? Math.abs(premiumRate) : null,
-      premiumBasis: hasRealtimeReferencePremium ? row.premiumBasis : premiumRate !== null ? 'lastNav' : row.premiumBasis,
-      premiumNote: hasRealtimeReferencePremium ? row.premiumNote : premiumRate !== null ? '基于已公布官方净值' : row.premiumNote,
+      premiumBasis: hasRealtimeReferencePremium ? row.premiumBasis : 'none',
+      premiumNote: hasRealtimeReferencePremium ? row.premiumNote : '今日估算净值暂无数据',
       navDate: officialNav?.navDate || '',
       navQuoteTime: officialNav?.navQuoteTime || '',
       navSource: officialNav?.navSource || '',
@@ -849,6 +1170,43 @@ export function mergeStableFinancialFields(previousRows, incomingRows) {
     };
     return { ...merged, ...validateFundRecord(merged) };
   });
+}
+
+export function mergeStableExchangeShareFields(previousRows, incomingRows) {
+  const previousByCode = new Map((Array.isArray(previousRows) ? previousRows : [])
+    .map((row) => [normalizeFundCode(row?.code || row?.fundCode), row])
+    .filter(([code]) => code));
+
+  return (Array.isArray(incomingRows) ? incomingRows : []).map((row) => {
+    if (hasVerifiedExchangeShare(row)) return row;
+    const previous = previousByCode.get(normalizeFundCode(row?.code || row?.fundCode));
+    if (!hasVerifiedExchangeShare(previous)) return row;
+    const share = {
+      shareAmount: previous.shareAmount,
+      shareValueWan: previous.shareValueWan,
+      shareChange: previous.shareChange,
+      shareSource: previous.shareSource,
+      shareTime: previous.shareTime,
+    };
+    return {
+      ...row,
+      ...share,
+      ...buildExchangeMarketValue({
+        marketPrice: row.marketPrice,
+        quoteSource: row.quoteSource || row.source,
+        quoteTime: row.quoteTime,
+        share,
+      }),
+      shareDataCarriedForward: true,
+    };
+  });
+}
+
+function hasVerifiedExchangeShare(row) {
+  return isExchangeShareSource(row?.shareSource)
+    && Number.isFinite(Number(row?.shareValueWan))
+    && Number(row.shareValueWan) >= 0
+    && Boolean(String(row?.shareTime || '').trim());
 }
 
 function stabilizeSnapshotPurchaseStatuses(snapshot, previousSnapshot) {
@@ -908,29 +1266,21 @@ function findIncompleteCriticalRows(rows) {
 function isIncompleteCriticalRow(row) {
   if (!hasUsableMarketPrice(row)) return false;
   if (row.dataStatus === 'missing_quote' || row.sourceStatus === 'missing') return false;
-  return !hasUsableNav(row) || !Number.isFinite(Number(row.premiumRate));
+  return !hasUsableNav(row) || !hasFiniteNumericValue(row.premiumRate);
 }
 
 function isDisplayStableSnapshot(snapshot, category = 'ALL') {
   const rows = Array.isArray(snapshot?.rows) ? snapshot.rows : [];
   if (rows.length < (MIN_COMPLETE_ROWS[category] || 1)) return false;
-  if (category === 'ALL') {
-    const categories = new Set(rows.map((row) => String(row.category || row.fundType || '').toUpperCase()));
-    if (!categories.has('LOF') || !categories.has('QDII') || !categories.has('ETF')) return false;
-  }
+  if ((category === 'ALL' || category === 'LOF') && countHomePremiumRows(rows) < 1) return false;
   return true;
 }
 
-function isReusableObservedSnapshot(snapshot, category = 'ALL') {
-  const rows = Array.isArray(snapshot?.rows) ? snapshot.rows : [];
-  return rows.length >= (MIN_COMPLETE_ROWS[category] || 1);
-}
-
 function protectSnapshotConsistency(snapshot, category, snapshotCacheKey) {
-  if (isReusableObservedSnapshot(snapshot, category) && !hasSevereRowDrop(snapshot, snapshotCacheKey)) return snapshot;
+  if (isDisplayStableSnapshot(snapshot, category) && !hasSevereRowDrop(snapshot, snapshotCacheKey, category)) return snapshot;
   const previous = cache.getStale(snapshotCacheKey, { maxAgeMs: COMPLETE_SNAPSHOT_MAX_STALE_MS })
-    || cache.getObserved(snapshotCacheKey, { maxAgeMs: COMPLETE_SNAPSHOT_MAX_STALE_MS });
-  if (!isReusableObservedSnapshot(previous, category)) return snapshot;
+    || getVerifiedSnapshot(category);
+  if (!isDisplayStableSnapshot(previous, category)) return snapshot;
   return {
     ...previous,
     meta: {
@@ -947,13 +1297,23 @@ function protectSnapshotConsistency(snapshot, category, snapshotCacheKey) {
   };
 }
 
-function hasSevereRowDrop(snapshot, snapshotCacheKey) {
+function hasSevereRowDrop(snapshot, snapshotCacheKey, category = 'ALL') {
   const previous = cache.getStale(snapshotCacheKey, { maxAgeMs: COMPLETE_SNAPSHOT_MAX_STALE_MS })
-    || cache.getObserved(snapshotCacheKey, { maxAgeMs: COMPLETE_SNAPSHOT_MAX_STALE_MS });
+    || getVerifiedSnapshot(category);
   const previousRows = Array.isArray(previous?.rows) ? previous.rows : [];
   const rows = Array.isArray(snapshot?.rows) ? snapshot.rows : [];
   if (!previousRows.length || !rows.length) return false;
-  return rows.length < previousRows.length;
+  if (rows.length < previousRows.length) return true;
+
+  // Raw quote rows can stay constant while current-day estimate coverage drops
+  // from hundreds to zero. Guard the actual homepage-visible population too.
+  const previousHomeCount = countHomePremiumRows(previousRows);
+  const nextHomeCount = countHomePremiumRows(rows);
+  return previousHomeCount > 0 && nextHomeCount < previousHomeCount;
+}
+
+function countHomePremiumRows(rows) {
+  return rows.filter((row) => isHomeLofRow(row) && hasCompletePremiumDisplaySet(row)).length;
 }
 
 function hasUsableNav(row) {
@@ -1123,10 +1483,29 @@ function isHomeLofRow(row) {
 function hasCompletePremiumDisplaySet(row) {
   const price = Number(row.marketPrice ?? row.price);
   const nav = Number(row.lastNav ?? row.nav);
-  const premiumRate = Number(row.premiumRate);
+  const estimatedNav = Number(row.estimatedNav);
   return Number.isFinite(price) && price > 0
     && Number.isFinite(nav) && nav > 0
-    && Number.isFinite(premiumRate);
+    && Number.isFinite(estimatedNav) && estimatedNav > 0
+    && hasCurrentEstimate(row)
+    && hasFiniteNumericValue(row.premiumRate);
+}
+
+function hasFiniteNumericValue(value) {
+  return value !== null && value !== undefined && value !== '' && Number.isFinite(Number(value));
+}
+
+function hasCurrentEstimate(row, now = new Date()) {
+  const time = String(row?.estimatedNavTime || row?.iopvTime || '').trim();
+  return isEstimateCurrentForQuote(time, { now, quoteTime: row?.quoteTime || '' });
+}
+
+function parseShanghaiTimestamp(value) {
+  const text = String(value || '').trim();
+  if (!/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}(:\d{2})?$/.test(text)) return undefined;
+  const normalized = text.length === 16 ? `${text}:00` : text;
+  const time = new Date(`${normalized.replace(' ', 'T')}+08:00`);
+  return Number.isFinite(time.getTime()) ? time : undefined;
 }
 
 function rememberPageSnapshot(snapshot) {

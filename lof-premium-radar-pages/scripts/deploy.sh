@@ -22,6 +22,7 @@ DEPLOY_SMOKE_URL="${DEPLOY_SMOKE_URL:-}"
 DEPLOY_ADMIN_PASSWORD="${DEPLOY_ADMIN_PASSWORD:-53123}"
 DEPLOY_STATIC_ROOT="${DEPLOY_STATIC_ROOT:-/srv/www}"
 DEPLOY_STATIC_INCLUDE_DIR="${DEPLOY_STATIC_INCLUDE_DIR:-/etc/nginx/includes/static-projects}"
+DEPLOY_API_INCLUDE_DIR="${DEPLOY_API_INCLUDE_DIR:-/etc/nginx/includes/lof-api}"
 DEPLOY_STATIC_PROJECTS="${DEPLOY_STATIC_PROJECTS:-}"
 DEPLOY_LEGACY_STATIC_PROJECTS="${DEPLOY_LEGACY_STATIC_PROJECTS:-person-website}"
 DEPLOY_HOME_ROOT="${DEPLOY_HOME_ROOT:-/srv/www/home}"
@@ -148,6 +149,7 @@ ssh "${SSH_OPTS[@]}" "$REMOTE" \
    ADMIN_PASSWORD='$DEPLOY_ADMIN_PASSWORD' \
    DEPLOY_STATIC_ROOT='$DEPLOY_STATIC_ROOT' \
    DEPLOY_STATIC_INCLUDE_DIR='$DEPLOY_STATIC_INCLUDE_DIR' \
+   DEPLOY_API_INCLUDE_DIR='$DEPLOY_API_INCLUDE_DIR' \
    DEPLOY_STATIC_PROJECTS='$DEPLOY_STATIC_PROJECTS' \
    DEPLOY_LEGACY_STATIC_PROJECTS='$DEPLOY_LEGACY_STATIC_PROJECTS' \
    DEPLOY_HOME_ROOT='$DEPLOY_HOME_ROOT' \
@@ -164,6 +166,7 @@ set -Eeuo pipefail
 release_dir="$DEPLOY_PATH/releases/$(date +%Y%m%d%H%M%S)"
 STATIC_ROOT="${DEPLOY_STATIC_ROOT:-/srv/www}"
 STATIC_INCLUDE_DIR="${DEPLOY_STATIC_INCLUDE_DIR:-/etc/nginx/includes/static-projects}"
+API_INCLUDE_DIR="${DEPLOY_API_INCLUDE_DIR:-/etc/nginx/includes/lof-api}"
 STATIC_PROJECTS="${DEPLOY_STATIC_PROJECTS:-}"
 LEGACY_STATIC_PROJECTS="${DEPLOY_LEGACY_STATIC_PROJECTS:-person-website}"
 HOME_ROOT="${DEPLOY_HOME_ROOT:-/srv/www/home}"
@@ -365,6 +368,7 @@ migrate_homepage_from_legacy_project
 install_static_project_locations
 cleanup_legacy_static_projects
 install_homepage_analytics_script
+mkdir -p "$API_INCLUDE_DIR"
 
 mkdir -p "$release_dir"
 tar -xzf "$REMOTE_ARCHIVE" -C "$release_dir"
@@ -436,6 +440,8 @@ server {
         proxy_set_header X-Forwarded-Proto \$scheme;
         add_header Cache-Control "no-store";
     }
+
+    include ${API_INCLUDE_DIR}/*.conf;
 
     include ${STATIC_INCLUDE_DIR}/*.conf;
 

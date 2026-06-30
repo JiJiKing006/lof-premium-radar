@@ -6,11 +6,13 @@ import { fetchLofSnapshot } from '../sources/lofProvider.js';
 import { fetchTiantianNav } from '../sources/tiantianSource.js';
 import { fetchEastmoneyFundNav } from '../sources/eastmoneyFundNavSource.js';
 import { fetchHaoetfQuotes } from '../sources/haoetfSource.js';
+import { fetchLof8Estimates } from '../sources/lof8EstimateSource.js';
+import { fetchAkshareEstimatedNavs } from '../sources/akshareSource.js';
 import { selectLatestOfficialNav } from './officialNavResolver.js';
 
 const NAV_KEY = 'nav:map';
 const LOF_TARGET_SNAPSHOT_KEY = 'nav:lof-target-snapshot';
-const TIANTIAN_LIMIT = 100;
+const TIANTIAN_LIMIT = 24;
 const EASTMONEY_OFFICIAL_NAV_RECHECK_MS = 15 * 60_000;
 const navInFlight = new Map();
 let lofTargetSnapshotInFlight = null;
@@ -163,9 +165,14 @@ async function fetchFreshNavMap(quotes, { force = false } = {}) {
     for (const [code, row] of previous.entries()) navMap.set(code, row);
   }
 
-  await Promise.allSettled([loadJisilu(navMap), loadLof(navMap, { force })]);
-  await loadTiantian(navMap, selectTiantianCodes(quotes));
-  await loadHaoetf(navMap, quotes);
+  await Promise.allSettled([
+    loadJisilu(navMap),
+    loadLof(navMap, { force }),
+    loadHaoetf(navMap, quotes),
+    loadLof8(navMap),
+    loadAkshareEstimates(navMap, quotes),
+  ]);
+  await loadTiantian(navMap, selectTiantianCodes(quotes, navMap));
   await loadEastmoneyFundNav(navMap, selectEastmoneyNavCodes(quotes, navMap));
 
   return cache.set(NAV_KEY, navMap, cacheTtl.nav);
@@ -190,7 +197,10 @@ async function loadJisilu(navMap) {
         estimatedNavSource: estimatedNav !== null ? 'jisilu' : '',
         subscriptionStatus: row.purchaseLimit?.limitText || '',
       };
-      navMap.set(code, applyOfficialNav({ ...existing, ...incoming }, [existing, incoming]));
+      navMap.set(code, mergeEstimateCandidate(
+        applyOfficialNav({ ...existing, ...incoming }, [existing, incoming]),
+        estimatedNav !== null ? { value: estimatedNav, source: 'jisilu', time: row.estimatedNavTime || row.quoteTime || '' } : null,
+      ));
     }
     recordSourceSuccess('jisilu', Date.now() - startedAt);
   } catch (error) {
@@ -217,7 +227,6 @@ async function loadLof(navMap, { force = false } = {}) {
 export function mergeLofNavRow(existing = {}, row = {}) {
   const code = normalizeCode(row.code);
   const estimatedNav = firstNumber(
-    existing.estimatedNav,
     row.realtimeEstValue,
     row.realtimeEst,
     row.referenceEstValue,
@@ -225,19 +234,27 @@ export function mergeLofNavRow(existing = {}, row = {}) {
     row.officialEstValue,
     row.officialEst,
   );
-  return applyOfficialNav({
+  const merged = applyOfficialNav({
     ...existing,
     code,
-    estimatedNav,
-    estimatedNavSource: existing.estimatedNavSource || (estimatedNav !== null ? 'lof' : ''),
     subscriptionStatus: existing.subscriptionStatus || row.purchaseLimit?.limitText || '',
   }, [existing]);
+  return mergeEstimateCandidate(merged, estimatedNav !== null ? {
+    value: estimatedNav,
+    source: 'lof',
+    time: normalizeTargetQuoteTime(row.quoteDate, row.quoteTime),
+  } : null);
 }
 
 async function loadHaoetf(navMap, quotes = []) {
-  const categories = [...new Set(quotes
+  const quoteCategories = new Set(quotes
     .map((row) => String(row.category || '').toUpperCase())
-    .filter((category) => category === 'QDII' || category === 'ETF'))];
+    .filter((category) => category === 'LOF' || category === 'QDII' || category === 'ETF'));
+  // HaoETF exposes LOF and QDII-LOF through the same table, so fetch it once.
+  const categories = [
+    ...([...quoteCategories].some((category) => category === 'LOF' || category === 'QDII') ? ['LOF'] : []),
+    ...(quoteCategories.has('ETF') ? ['ETF'] : []),
+  ];
   if (!categories.length) return;
 
   const quoteCodes = new Set(quotes.map((row) => normalizeCode(row.code)).filter(Boolean));
@@ -265,7 +282,7 @@ async function loadHaoetf(navMap, quotes = []) {
 
 export function mergeHaoetfNavRow(existing = {}, row = {}) {
   const code = normalizeCode(row.code);
-  const estimatedNav = firstNumber(existing.estimatedNav, row.estimatedNav);
+  const estimatedNav = firstNumber(row.estimatedNav);
   const incomingOfficialNav = {
     lastNav: firstNumber(row.lastNav),
     navDate: row.navDate || '',
@@ -273,12 +290,54 @@ export function mergeHaoetfNavRow(existing = {}, row = {}) {
     navSource: 'haoetf',
     updateTime: row.updateTime || '',
   };
-  return applyOfficialNav({
+  const merged = applyOfficialNav({
     ...existing,
     code,
-    estimatedNav,
-    estimatedNavSource: existing.estimatedNavSource || (estimatedNav !== null ? 'haoetf' : ''),
   }, [existing, incomingOfficialNav]);
+  return mergeEstimateCandidate(merged, estimatedNav !== null ? {
+    value: estimatedNav,
+    source: 'haoetf',
+    time: row.estimatedNavTime || row.quoteTime || row.navQuoteTime || row.updateTime || '',
+  } : null);
+}
+
+async function loadLof8(navMap) {
+  const startedAt = Date.now();
+  try {
+    const rows = await fetchLof8Estimates();
+    for (const row of rows) {
+      const existing = navMap.get(row.code) || {};
+      navMap.set(row.code, mergeEstimateCandidate(existing, {
+        value: row.estimatedNav,
+        source: row.estimatedNavSource,
+        time: row.estimatedNavTime,
+      }));
+    }
+    if (!rows.length) throw new Error('LOF8 未返回今日估算净值');
+    recordSourceSuccess('lof8-estimate', Date.now() - startedAt);
+  } catch (error) {
+    recordSourceFailure('lof8-estimate', error, Date.now() - startedAt);
+  }
+}
+
+async function loadAkshareEstimates(navMap, quotes = []) {
+  const startedAt = Date.now();
+  try {
+    const codes = quotes.map((row) => normalizeCode(row.code)).filter(Boolean);
+    const rows = await fetchAkshareEstimatedNavs({ codes });
+    for (const row of rows) {
+      const existing = navMap.get(row.code) || {};
+      navMap.set(row.code, mergeEstimateCandidate(existing, {
+        value: row.estimatedNav,
+        source: row.estimatedNavSource,
+        time: row.estimatedNavTime,
+      }));
+    }
+    if (!rows.length) throw new Error('AKShare 估值上游未返回匹配的今日估算净值');
+    recordSourceSuccess('akshare-estimate', Date.now() - startedAt);
+  } catch (error) {
+    recordSourceFailure('akshare-estimate', error, Date.now() - startedAt);
+  }
 }
 
 async function loadTiantian(navMap, codes) {
@@ -291,14 +350,15 @@ async function loadTiantian(navMap, codes) {
         if (result.status !== 'fulfilled') continue;
         const row = result.value;
         const existing = navMap.get(row.code) || {};
-        navMap.set(row.code, applyOfficialNav({
+        const merged = applyOfficialNav({
           ...existing,
           ...row,
-          estimatedNav: row.estimatedNav ?? existing.estimatedNav ?? null,
-          estimatedNavSource: row.estimatedNav !== null && row.estimatedNav !== undefined
-            ? 'tiantian'
-            : existing.estimatedNavSource || '',
-        }, [existing, { ...row, navSource: 'tiantian' }]));
+        }, [existing, { ...row, navSource: 'tiantian' }]);
+        navMap.set(row.code, mergeEstimateCandidate(merged, row.estimatedNav !== null && row.estimatedNav !== undefined ? {
+          value: row.estimatedNav,
+          source: 'tiantian',
+          time: row.navQuoteTime || row.updateTime || '',
+        } : null));
         success += 1;
       }
     }
@@ -337,9 +397,10 @@ async function loadEastmoneyFundNav(navMap, codes) {
   }
 }
 
-export function selectTiantianCodes(quotes) {
+export function selectTiantianCodes(quotes, navMap = new Map()) {
   return quotes
     .filter((row) => row.category === 'QDII' || row.category === 'LOF' || isNasdaqTechnologyQuote(row))
+    .filter((row) => !hasCurrentEstimate(navMap.get(normalizeCode(row.code))))
     .sort((left, right) => (right.turnover || 0) - (left.turnover || 0))
     .map((row) => row.code)
     .slice(0, TIANTIAN_LIMIT);
@@ -377,6 +438,77 @@ function firstNumber(...values) {
     if (number !== null) return number;
   }
   return null;
+}
+
+export function mergeEstimateCandidate(existing = {}, candidate) {
+  const candidates = normalizeEstimateCandidates(existing);
+  const value = toNumber(candidate?.value);
+  const source = String(candidate?.source || '').trim();
+  const time = normalizeEstimateTimestamp(candidate?.time);
+  if (value !== null && value > 0 && source && time) {
+    const key = `${source}:${time}`;
+    const next = { value, source, time };
+    const index = candidates.findIndex((item) => `${item.source}:${item.time}` === key);
+    if (index >= 0) candidates[index] = next;
+    else candidates.push(next);
+  }
+  const selected = candidates.slice().sort(compareEstimateCandidate)[0] || null;
+  return {
+    ...existing,
+    estimatedNav: selected?.value ?? null,
+    estimatedNavSource: selected?.source || '',
+    estimatedNavTime: selected?.time || '',
+    estimateCandidates: candidates,
+  };
+}
+
+function normalizeEstimateCandidates(existing) {
+  const candidates = Array.isArray(existing?.estimateCandidates)
+    ? existing.estimateCandidates.map((item) => ({
+        value: toNumber(item?.value),
+        source: String(item?.source || '').trim(),
+        time: normalizeEstimateTimestamp(item?.time),
+      })).filter((item) => item.value !== null && item.value > 0 && item.source && item.time)
+    : [];
+  const existingValue = toNumber(existing?.estimatedNav);
+  const existingSource = String(existing?.estimatedNavSource || '').trim();
+  const existingTime = normalizeEstimateTimestamp(existing?.estimatedNavTime || existing?.navQuoteTime);
+  if (existingValue !== null && existingValue > 0 && existingSource && existingTime
+    && !candidates.some((item) => item.source === existingSource && item.time === existingTime)) {
+    candidates.push({ value: existingValue, source: existingSource, time: existingTime });
+  }
+  return candidates;
+}
+
+function compareEstimateCandidate(left, right) {
+  const timeDelta = parseShanghaiTime(right.time) - parseShanghaiTime(left.time);
+  if (timeDelta !== 0) return timeDelta;
+  return estimateSourcePriority(right.source) - estimateSourcePriority(left.source);
+}
+
+function estimateSourcePriority(source) {
+  const text = String(source || '').toLowerCase();
+  if (text.includes('akshare-eastmoney')) return 99;
+  if (text === 'tiantian') return 100;
+  if (text.includes('lof8')) return 98;
+  if (text.includes('jisilu')) return 90;
+  if (text.includes('haoetf')) return 85;
+  if (text === 'lof' || text.includes('palmmicro')) return 80;
+  return 70;
+}
+
+function normalizeEstimateTimestamp(value) {
+  const text = String(value || '').trim();
+  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(text)) return `${text}:00`;
+  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(text)) return text;
+  return '';
+}
+
+function hasCurrentEstimate(row, now = new Date()) {
+  const today = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(now);
+  return normalizeEstimateCandidates(row).some((item) => item.time.startsWith(today));
 }
 
 function applyOfficialNav(base, candidates) {

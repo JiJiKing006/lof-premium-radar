@@ -49,6 +49,7 @@
       { "type": "folder", "value": "output" },
       { "type": "folder", "value": "data" },
       { "type": "folder", "value": "assets" },
+      { "type": "folder", "value": "artifacts" },
       { "type": "folder", "value": "coverage" },
       { "type": "suffix", "value": ".test.js" },
       { "type": "suffix", "value": ".spec.js" },

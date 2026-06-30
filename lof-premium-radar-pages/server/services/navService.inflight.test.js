@@ -6,6 +6,8 @@ const mocks = vi.hoisted(() => ({
   fetchTiantianNav: vi.fn(),
   fetchEastmoneyFundNav: vi.fn(),
   fetchHaoetfQuotes: vi.fn(),
+  fetchLof8Estimates: vi.fn(),
+  fetchAkshareEstimatedNavs: vi.fn(),
 }));
 
 vi.mock('../sources/jisiluQdiiProvider.js', () => ({
@@ -28,6 +30,14 @@ vi.mock('../sources/haoetfSource.js', () => ({
   fetchHaoetfQuotes: mocks.fetchHaoetfQuotes,
 }));
 
+vi.mock('../sources/lof8EstimateSource.js', () => ({
+  fetchLof8Estimates: mocks.fetchLof8Estimates,
+}));
+
+vi.mock('../sources/akshareSource.js', () => ({
+  fetchAkshareEstimatedNavs: mocks.fetchAkshareEstimatedNavs,
+}));
+
 const { getLofPremiumReferenceMap, getNavMap, getSingleNav } = await import('./navService.js');
 const { cache } = await import('./cacheService.js');
 
@@ -40,6 +50,8 @@ describe('navService in-flight isolation', () => {
     mocks.fetchJisiluQdiiSnapshot.mockResolvedValue({ rows: [] });
     mocks.fetchLofSnapshot.mockResolvedValue({ rows: [] });
     mocks.fetchHaoetfQuotes.mockResolvedValue([]);
+    mocks.fetchLof8Estimates.mockResolvedValue([]);
+    mocks.fetchAkshareEstimatedNavs.mockResolvedValue([]);
     mocks.fetchEastmoneyFundNav.mockRejectedValue(new Error('not needed'));
     mocks.fetchTiantianNav.mockImplementation(async (code) => ({
       code,

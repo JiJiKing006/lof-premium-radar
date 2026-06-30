@@ -65,7 +65,6 @@
             </view>
             <view class="td col-security" style="{{columnStyles.security}}">
               <view class="fund-cell">
-                <text class="fund-name">{{item.name}}</text>
                 <view class="fund-code-line">
                   <text class="fund-code">{{item.code}}</text>
                   <text class="limit-pill limit-{{item.purchaseState}}">{{item.purchaseText}}</text>
