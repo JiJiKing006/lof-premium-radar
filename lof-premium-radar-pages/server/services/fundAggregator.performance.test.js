@@ -46,8 +46,16 @@ vi.mock('../sources/exchangeShareSource.js', () => ({
 
 const { getFundDetail, getFundList, getFundQuotePage, getFundQuotes } = await import('./fundAggregator.js');
 const { cache } = await import('./cacheService.js');
+const { hasSevereRowDrop } = await import('./fundSnapshotPolicy.js');
 
 describe('fundAggregator performance', () => {
+  it('keeps severe row-count drops behind the snapshot policy gate', () => {
+    expect(hasSevereRowDrop(
+      { rows: [{ code: '160001' }] },
+      { rows: [{ code: '160001' }, { code: '160002' }] },
+    )).toBe(true);
+  });
+
   beforeEach(() => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     vi.setSystemTime(new Date('2026-06-30T10:30:00+08:00'));

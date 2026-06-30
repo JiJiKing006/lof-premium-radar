@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { dedupeFundsByCodePriority, filterRenderablePremiumRows, formatFundQuoteResponse, getFundQuotePage, mergeMarketQuoteMaps, mergeStableExchangeShareFields, mergeStableFinancialFields, mergeStablePurchaseStatuses, recalculatePremiumFields, toUnifiedFund } from './fundAggregator.js';
 import { filterRenderablePremiumRows as projectedFilterRenderablePremiumRows } from './fundListProjector.js';
+import { mergeStableFinancialFields as policyMergeStableFinancialFields } from './fundSnapshotPolicy.js';
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -14,6 +15,7 @@ afterEach(() => {
 describe('fundAggregator', () => {
   it('keeps the list filter available through the aggregator facade', () => {
     expect(filterRenderablePremiumRows).toBe(projectedFilterRenderablePremiumRows);
+    expect(mergeStableFinancialFields).toBe(policyMergeStableFinancialFields);
   });
 
   it('keeps a verified quote purchase status when the supplemental status is unavailable', () => {
