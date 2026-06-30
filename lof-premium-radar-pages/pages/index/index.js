@@ -4,12 +4,13 @@ const { readSnapshot, writeSnapshot } = require('../../utils/cache');
 const { recordVisitor, getOrCreateDeviceId } = require('../../utils/analytics');
 const { registerSubscription, getSubscriptionStatus, cancelSubscription } = require('../../utils/subscription');
 const { allowAction } = require('../../utils/action-guard');
+const { loadFavoriteCodes, storeFavoriteCodes } = require('../../utils/favorites');
+const { purchaseText, purchaseState, settlementCycleDisplay } = require('../../utils/fund-display');
 const { REVIEW_COPY_MODE, reviewCopy } = require('../../config/review-copy');
 
 const PAGE_SIZE = 30;
 const FULL_FILTER_PAGE_SIZE = 500;
 const SEARCH_DEBOUNCE_MS = 160;
-const WATCH_STORAGE_KEY = 'fund-watchlist';
 const WATCH_SECTION = 'WATCH';
 const DEFAULT_SECTION = 'ALL';
 const DEFAULT_MARKET_FILTER = 'ALL';
@@ -416,7 +417,7 @@ Page({
       isFavorite: favoriteSet.has(fund.code),
       purchaseText: purchaseText(fund),
       purchaseState: purchaseState(fund),
-      settlementCycle: settlementCycleDisplay(settlementCycle(fund)),
+      settlementCycle: settlementCycleDisplay(settlementCycle(fund), REVIEW_COPY_MODE),
       settlementState: settlementCycle(fund) === 'T+2' ? 'short' : 'long',
       changedPremiumRate: hasChangedField(fund, ['premiumRate', 'realtimePremium']),
       changedMarketPrice: hasChangedField(fund, ['marketPrice', 'price']),
@@ -935,19 +936,6 @@ Page({
   }
 });
 
-function loadFavoriteCodes() {
-  try {
-    const parsed = JSON.parse(wx.getStorageSync(WATCH_STORAGE_KEY) || '[]');
-    return Array.isArray(parsed) ? parsed.map(String).filter(Boolean) : [];
-  } catch (error) {
-    return [];
-  }
-}
-
-function storeFavoriteCodes(codes) {
-  wx.setStorageSync(WATCH_STORAGE_KEY, JSON.stringify(codes));
-}
-
 function buildWatchMeta(options = {}) {
   const rowCount = Number(options.rowCount || 0);
   const updateTime = options.updateTime || localTimestamp();
@@ -978,12 +966,6 @@ function sectionLabel(section) {
   return map[section] || DEFAULT_SECTION;
 }
 
-function settlementCycleDisplay(value) {
-  if (value === 'T+2') return REVIEW_COPY_MODE ? '延2天' : value;
-  if (value === 'T+3') return REVIEW_COPY_MODE ? '延3天' : value;
-  return value || '暂无数据';
-}
-
 function marketFilterForSection(section) {
   if (section === 'T+2' || section === 'T+3') return section;
   return 'ALL';
@@ -992,8 +974,8 @@ function marketFilterForSection(section) {
 function buildRedemptionOptions() {
   return [
     { key: DEFAULT_REDEMPTION_FILTER, label: '全部' },
-    { key: 'T+2', label: settlementCycleDisplay('T+2') },
-    { key: 'T+3', label: settlementCycleDisplay('T+3') }
+    { key: 'T+2', label: settlementCycleDisplay('T+2', REVIEW_COPY_MODE) },
+    { key: 'T+3', label: settlementCycleDisplay('T+3', REVIEW_COPY_MODE) }
   ];
 }
 
@@ -1114,43 +1096,6 @@ function appendUniqueFunds(existing, incoming) {
   return rows;
 }
 
-function purchaseText(fund) {
-  const limit = fund && fund.purchaseLimit || {};
-  const label = String(limit.label || limit.limitText || fund && fund.subscriptionStatus || '').trim();
-  const state = String(limit.state || fund && fund.subscriptionState || '').toLowerCase();
-  const explicitAmount = purchaseLimitAmount(limit, label);
-
-  if (state === 'paused' || /暂停|停止/.test(label)) return '暂停';
-  if (state === 'open' || /不限额|无限额|不限|开放/.test(label) || explicitAmount !== null && explicitAmount >= 800_000_000) return '不限';
-  if (state === 'limited' || /限|大额/.test(label)) {
-    return explicitAmount === null ? '暂无数据' : `限 ${formatPurchaseAmount(explicitAmount)}`;
-  }
-  return '暂无数据';
-}
-
-function purchaseLimitAmount(limit, label) {
-  const value = limit.dailyLimit ?? limit.limitAmount ?? limit.amountYuan;
-  if (value !== null && value !== undefined && value !== '') {
-    const amount = Number(value);
-    if (Number.isFinite(amount) && amount > 0) return amount;
-  }
-  const match = String(label || '').match(/(\d+(?:\.\d+)?)\s*(亿|万|元)/);
-  if (!match) return null;
-  const scale = match[2] === '亿' ? 100_000_000 : match[2] === '万' ? 10_000 : 1;
-  const amount = Number(match[1]) * scale;
-  return Number.isFinite(amount) && amount > 0 ? amount : null;
-}
-
-function formatPurchaseAmount(amount) {
-  if (amount > 10_000) return `${trimPurchaseDecimal(amount / 10_000, 4)} 万`;
-  return `${trimPurchaseDecimal(amount, 2)} 元`;
-}
-
-function trimPurchaseDecimal(value, precision) {
-  if (Number.isInteger(value)) return String(value);
-  return value.toFixed(precision).replace(/(\.\d*?[1-9])0+$|\.0+$/, '$1');
-}
-
 function hasUsablePurchaseStatus(fund) {
   const limit = fund && fund.purchaseLimit || {};
   const label = String(limit.label || limit.limitText || fund && fund.subscriptionStatus || '').trim();
@@ -1158,11 +1103,6 @@ function hasUsablePurchaseStatus(fund) {
   return Boolean(label)
     && !/^(未知|暂无数据|--|-|N\/A)$/i.test(label)
     && !['', 'unknown', 'unavailable'].includes(state);
-}
-
-function purchaseState(fund) {
-  const state = (fund.purchaseLimit && fund.purchaseLimit.state) || fund.subscriptionState;
-  return !state || state === 'unknown' ? 'unavailable' : state;
 }
 
 function requestOneTimeSubscription(templateId) {

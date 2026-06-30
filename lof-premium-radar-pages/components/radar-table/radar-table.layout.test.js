@@ -157,7 +157,7 @@ describe('首页表格滚动与页面刷新', () => {
     expect(pageScript).toContain("const DEFAULT_MARKET_FILTER = 'ALL'");
     expect(pageScript).toContain("'T+2': REVIEW_COPY_MODE ? '延2天' : 'T+2'");
     expect(pageScript).toContain('formatUpdateTime(meta.updateTime || meta.latestQuoteTime || \'\')');
-    expect(pageScript).toContain("settlementCycle: settlementCycleDisplay(settlementCycle(fund))");
+    expect(pageScript).toContain("settlementCycle: settlementCycleDisplay(settlementCycle(fund), REVIEW_COPY_MODE)");
   });
 
   it('首页恢复提醒入口但保持中性提醒文案', () => {

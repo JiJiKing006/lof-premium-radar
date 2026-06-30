@@ -294,6 +294,12 @@ function loadDetailPage() {
     require(id) {
       if (id === '../../utils/fund-api') return { fetchFundDetail() {}, fetchFundHistory() {} };
       if (id === '../../utils/source-links') return { sourceLabel: (value) => value || '' };
+      if (id === '../../utils/fund-display') {
+        return {
+          purchaseText: (fund) => fund.purchaseLimit?.label || fund.subscriptionStatus || '暂无数据',
+          purchaseState: (fund) => fund.purchaseLimit?.state || fund.subscriptionState || 'unavailable',
+        };
+      }
       if (id === '../../config/review-copy') return { REVIEW_COPY_MODE: true };
       return {
         formatNumber,
