@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { formatFundQuoteResponse, getFundQuotePage } from './fundAggregator.js';
 import { formatFundQuoteResponse as projectFundQuoteResponse } from './fundListProjector.js';
+import { getPinnedPageSnapshot, rememberPageSnapshot } from './fundPageSnapshotStore.js';
 
 const COMPLETE_LOF_ROW = {
   code: '160216',
@@ -29,6 +30,14 @@ const COMPLETE_LOF_ROW = {
 };
 
 describe('fund quote response contract', () => {
+  it('keeps page snapshot ids pinned to the same snapshot object', () => {
+    const snapshot = { meta: {}, rows: [COMPLETE_LOF_ROW] };
+    const snapshotId = rememberPageSnapshot(snapshot);
+
+    expect(rememberPageSnapshot(snapshot)).toBe(snapshotId);
+    expect(getPinnedPageSnapshot(snapshotId)).toBe(snapshot);
+  });
+
   it('keeps the aggregator response equal to the extracted projector response', () => {
     const snapshot = { meta: { allCount: 1 }, rows: [COMPLETE_LOF_ROW] };
     const options = { fields: 'home', page: 1, pageSize: 30 };

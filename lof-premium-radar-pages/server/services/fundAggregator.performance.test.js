@@ -47,8 +47,13 @@ vi.mock('../sources/exchangeShareSource.js', () => ({
 const { getFundDetail, getFundList, getFundQuotePage, getFundQuotes } = await import('./fundAggregator.js');
 const { cache } = await import('./cacheService.js');
 const { hasSevereRowDrop } = await import('./fundSnapshotPolicy.js');
+const { COMPLETE_SNAPSHOT_MAX_STALE_MS } = await import('./fundSnapshotStore.js');
 
 describe('fundAggregator performance', () => {
+  it('keeps the complete snapshot stale window unchanged', () => {
+    expect(COMPLETE_SNAPSHOT_MAX_STALE_MS).toBe(24 * 60 * 60_000);
+  });
+
   it('keeps severe row-count drops behind the snapshot policy gate', () => {
     expect(hasSevereRowDrop(
       { rows: [{ code: '160001' }] },
