@@ -516,6 +516,29 @@ describe('fundAggregator performance', () => {
     expect(mocks.getQuotes).not.toHaveBeenCalled();
   });
 
+  it('详情优先选择更新交易日的真实行情，不被旧日完整快照覆盖', async () => {
+    const staleComplete = {
+      code: '501225', category: 'LOF', marketPrice: 4.771, lastNav: 3.6412,
+      estimatedNav: 3.641, estimatedNavSource: 'lof', estimatedNavTime: '2026-06-30 15:00:00',
+      premiumRate: (4.771 / 3.641 - 1) * 100, source: 'sina', sourceStatus: 'cache',
+      quoteTime: '2026-06-30 15:00:01', updateTime: '2026-07-01 15:40:43',
+    };
+    const currentQuote = {
+      code: '501225', category: 'LOF', marketPrice: 4.752, lastNav: 3.6412,
+      estimatedNav: null, premiumRate: null, source: 'sina', sourceStatus: 'fallback',
+      quoteTime: '2026-07-01 15:00:02', updateTime: '2026-07-01 15:56:54',
+    };
+    cache.set('fund-quotes:snapshot:ALL:trends:0', { meta: {}, rows: [staleComplete] }, 60_000);
+    cache.set('fund-quotes:snapshot:LOF:trends:0', { meta: {}, rows: [currentQuote] }, 60_000);
+
+    const fund = await getFundDetail('501225', { category: 'LOF' });
+
+    expect(fund).toMatchObject({
+      code: '501225', marketPrice: 4.752, quoteTime: '2026-07-01 15:00:02',
+    });
+    expect(mocks.getQuotes).not.toHaveBeenCalled();
+  });
+
   it('详情聚合快照偶发缺行时使用真实单基金行情补查', async () => {
     mocks.getQuotes.mockResolvedValue({ rows: [], source: 'sina', sourceStatus: 'fallback', errors: [] });
     mocks.fetchEastmoneyQuoteMap.mockResolvedValue(new Map([

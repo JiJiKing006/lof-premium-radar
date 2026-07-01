@@ -194,7 +194,11 @@ describe('详情页 UI 与数据展示约束', () => {
     });
 
     expect(instance.data.summaryCards).toHaveLength(4);
-    expect(instance.data.summaryCards[0]).toMatchObject({ label: '实时价格', value: '4.604' });
+    expect(instance.data.summaryCards[0]).toMatchObject({
+      label: '实时价格',
+      value: '4.604',
+      note: '2026-06-26 16:11:39'
+    });
     expect(instance.data.summaryCards[1]).toMatchObject({ label: '实时溢价率', toneClass: 'premium-tone-up', note: '连续溢价 3 天' });
     expect(instance.data.summaryCards[2]).toMatchObject({ label: '今日估算净值', value: '3.487', note: '2026-06-25 00:00:00' });
     expect(instance.data.summaryCards[3]).toMatchObject({ label: '总规模', value: '8.63亿', note: '2026-06-26' });

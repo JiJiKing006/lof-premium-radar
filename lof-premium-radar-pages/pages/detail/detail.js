@@ -116,6 +116,7 @@ Page({
         icon: '/images/icons/detail-price.svg',
         value: formatNumber(priceValue),
         className: valueClass(changeValue),
+        note: hasDisplayText(fund.quoteTime) ? fund.quoteTime : '',
         sideLabel: hasFiniteNumber(changeValue) ? '涨跌幅' : '',
         sideValue: hasFiniteNumber(changeValue) ? percentText(changeValue, { sign: true }) : '',
         sideClass: valueClass(changeValue),

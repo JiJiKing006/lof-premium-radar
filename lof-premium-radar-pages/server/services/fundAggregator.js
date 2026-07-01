@@ -610,9 +610,21 @@ function findFundInCachedSnapshots(code, category = '') {
 }
 
 function compareDetailCandidate(left, right) {
+  const quoteDayDelta = quoteDay(right) - quoteDay(left);
+  if (quoteDayDelta !== 0) return quoteDayDelta;
   const scoreDelta = detailCandidateScore(right) - detailCandidateScore(left);
   if (scoreDelta !== 0) return scoreDelta;
-  return latestRowTime(right) - latestRowTime(left);
+  return quoteTimestamp(right) - quoteTimestamp(left);
+}
+
+function quoteDay(row) {
+  const date = String(row?.quoteTime || '').slice(0, 10);
+  const parsed = /^\d{4}-\d{2}-\d{2}$/.test(date) ? Date.parse(`${date}T00:00:00+08:00`) : NaN;
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function quoteTimestamp(row) {
+  return parseShanghaiTimestamp(row?.quoteTime || '')?.getTime() || 0;
 }
 
 function detailCandidateScore(row) {
@@ -625,10 +637,6 @@ function detailCandidateScore(row) {
   if (hasUsablePurchaseLimit(row?.purchaseLimit)) score += 2;
   if (row?.sourceStatus === 'missing' || row?.dataStatus === 'missing_quote') score -= 100;
   return score;
-}
-
-function latestRowTime(row) {
-  return parseShanghaiTimestamp(row?.updateTime || row?.quoteTime || row?.estimatedNavTime || '')?.getTime() || 0;
 }
 
 function refreshFundDetailInBackground(code, options) {

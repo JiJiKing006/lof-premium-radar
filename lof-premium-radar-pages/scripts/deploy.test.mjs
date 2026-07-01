@@ -36,6 +36,7 @@ describe('deployment nginx configuration', () => {
     expect(serverIndex).toContain("app.use('/api', createOperationsRouter({ wechatSubscriptionService }));");
     expect(fundsRoutes).toContain("router.post('/funds/quotes'");
     expect(fundsRoutes).toContain("router.post('/funds/quotes/refresh'");
+    expect(fundsRoutes).toContain('waitForFresh: true');
     expect(fundsRoutes).toContain("router.post('/funds/quotes/page'");
     expect(serverIndex).not.toContain('createViteServer');
     expect(serverIndex).not.toContain('express.static');
@@ -228,6 +229,9 @@ describe('isolated test API deployment', () => {
     expect(testDeployScript).toContain('["share", "lot"].includes(row.turnoverRateVolumeUnit)');
     expect(testDeployScript).toContain('!fundScaleValid');
     expect(testDeployScript).toContain('!turnoverRateValid');
+    expect(testDeployScript).toContain('completeEstimateValid');
+    expect(testDeployScript).toContain('missingEstimateValid');
+    expect(testDeployScript).toContain('row.premiumNote === "今日估算净值暂无数据"');
   });
 
   it('points non-release mini program builds at the test API base', () => {

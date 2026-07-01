@@ -358,6 +358,18 @@ process.stdin.on("end", () => {
     && estimateDate <= today
     && (!/^\d{4}-\d{2}-\d{2}$/.test(quoteDate) || estimateDate >= quoteDate);
   const formula = ((Number(row.marketPrice) / Number(row.estimatedNav)) - 1) * 100;
+  const completeEstimateValid = Number(row.estimatedNav) > 0
+    && String(row.estimatedNavSource || "").trim()
+    && estimateDateValid
+    && Number.isFinite(Number(row.premiumRate))
+    && Math.abs(Number(row.premiumRate) - formula) <= 0.02;
+  const missingEstimateValid = row.estimatedNav === null
+    && row.premiumRate === null
+    && row.realtimePremiumRate === null
+    && row.premiumBasis === "none"
+    && row.premiumNote === "今日估算净值暂无数据"
+    && !String(row.estimatedNavSource || "").trim()
+    && !String(row.estimatedNavTime || "").trim();
   const marketValueValid = Object.prototype.hasOwnProperty.call(row, "marketValue")
     && (!(Number(row.marketValue) > 0) || (
       row.marketValueBasis === "marketPrice*exchangeShare"
@@ -375,10 +387,7 @@ process.stdin.on("end", () => {
     && String(row.turnoverRateSource || "").trim()
     && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(String(row.turnoverRateTime || ""));
   if (!(Number(row.marketPrice) > 0)
-    || !(Number(row.estimatedNav) > 0)
-    || !estimateDateValid
-    || !Number.isFinite(Number(row.premiumRate))
-    || Math.abs(Number(row.premiumRate) - formula) > 0.02
+    || (!completeEstimateValid && !missingEstimateValid)
     || !marketValueValid
     || !fundScaleValid
     || !turnoverRateValid) {

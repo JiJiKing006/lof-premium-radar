@@ -30,6 +30,7 @@ const DEFAULT_SECTION = 'ALL';
 const DEFAULT_MARKET_FILTER = 'ALL';
 const PURCHASE_STATUS_RECOVERY_DELAY_MS = 3800;
 const PURCHASE_STATUS_RECOVERY_MAX_ATTEMPTS = 1;
+const SNAPSHOT_RECOVERY_DELAY_MS = 4800;
 const MIN_REFRESH_LOADING_MS = 650;
 const SUBSCRIBE_TEMPLATE_ID = 'nChCRD1ljtNdWE20NSZIogo5tYX5sX4xP4UPEdZVLyM';
 const PURCHASE_STATUS_OPTIONS = [
@@ -111,6 +112,7 @@ Page({
     this.visiblePage = 1;
     this.loadingMoreFunds = false;
     this.purchaseStatusRecoveryAttempts = 0;
+    this.snapshotRecoveryAttempts = 0;
     this.refreshFavoriteCodes();
     this.hydrateSectionSnapshot({ allowStale: true });
     this.fetchSectionSnapshot();
@@ -135,6 +137,7 @@ Page({
     this.clearPulseTimer();
     this.clearSearchTimer();
     this.clearPurchaseStatusRecoveryTimer();
+    this.clearSnapshotRecoveryTimer();
   },
 
   hydrateSectionSnapshot(options = {}) {
@@ -262,6 +265,7 @@ Page({
       abnormalCount
     });
     this.updateVisibleFunds({ keepPage: Boolean(options.keepPage), serverPagination: meta.pagination || null });
+    if (!options.skipRecovery) this.scheduleSnapshotRecovery(meta);
     if (!options.skipRecovery) this.schedulePurchaseStatusRecovery(funds);
   },
 
@@ -563,7 +567,9 @@ Page({
     if (this.data.manualRefreshing) return;
     if (!allowAction(this, 'manual-refresh', 1000)) return;
     this.clearPurchaseStatusRecoveryTimer();
+    this.clearSnapshotRecoveryTimer();
     this.purchaseStatusRecoveryAttempts = 0;
+    this.snapshotRecoveryAttempts = 0;
     this.visiblePage = 1;
     this.resetTableScroll();
     this.setData({ showFilterPanel: false });
@@ -625,8 +631,31 @@ Page({
     this.purchaseStatusRecoveryTimer = null;
   },
 
+  scheduleSnapshotRecovery(meta = {}) {
+    if (meta.status !== 'refreshing') {
+      this.snapshotRecoveryAttempts = 0;
+      this.clearSnapshotRecoveryTimer();
+      return;
+    }
+    if (this.snapshotRecoveryTimer || this.snapshotRecoveryAttempts >= 1) return;
+    this.snapshotRecoveryTimer = setTimeout(() => {
+      this.snapshotRecoveryTimer = null;
+      this.snapshotRecoveryAttempts += 1;
+      if (this.data.section !== WATCH_SECTION) {
+        this.fetchSectionSnapshot({ background: true, skipRecovery: true });
+      }
+    }, SNAPSHOT_RECOVERY_DELAY_MS);
+  },
+
+  clearSnapshotRecoveryTimer() {
+    if (this.snapshotRecoveryTimer) clearTimeout(this.snapshotRecoveryTimer);
+    this.snapshotRecoveryTimer = null;
+  },
+
   handleSectionChange(event) {
     this.clearSearchTimer();
+    this.clearSnapshotRecoveryTimer();
+    this.snapshotRecoveryAttempts = 0;
     const section = event.detail.value;
     if (!section || section === this.data.section) return;
     this.rememberCurrentSectionState();

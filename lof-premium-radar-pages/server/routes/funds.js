@@ -110,7 +110,7 @@ async function handleFundQuotesRefresh(request, response) {
     const snapshot = await getFundQuotes({
       category: String(input.category || ''),
       force: true,
-      waitForFresh: false,
+      waitForFresh: true,
       includeTrends: includeTrends(input),
     });
     response.setHeader('Cache-Control', 'no-store');
